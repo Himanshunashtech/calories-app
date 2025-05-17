@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Progress } from '@/components/ui/progress';
 import { getMealLogs, clearMealLogs, getSelectedPlan, type UserPlan } from '@/lib/localStorage';
 import type { MealEntry } from '@/types';
-import { CalendarDays, Utensils, Leaf, Trash2, Info, ShieldCheck, TrendingUp, Activity, PieChart as PieChartIcon, NotebookText } from 'lucide-react';
+import { CalendarDays, Utensils, Leaf, Trash2, Info, ShieldCheck, TrendingUp, Activity, PieChart as PieChartIcon, NotebookText, ListFilter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -55,7 +55,7 @@ export default function StatsPage() {
   }
 
   const todayISO = useMemo(() => {
-    if (!isClient) return new Date().toISOString().split('T')[0]; // Fallback for SSR, though client check helps
+    if (!isClient) return new Date().toISOString().split('T')[0]; 
     return new Date().toISOString().split('T')[0];
   }, [isClient]);
 
@@ -96,7 +96,6 @@ export default function StatsPage() {
     [mealLogs]
   );
 
-  // --- New Statistics Calculations ---
 
   const dailyLogData = useMemo(() => {
     if (!isClient) return {};
@@ -272,7 +271,6 @@ export default function StatsPage() {
         </CardContent>
       </Card>
 
-      {/* --- New Statistics Cards --- */}
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl"><Activity className="h-6 w-6 text-primary"/>Overall Averages</CardTitle>
@@ -373,7 +371,7 @@ export default function StatsPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <Utensils className="h-6 w-6 text-primary" />
+            <ListFilter className="h-6 w-6 text-primary" />
             Recent Meals
           </CardTitle>
           <CardDescription>Your last few logged meals.</CardDescription>
@@ -383,8 +381,11 @@ export default function StatsPage() {
             <ul className="space-y-3">
               {recentMeals.map(log => (
                 <li key={log.id} className="flex items-center justify-between p-3 bg-card rounded-md border">
-                  <div className="flex-1 min-w-0"> {/* Added for text truncation */}
-                    <p className="font-medium truncate">{log.description || "Meal Photo"}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">
+                      {log.category && <Badge variant="secondary" className="mr-2 capitalize">{log.category}</Badge>}
+                      {log.description || "Meal Photo"}
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       {log.calories.toFixed(0)} kcal - {new Date(log.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </p>

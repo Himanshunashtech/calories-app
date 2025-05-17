@@ -9,9 +9,12 @@ export interface DetailedNutrients {
   [key: string]: DetailedNutrient; // e.g., iron, vitaminD, fiber, calcium
 }
 
+export type MealCategory = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
+
 export interface MealEntry {
   id: string;
   date: string; // ISO string
+  category?: MealCategory;
   photoDataUri?: string;
   description?: string;
   calories: number;
@@ -41,6 +44,14 @@ export interface AIScanUsage {
   lastResetMonth: number; // Stores the month (0-11) of the last reset
 }
 
+export interface ReminderSettings {
+  breakfastTime?: string; // e.g., "08:00"
+  lunchTime?: string;     // e.g., "12:30"
+  dinnerTime?: string;    // e.g., "18:30"
+  waterReminderEnabled?: boolean;
+  waterReminderInterval?: number; // in minutes, e.g., 60
+}
+
 export interface OnboardingData {
   name: string;
   age: string;
@@ -64,6 +75,7 @@ export interface UserProfile extends OnboardingData {
   email?: string;
   phone?: string;
   profileImageUri?: string | null;
+  reminderSettings?: ReminderSettings;
 }
 
 export interface WaterIntakeData {

@@ -10,22 +10,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { addMealLog, getSelectedPlan, canUseAIScan, incrementAIScanCount, getAIScanUsage, type UserPlan } from '@/lib/localStorage';
-import type { FoodAnalysisResult, DetailedNutrients } from '@/types'; // Added DetailedNutrients
-import { UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle, Info, Camera as CameraIcon, RefreshCcw } from 'lucide-react';
+import type { FoodAnalysisResult, DetailedNutrients, MealCategory } from '@/types'; 
+import { UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle, Info, Camera as CameraIcon, RefreshCcw, ListPlus } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
 
 interface ExtendedAnalysisResult extends FoodAnalysisResult {
   carbonFootprintEstimate?: number;
-  // detailedNutrients are already part of FoodAnalysisResult via types.ts
 }
 
 export default function LogMealPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [description, setDescription] = useState('');
+  const [mealCategory, setMealCategory] = useState<MealCategory | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<ExtendedAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -180,7 +181,6 @@ export default function LogMealPage() {
     try {
       const photoDataUri = photoPreview; 
 
-      // These calls now return more structured data
       const [foodDetails, macroDetails] = await Promise.all([
         analyzeFoodPhoto({ photoDataUri }),
         autoLogMacros({ photoDataUri, description: description || 'A meal' })
@@ -188,19 +188,19 @@ export default function LogMealPage() {
       
       setAnalysisResult({
         estimatedCalories: foodDetails.estimatedCalories,
-        nutritionalInformation: foodDetails.nutritionalInformation, // General summary
-        detailedNutrients: foodDetails.detailedNutrients, // Structured nutrients
+        nutritionalInformation: foodDetails.nutritionalInformation,
+        detailedNutrients: foodDetails.detailedNutrients,
         carbohydrates: macroDetails.carbohydrates,
         fats: macroDetails.fats,
         proteins: macroDetails.proteins,
-        carbonFootprintEstimate: macroDetails.carbonFootprintEstimate, // Carbon footprint
+        carbonFootprintEstimate: macroDetails.carbonFootprintEstimate,
       });
 
       if (userPlan === 'free') {
         incrementAIScanCount();
         const usage = getAIScanUsage(); 
         setAiScansRemaining(usage.limit - usage.count);
-        setShowWatermark(true); // Show watermark for free users
+        setShowWatermark(true);
         toast({
           title: "AI Scan Used (Free Tier)",
           description: `You have ${usage.limit - usage.count} free scans remaining. Results watermarked.`,
@@ -222,22 +222,28 @@ export default function LogMealPage() {
       toast({ variant: "destructive", title: "Cannot Log Meal", description: "Please analyze the meal first." });
       return;
     }
+    if (!mealCategory) {
+      toast({ variant: "destructive", title: "Cannot Log Meal", description: "Please select a meal category." });
+      return;
+    }
+
 
     addMealLog({
       photoDataUri: photoPreview || undefined,
       description: description,
+      category: mealCategory,
       calories: analysisResult.estimatedCalories,
       protein: analysisResult.proteins,
       carbs: analysisResult.carbohydrates,
       fat: analysisResult.fats,
-      nutritionalInfo: analysisResult.nutritionalInformation, // General summary
-      detailedNutrients: analysisResult.detailedNutrients, // Log structured nutrients
-      carbonFootprintEstimate: analysisResult.carbonFootprintEstimate, // Log carbon footprint
+      nutritionalInfo: analysisResult.nutritionalInformation,
+      detailedNutrients: analysisResult.detailedNutrients,
+      carbonFootprintEstimate: analysisResult.carbonFootprintEstimate,
     });
 
     toast({
       title: "Meal Logged!",
-      description: `${analysisResult.estimatedCalories} kcal added.`,
+      description: `${mealCategory}: ${analysisResult.estimatedCalories} kcal added.`,
       action: <Leaf className="h-5 w-5 text-green-500" />,
     });
 
@@ -248,6 +254,7 @@ export default function LogMealPage() {
     setPhotoFile(null);
     setPhotoPreview(null);
     setDescription('');
+    setMealCategory(undefined);
     setAnalysisResult(null);
     setError(null);
     setIsLoading(false);
@@ -289,6 +296,7 @@ export default function LogMealPage() {
   };
 
   const canAnalyze = isClient && (userPlan !== 'free' || (userPlan === 'free' && aiScansRemaining > 0));
+  const mealCategories: MealCategory[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
   return (
     <div className="space-y-8">
@@ -357,7 +365,7 @@ export default function LogMealPage() {
               <div className="mt-2 flex justify-center rounded-lg border border-dashed border-input px-6 py-10 hover:border-primary transition-colors">
                 <div className="text-center">
                   {photoPreview && ( 
-                    <div className="relative group w-48 h-48 mx-auto"> {/* Ensure parent has dimensions for layout="fill" */}
+                    <div className="relative group w-48 h-48 mx-auto">
                       <Image
                         src={photoPreview}
                         alt="Meal preview"
@@ -393,6 +401,21 @@ export default function LogMealPage() {
             <Label htmlFor="description" className="text-base">Description (Optional)</Label>
             <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g., Chicken salad with avocado" className="mt-2 min-h-[80px]" />
           </div>
+
+          <div>
+            <Label htmlFor="mealCategory" className="text-base">Category</Label>
+            <Select value={mealCategory} onValueChange={(value) => setMealCategory(value as MealCategory)}>
+              <SelectTrigger id="mealCategory" className="mt-2">
+                <SelectValue placeholder="Select meal category" />
+              </SelectTrigger>
+              <SelectContent>
+                {mealCategories.map(cat => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
 
           {error && ( <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-md"> <AlertCircle className="h-5 w-5"/> <span>{error}</span> </div> )}
 
@@ -442,7 +465,7 @@ export default function LogMealPage() {
               </div>
             )}
             <div className="flex flex-col sm:flex-row gap-2 pt-4">
-              <Button onClick={handleLogMeal} className="w-full" size="lg"> <Utensils className="mr-2 h-5 w-5" /> Log This Meal </Button>
+              <Button onClick={handleLogMeal} className="w-full" size="lg" disabled={!mealCategory}> <ListPlus className="mr-2 h-5 w-5" /> Log This Meal </Button>
               <Button onClick={resetForm} className="w-full" variant="outline" size="lg"> Clear & Start New </Button>
             </div>
           </CardContent>

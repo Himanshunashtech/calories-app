@@ -1,5 +1,5 @@
 
-import type { MealEntry, UserPlan, AIScanUsage, UserProfile, OnboardingData, WaterIntakeData } from '@/types';
+import type { MealEntry, UserPlan, AIScanUsage, UserProfile, OnboardingData, WaterIntakeData, ReminderSettings, MealCategory } from '@/types';
 
 const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
 const SELECTED_PLAN_KEY = 'selectedPlan';
@@ -26,6 +26,7 @@ export function addMealLog(entry: Omit<MealEntry, 'id' | 'date'>): MealEntry {
       ...entry,
       id: Math.random().toString(36).substring(2, 15),
       date: new Date().toISOString(),
+      category: entry.category || undefined,
     };
     console.warn("localStorage not available, meal log not saved:", newEntryStub);
     return newEntryStub;
@@ -35,6 +36,7 @@ export function addMealLog(entry: Omit<MealEntry, 'id' | 'date'>): MealEntry {
     ...entry,
     id: Math.random().toString(36).substring(2, 15),
     date: new Date().toISOString(),
+    category: entry.category || undefined,
   };
   logs.push(newEntry);
   try {
@@ -126,31 +128,77 @@ export function canUseAIScan(plan: UserPlan): boolean {
 }
 
 // User Profile Data
+const defaultReminderSettings: ReminderSettings = {
+  breakfastTime: '08:00',
+  lunchTime: '12:30',
+  dinnerTime: '18:30',
+  waterReminderEnabled: false,
+  waterReminderInterval: 60,
+};
+
 export function getUserProfile(): UserProfile | null {
   if (typeof window === 'undefined') return null;
   try {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
+    let existingProfile: Partial<UserProfile> = {};
+
     if (profileJson) {
-      return JSON.parse(profileJson) as UserProfile;
+      existingProfile = JSON.parse(profileJson) as UserProfile;
+    } else {
+      const onboardingJson = localStorage.getItem(ONBOARDING_DATA_KEY);
+      if (onboardingJson) {
+        const onboardingData = JSON.parse(onboardingJson) as OnboardingData;
+        existingProfile = {
+          ...onboardingData,
+          email: '',
+          phone: '',
+          profileImageUri: null,
+        };
+        // localStorage.removeItem(ONBOARDING_DATA_KEY); // Optional: remove old key after migration
+      }
+    }
+    
+    const completeProfile: UserProfile = {
+      name: existingProfile.name || '',
+      age: existingProfile.age || '',
+      gender: existingProfile.gender || '',
+      height: existingProfile.height || '',
+      heightUnit: existingProfile.heightUnit || 'cm',
+      weight: existingProfile.weight || '',
+      weightUnit: existingProfile.weightUnit || 'kg',
+      activityLevel: existingProfile.activityLevel || '',
+      healthGoals: existingProfile.healthGoals || [],
+      exerciseFrequency: existingProfile.exerciseFrequency || '',
+      dietaryRestrictions: existingProfile.dietaryRestrictions || '',
+      dietType: existingProfile.dietType || '',
+      sleepHours: existingProfile.sleepHours || '',
+      stressLevel: existingProfile.stressLevel || '',
+      email: existingProfile.email || '',
+      phone: existingProfile.phone || '',
+      profileImageUri: existingProfile.profileImageUri || null,
+      reminderSettings: {
+        ...defaultReminderSettings,
+        ...(existingProfile.reminderSettings || {}),
+      },
+    };
+    
+    // Save the potentially migrated/defaulted profile back to ensure it's always complete
+    if (!profileJson && existingProfile.name) { // Only save if we migrated from onboarding
+         saveUserProfile(completeProfile);
     }
 
-    const onboardingJson = localStorage.getItem(ONBOARDING_DATA_KEY);
-    if (onboardingJson) {
-      const onboardingData = JSON.parse(onboardingJson) as OnboardingData;
-      const migratedProfile: UserProfile = {
-        ...onboardingData,
-        email: '',
-        phone: '',
-        profileImageUri: null,
-      };
-      localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(migratedProfile));
-      // localStorage.removeItem(ONBOARDING_DATA_KEY); // Optional: remove old key after migration
-      return migratedProfile;
-    }
-    return null;
+
+    return completeProfile;
+
   } catch (error) {
     console.error("Error reading user profile from localStorage:", error);
-    return null;
+    const fallbackProfile: UserProfile = {
+        name: '', age: '', gender: '', height: '', heightUnit: 'cm', weight: '', weightUnit: 'kg',
+        activityLevel: '', healthGoals: [], exerciseFrequency: '', dietaryRestrictions: '',
+        dietType: '', sleepHours: '', stressLevel: '', email: '', phone: '', profileImageUri: null,
+        reminderSettings: defaultReminderSettings
+    };
+    return fallbackProfile;
   }
 }
 

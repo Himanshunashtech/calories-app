@@ -9,15 +9,16 @@ import {
   getAIScanUsage, 
   getWaterIntake,
   addWater,
-  getTodaysMealLogs, // Use specific function for today's logs
-  getRecentMealLogs, // For trend analysis over several days
-  updateMealLogWithMood, // To log mood for a meal
+  getTodaysMealLogs, 
+  getRecentMealLogs, 
+  updateMealLogWithMood, 
   getUserProfile,
   type UserPlan, 
   type AIScanUsage as AIScanUsageType,
   type WaterIntakeData,
   type MealEntry,
-  type UserProfile as UserProfileType
+  type UserProfile as UserProfileType,
+  type ReminderSettings
 } from '@/lib/localStorage';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -28,7 +29,7 @@ import { useRouter } from 'next/navigation';
 import { 
   BarChart3, Camera, Leaf, Utensils, ShieldCheck, Zap, Brain, Trees, BarChartBig, Users, MessageSquareHeart, 
   CheckCircle, AlertTriangle, Info, Droplet, Footprints, TrendingUp, PlusCircle, Target as TargetIcon, 
-  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3
+  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -55,7 +56,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  // State for AI-driven widget data
   const [nutrientTrend, setNutrientTrend] = useState<AnalyzeNutrientTrendsOutput | null>(null);
   const [coachRecommendations, setCoachRecommendations] = useState<GetAICoachRecommendationsOutput | null>(null);
   const [carbonComparison, setCarbonComparison] = useState<GetCarbonComparisonOutput | null>(null);
@@ -71,26 +71,26 @@ export default function DashboardPage() {
 
     if (currentPlan === 'pro' || currentPlan === 'ecopro') {
       setIsLoadingAI(prev => ({ ...prev, trends: true, coach: true }));
-      const recentMealsForTrends = getRecentMealLogs(7); // Get last 7 days for trends
+      const recentMealsForTrends = getRecentMealLogs(7); 
       
       analyzeNutrientTrends({ recentMeals: recentMealsForTrends.map(m => ({...m, date: m.date})), userHealthGoals: profile.healthGoals })
         .then(setNutrientTrend).catch(err => console.error("Error fetching nutrient trends:", err))
         .finally(() => setIsLoadingAI(prev => ({ ...prev, trends: false })));
       
-      getAICoachRecommendations({ userProfile: profile, recentMeals: meals.slice(0, 10) }) // Use today's meals or recent for coach
+      getAICoachRecommendations({ userProfile: profile, recentMeals: meals.slice(0, 10) }) 
         .then(setCoachRecommendations).catch(err => console.error("Error fetching coach recommendations:", err))
         .finally(() => setIsLoadingAI(prev => ({ ...prev, coach: false })));
     }
     if (currentPlan === 'ecopro') {
       setIsLoadingAI(prev => ({ ...prev, carbon: true, mood: true }));
-      const allMealsForCarbon = getRecentMealLogs(30); // Use more data for carbon avg
+      const allMealsForCarbon = getRecentMealLogs(30); 
       
       getCarbonComparison({ userMeals: allMealsForCarbon.filter(m => m.carbonFootprintEstimate !== undefined) })
         .then(setCarbonComparison).catch(err => console.error("Error fetching carbon comparison:", err))
         .finally(() => setIsLoadingAI(prev => ({ ...prev, carbon: false })));
 
-      const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood); // Meals from last 2 weeks that have mood
-      if(mealsWithMood.length >= 3) { // Only call if there's some data
+      const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood);
+      if(mealsWithMood.length >= 3) { 
         analyzeFoodMoodCorrelation({ mealsWithMood: mealsWithMood.map(m => ({...m, date: m.date})) })
           .then(setFoodMoodInsights).catch(err => console.error("Error fetching food-mood insights:", err))
           .finally(() => setIsLoadingAI(prev => ({ ...prev, mood: false })));
@@ -120,12 +120,11 @@ export default function DashboardPage() {
         fetchDashboardData(currentPlan, profile, todayLogs);
     }
 
-  }, [fetchDashboardData]); // Added fetchDashboardData to dependency array
+  }, [fetchDashboardData]);
 
   const refreshMealLogs = () => {
     const todayLogs = getTodaysMealLogs();
     setTodaysMealLogs(todayLogs);
-    // Optionally re-fetch AI data if meals change significantly
     if(userProfile) fetchDashboardData(plan, userProfile, todayLogs);
   }
   
@@ -149,11 +148,10 @@ export default function DashboardPage() {
   const handleLogMood = async (mood: 'happy' | 'neutral' | 'sad') => {
     const lastMeal = todaysMealLogs.length > 0 ? todaysMealLogs[todaysMealLogs.length - 1] : null;
     if (lastMeal) {
-      updateMealLogWithMood(lastMeal.id, mood); // Update mood for the last meal
-      refreshMealLogs(); // Refresh logs to reflect mood change
+      updateMealLogWithMood(lastMeal.id, mood);
+      refreshMealLogs(); 
       toast({ title: "Mood Logged!", description: `Feeling ${mood} after ${lastMeal.description || 'your last meal'}.`});
       
-      // Re-fetch mood correlation insights
       if (plan === 'ecopro' && userProfile) {
         setIsLoadingAI(prev => ({ ...prev, mood: true }));
         const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood);
@@ -192,10 +190,10 @@ export default function DashboardPage() {
   };
   
   const nutrientDataPlaceholders = [
-    { name: 'Iron', value: 0, low: true, icon: Shell, tip: "Analyze meals to see Iron levels.", unit: "mg" },
-    { name: 'Vitamin D', value: 0, low: true, icon: Fish, tip: "Analyze meals for Vitamin D insights.", unit: "mcg" },
-    { name: 'Fiber', value: 0, low: true, icon: Grape, tip: "Track fiber through meal analysis.", unit: "g" },
-    { name: 'Calcium', value: 0, low: true, icon: Maximize2, tip: "Calcium data appears after meal analysis.", unit: "mg" },
+    { name: 'Iron', value: 0, actualValue: 0, low: true, icon: Shell, tip: "Analyze meals to see Iron levels.", unit: "mg" },
+    { name: 'Vitamin D', value: 0, actualValue: 0, low: true, icon: Fish, tip: "Analyze meals for Vitamin D insights.", unit: "mcg" },
+    { name: 'Fiber', value: 0, actualValue: 0, low: true, icon: Grape, tip: "Track fiber through meal analysis.", unit: "g" },
+    { name: 'Calcium', value: 0, actualValue: 0, low: true, icon: Maximize2, tip: "Calcium data appears after meal analysis.", unit: "mg" },
   ];
 
   const todayMicronutrients = useMemo(() => {
@@ -213,31 +211,32 @@ export default function DashboardPage() {
             aggregatedNutrients[key].totalValue += nutrient.value;
             aggregatedNutrients[key].entries += 1;
             if (nutrient.rdaPercentage) {
-                 aggregatedNutrients[key].rdaSum = (aggregatedNutrients[key].rdaSum || 0) + (nutrient.rdaPercentage || 0) ; // Assuming RDA is based on single serving
+                 aggregatedNutrients[key].rdaSum = (aggregatedNutrients[key].rdaSum || 0) + (nutrient.rdaPercentage || 0) ;
             }
           }
         }
       }
     });
     
-    // RDA goals are illustrative, actual RDAs vary by individual
     const illustrativeRDAGoals: {[key:string]: number} = { iron: 18, vitaminD: 20, fiber: 30, calcium: 1000, vitaminC: 90, potassium: 3500 };
 
-
-    return Object.entries(aggregatedNutrients).map(([name, data]) => {
-        const rdaGoal = illustrativeRDAGoals[name.toLowerCase()] || 100; // Default to 100 if no specific RDA goal
+    const calculatedNutrients = Object.entries(aggregatedNutrients).map(([name, data]) => {
+        const rdaGoal = illustrativeRDAGoals[name.toLowerCase()] || 100; 
         const percentageOfRDA = data.rdaSum && data.entries > 0 ? (data.rdaSum / data.entries) : (data.totalValue / rdaGoal) * 100;
         const icon = nutrientDataPlaceholders.find(p => p.name.toLowerCase() === name.toLowerCase())?.icon || Leaf;
         return {
             name: name.charAt(0).toUpperCase() + name.slice(1),
-            value: parseFloat(percentageOfRDA.toFixed(0)), // Display as % RDA achieved
+            value: parseFloat(percentageOfRDA.toFixed(0)), 
             actualValue: parseFloat(data.totalValue.toFixed(1)),
             unit: data.unit,
-            low: percentageOfRDA < 50, // Arbitrary threshold for "low"
+            low: percentageOfRDA < 50,
             icon: icon,
             tip: percentageOfRDA < 50 ? `Low ${name}. Aim for ${rdaGoal}${data.unit}.` : `${name} levels look good today!`
         }
-    }).slice(0,4); // Show top 4 or defined placeholders
+    });
+    
+    if (calculatedNutrients.length === 0) return nutrientDataPlaceholders;
+    return calculatedNutrients.slice(0,4);
   }, [todaysMealLogs, plan]);
 
 
@@ -248,6 +247,8 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  const reminderSettings = userProfile?.reminderSettings;
 
   return (
     <div className="space-y-8">
@@ -282,10 +283,38 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
+      {reminderSettings && (
+        <Card className="shadow-md">
+          <CardHeader><CardTitle className="flex items-center gap-2"><BellRing className="text-primary"/> Reminders</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-center justify-between p-2 border rounded-md">
+              <span className="flex items-center gap-1"><Clock3 className="h-4 w-4 text-muted-foreground"/> Breakfast:</span>
+              <Badge variant="outline">{reminderSettings.breakfastTime || 'Not set'}</Badge>
+            </div>
+            <div className="flex items-center justify-between p-2 border rounded-md">
+              <span className="flex items-center gap-1"><Clock3 className="h-4 w-4 text-muted-foreground"/> Lunch:</span>
+              <Badge variant="outline">{reminderSettings.lunchTime || 'Not set'}</Badge>
+            </div>
+            <div className="flex items-center justify-between p-2 border rounded-md">
+              <span className="flex items-center gap-1"><Clock3 className="h-4 w-4 text-muted-foreground"/> Dinner:</span>
+              <Badge variant="outline">{reminderSettings.dinnerTime || 'Not set'}</Badge>
+            </div>
+            <div className="flex items-center justify-between p-2 border rounded-md">
+              <span className="flex items-center gap-1"><Droplet className="h-4 w-4 text-blue-500"/> Water Reminder:</span>
+              <Badge variant={reminderSettings.waterReminderEnabled ? "secondary" : "outline"}>
+                {reminderSettings.waterReminderEnabled ? `Every ${reminderSettings.waterReminderInterval} mins` : 'Disabled'}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground pt-2 text-center">Notification functionality is browser-dependent and will be enhanced soon. Set preferences in your Profile.</p>
+          </CardContent>
+        </Card>
+      )}
+
+
       <Card className="shadow-md">
         <CardHeader><CardTitle className="flex items-center gap-2"><Utensils className="text-primary"/> Today's Meals</CardTitle><CardDescription>Timeline of your meals logged today. <Button variant="ghost" size="sm" onClick={refreshMealLogs} className="text-xs"><Edit3 className="mr-1 h-3 w-3"/>Refresh</Button></CardDescription></CardHeader>
         <CardContent>
-          {todaysMealLogs.length > 0 ? (<ScrollArea className="w-full whitespace-nowrap"><div className="flex space-x-4 pb-4">{todaysMealLogs.map(meal => (<Card key={meal.id} className="min-w-[220px] max-w-[280px] shrink-0"><CardHeader className="p-3">{meal.photoDataUri && (<Image src={meal.photoDataUri} alt={meal.description || "Meal"} width={200} height={120} className="rounded-md object-cover w-full aspect-[16/9]" data-ai-hint="food meal"/>)}<CardTitle className="text-base mt-2 truncate">{meal.description || "Meal Photo"}</CardTitle><CardDescription className="text-xs">{new Date(meal.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}{meal.mood && ` - Mood: ${meal.mood.charAt(0).toUpperCase() + meal.mood.slice(1)}`}</CardDescription></CardHeader><CardContent className="p-3 text-xs space-y-1"><p><span className="font-medium">{meal.calories.toFixed(0)} kcal</span></p><p className="text-muted-foreground">P: {meal.protein.toFixed(1)}g, C: {meal.carbs.toFixed(1)}g, F: {meal.fat.toFixed(1)}g</p>{(plan === 'ecopro' || plan === 'pro') && meal.carbonFootprintEstimate !== undefined && <p className="text-teal-600 text-xs flex items-center gap-1"><Trees className="h-3 w-3"/>~{meal.carbonFootprintEstimate.toFixed(2)} kg CO₂e</p>}</CardContent><CardFooter className="p-3"><Button variant="ghost" size="sm" className="w-full text-xs" disabled>Recreate Meal</Button></CardFooter></Card>))}</div><ScrollBar orientation="horizontal" /></ScrollArea>) : (<p className="text-muted-foreground text-center py-4">No meals logged today.</p>)}
+          {todaysMealLogs.length > 0 ? (<ScrollArea className="w-full whitespace-nowrap"><div className="flex space-x-4 pb-4">{todaysMealLogs.map(meal => (<Card key={meal.id} className="min-w-[220px] max-w-[280px] shrink-0"><CardHeader className="p-3">{meal.photoDataUri && (<Image src={meal.photoDataUri} alt={meal.description || "Meal"} width={200} height={120} className="rounded-md object-cover w-full aspect-[16/9]" data-ai-hint="food meal"/>)}<CardTitle className="text-base mt-2 truncate">{meal.category ? `${meal.category}: ` : ''}{meal.description || "Meal Photo"}</CardTitle><CardDescription className="text-xs">{new Date(meal.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}{meal.mood && ` - Mood: ${meal.mood.charAt(0).toUpperCase() + meal.mood.slice(1)}`}</CardDescription></CardHeader><CardContent className="p-3 text-xs space-y-1"><p><span className="font-medium">{meal.calories.toFixed(0)} kcal</span></p><p className="text-muted-foreground">P: {meal.protein.toFixed(1)}g, C: {meal.carbs.toFixed(1)}g, F: {meal.fat.toFixed(1)}g</p>{(plan === 'ecopro' || plan === 'pro') && meal.carbonFootprintEstimate !== undefined && <p className="text-teal-600 text-xs flex items-center gap-1"><Trees className="h-3 w-3"/>~{meal.carbonFootprintEstimate.toFixed(2)} kg CO₂e</p>}</CardContent><CardFooter className="p-3"><Button variant="ghost" size="sm" className="w-full text-xs" disabled>Recreate Meal</Button></CardFooter></Card>))}</div><ScrollBar orientation="horizontal" /></ScrollArea>) : (<p className="text-muted-foreground text-center py-4">No meals logged today.</p>)}
         </CardContent>
       </Card>
 
