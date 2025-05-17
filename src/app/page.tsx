@@ -2,7 +2,7 @@
 import { Button } from '@/components/ui/button';
 import { AppLogo } from '@/components/AppLogo';
 import Link from 'next/link';
-import Image from 'next/image';
+// Image import removed as it's replaced by model-viewer
 import { Leaf, Zap, BarChart3, LogIn } from 'lucide-react';
 
 export default function LandingPage() {
@@ -13,14 +13,18 @@ export default function LandingPage() {
       </header>
 
       <main className="flex flex-col items-center">
-        <Image
-          src="https://placehold.co/300x200.png"
-          alt="Healthy food illustration"
-          data-ai-hint="healthy food"
-          width={300}
-          height={200}
-          className="rounded-lg shadow-md mb-8"
-        />
+        <div className="w-full max-w-sm h-80 md:h-96 mb-8">
+          {/* @ts-ignore next-line  Necessary because model-viewer is a custom element and TS might not recognize it without global declaration */}
+          <model-viewer
+            src="https://modelviewer.dev/shared-assets/models/Astronaut.glb"
+            alt="A 3D model of an astronaut"
+            camera-controls
+            auto-rotate
+            shadow-intensity="1"
+            style={{ width: '100%', height: '100%', backgroundColor: 'transparent' }}
+            data-ai-hint="astronaut space"
+          ></model-viewer>
+        </div>
         <h1 className="text-4xl font-bold text-primary mb-4">
           Welcome to EcoAI Calorie Tracker
         </h1>
@@ -28,7 +32,7 @@ export default function LandingPage() {
           Effortlessly track your meals and nutrition with the power of AI, wrapped in an eco-conscious design.
         </p>
 
-        <Link href="/onboarding" passHref> {/* Changed href to /onboarding */}
+        <Link href="/onboarding" passHref>
           <Button size="lg" className="mb-10">
             Get Started
             <LogIn className="ml-2 h-5 w-5" />
