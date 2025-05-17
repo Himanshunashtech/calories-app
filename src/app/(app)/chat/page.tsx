@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Send, User, Sparkles, Loader2, MessageCircle, ShieldAlert } from 'lucide-react';
+import { Send, User, Sparkles, Loader2, MessageCircle, ShieldAlert, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { chatWithAICoach } from '@/ai/flows/chat-with-ai-coach';
 import type { ChatMessage, FlowChatMessage } from '@/types';
@@ -132,11 +132,14 @@ export default function ChatPage() {
 
   return (
     <Card className="w-full h-[calc(100vh-10rem)] md:h-[calc(100vh-12rem)] flex flex-col shadow-xl border-primary/20">
-      <CardHeader className="border-b">
+      <CardHeader className="border-b flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-primary">
           <MessageCircle className="h-6 w-6" />
           Chat with EcoAI Coach
         </CardTitle>
+        <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Close chat">
+          <X className="h-5 w-5 text-muted-foreground hover:text-foreground" />
+        </Button>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
         <ScrollArea className="h-full p-4" ref={scrollAreaRef}>
