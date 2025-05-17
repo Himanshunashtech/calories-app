@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, ChangeEvent, FormEvent, useEffect } from 'react'; // Added useEffect
+import { useState, ChangeEvent, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, Coffee, CheckCircle, Leaf, Sparkles } from 'lucide-react'; // Added Sparkles from lucide-react
+import { User, Target, Salad, Coffee, CheckCircle, Leaf, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TOTAL_STEPS = 5;
@@ -53,12 +53,12 @@ export default function OnboardingPage() {
     sleepHours: '',
     stressLevel: '',
   });
-  const [isClient, setIsClient] = useState(false); // State to track client-side mount
+  const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
-    setIsClient(true); // Set to true once component mounts on client
+    setIsClient(true);
   }, []);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -117,16 +117,15 @@ export default function OnboardingPage() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     console.log('Onboarding Data:', formData);
-    // Here you would typically save the data to a backend or state management
-    localStorage.setItem('onboardingData', JSON.stringify(formData)); // Example: save to localStorage
+    localStorage.setItem('onboardingData', JSON.stringify(formData));
     localStorage.setItem('onboardingComplete', 'true');
 
     toast({
-      title: 'Welcome to EcoAI!',
-      description: 'Your personalized plan is ready.',
+      title: 'Onboarding Complete!',
+      description: "Let's choose a plan that's right for you.",
       action: <CheckCircle className="text-green-500" />,
     });
-    router.push('/log-meal'); // Redirect to the main app
+    router.push('/subscription'); // Redirect to the subscription page
   };
 
   const progressValue = (currentStep / TOTAL_STEPS) * 100;
@@ -156,7 +155,7 @@ export default function OnboardingPage() {
       </CardHeader>
 
       <CardContent>
-        {isClient && ( // Only render form content on the client
+        {isClient ? (
           <form onSubmit={handleSubmit} className="space-y-6">
             {currentStep === 1 && (
               <section className="space-y-4 animate-in fade-in duration-500">
@@ -371,8 +370,7 @@ export default function OnboardingPage() {
               )}
             </CardFooter>
           </form>
-        )}
-        {!isClient && ( // Show a loading skeleton or placeholder for SSR/initial render
+        ) : (
           <div className="space-y-6">
             <div className="h-10 bg-muted rounded-md animate-pulse"></div>
             <div className="h-10 bg-muted rounded-md animate-pulse"></div>
@@ -387,8 +385,3 @@ export default function OnboardingPage() {
     </Card>
   );
 }
-
-// Removed the custom Sparkles SVG component as we are using lucide-react's Sparkles
-    
-
-      

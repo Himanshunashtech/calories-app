@@ -1,0 +1,149 @@
+
+'use client';
+
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Check, Leaf, Sparkles, Trees, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
+
+const plans = [
+  {
+    name: 'Free',
+    price: '$0',
+    priceSuffix: '/ month',
+    icon: Leaf,
+    description: 'Start tracking your meals and calories effortlessly.',
+    features: [
+      'Basic meal logging',
+      'Calorie tracking (manual & AI-assisted)',
+      'Limited AI analysis (3 scans/day)',
+    ],
+    cta: 'Get Started Free',
+    tier: 'free',
+    variant: 'outline' as 'outline' | 'default',
+  },
+  {
+    name: 'Pro',
+    price: '$9.99',
+    priceSuffix: '/ month',
+    icon: Sparkles,
+    description: 'Unlock advanced AI insights for optimal results.',
+    features: [
+      'All Free features, plus:',
+      'Unlimited AI meal analysis & logging',
+      'Detailed nutritional insights & reports',
+      'Advanced macronutrient tracking',
+      'Personalized AI-driven tips & recommendations',
+    ],
+    cta: 'Upgrade to Pro',
+    tier: 'pro',
+    variant: 'default' as 'outline' | 'default',
+    highlight: true,
+  },
+  {
+    name: 'EcoPro',
+    price: '$12.99',
+    priceSuffix: '/ month',
+    icon: Trees,
+    description: 'Maximize your health and minimize your carbon footprint.',
+    features: [
+      'All Pro features, plus:',
+      'Meal carbon footprint estimations',
+      'Eco-friendly food suggestions',
+      'Track your positive environmental impact',
+      'Support eco-initiatives (conceptual)',
+    ],
+    cta: 'Go EcoPro',
+    tier: 'ecopro',
+    variant: 'outline' as 'outline' | 'default',
+  },
+];
+
+export default function SubscriptionPage() {
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const handleSelectPlan = (tier: string, planName: string) => {
+    localStorage.setItem('selectedPlan', tier);
+    toast({
+      title: 'Plan Selected!',
+      description: `You've chosen the ${planName} plan. Welcome aboard!`,
+      action: <Check className="text-green-500" />,
+    });
+    router.push('/log-meal');
+  };
+
+  const handleContinueFree = () => {
+    localStorage.setItem('selectedPlan', 'free');
+     toast({
+      title: 'Welcome!',
+      description: `You're starting with the Free plan. Enjoy EcoAI!`,
+    });
+    router.push('/log-meal');
+  };
+
+
+  return (
+    <div className="space-y-8">
+      <div className="text-center">
+        <h1 className="text-3xl md:text-4xl font-bold text-primary mb-2">Choose Your EcoAI Plan</h1>
+        <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          Unlock powerful features to supercharge your health journey while being mindful of our planet.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
+        {plans.map((plan) => (
+          <Card 
+            key={plan.name} 
+            className={cn(
+              'flex flex-col shadow-lg hover:shadow-2xl transition-shadow duration-300',
+              plan.highlight ? 'border-primary border-2 ring-2 ring-primary/30 md:scale-105 z-10 bg-card' : 'bg-card'
+            )}
+          >
+            <CardHeader className="items-center text-center pt-8">
+              <plan.icon className={cn('h-12 w-12 mb-4', plan.highlight ? 'text-primary' : 'text-accent')} />
+              <CardTitle className="text-2xl">{plan.name}</CardTitle>
+              <div className="text-3xl font-bold text-primary mt-2">
+                {plan.price}
+                <span className="text-sm font-normal text-muted-foreground">{plan.priceSuffix}</span>
+              </div>
+              <CardDescription className="mt-1 min-h-[60px] px-2 text-sm">{plan.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-grow pt-0">
+              <ul className="space-y-2.5 text-sm">
+                {plan.features.map((feature, index) => (
+                  <li key={index} className="flex items-start">
+                    <Check className="h-4 w-4 text-green-600 mr-2 shrink-0 mt-1" />
+                    <span className="text-muted-foreground group-hover:text-foreground transition-colors">{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+            <CardFooter className="mt-auto pb-6 px-6">
+              <Button
+                onClick={() => handleSelectPlan(plan.tier, plan.name)}
+                className="w-full text-base py-5"
+                variant={plan.highlight ? 'default' : 'outline'}
+                size="lg"
+              >
+                {plan.cta} <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
+
+      <div className="text-center mt-6 space-y-2">
+        <p className="text-muted-foreground">All plans are commitment-free. Cancel anytime.</p>
+        <Button variant="link" onClick={handleContinueFree} className="text-primary hover:underline">
+          Or continue with the Free plan for now
+          <ArrowRight className="ml-1 h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
