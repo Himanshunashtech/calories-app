@@ -17,3 +17,11 @@ export interface FoodAnalysisResult {
   fats: number; // in grams
   proteins: number; // in grams
 }
+
+export type UserPlan = 'free' | 'pro' | 'ecopro';
+
+export interface AIScanUsage {
+  count: number;
+  limit: number;
+  lastResetMonth: number; // Stores the month (0-11) of the last reset
+}

@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Camera, BarChart3, Leaf } from 'lucide-react'; // Using Leaf as a placeholder for a generic 'Log' icon or 'Scan' icon if specific ones aren't fitting
+import { Camera, BarChart3, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/log-meal', label: 'Log Meal', icon: Camera },
   { href: '/stats', label: 'Stats', icon: BarChart3 },
 ];

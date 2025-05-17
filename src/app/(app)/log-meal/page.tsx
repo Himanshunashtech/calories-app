@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { addMealLog } from '@/lib/localStorage';
+import { addMealLog, getSelectedPlan, canUseAIScan, incrementAIScanCount, getAIScanUsage, type UserPlan } from '@/lib/localStorage';
 import type { FoodAnalysisResult } from '@/types';
-import { UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle } from 'lucide-react';
+import { UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle, Info } from 'lucide-react';
 
 export default function LogMealPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -22,6 +22,27 @@ export default function LogMealPage() {
   const [analysisResult, setAnalysisResult] = useState<FoodAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const [userPlan, setUserPlan] = useState<UserPlan>('free');
+  const [isClient, setIsClient] = useState(false);
+  const [aiScansRemaining, setAiScansRemaining] = useState(0);
+
+  useEffect(() => {
+    setIsClient(true);
+    const plan = getSelectedPlan();
+    setUserPlan(plan);
+    if (plan === 'free') {
+      const usage = getAIScanUsage();
+      setAiScansRemaining(usage.limit - usage.count);
+    }
+  }, []);
+  
+  useEffect(() => {
+    if (userPlan === 'free') {
+      const usage = getAIScanUsage();
+      setAiScansRemaining(usage.limit - usage.count);
+    }
+  }, [isLoading, userPlan]);
+
 
   useEffect(() => {
     if (photoFile) {
@@ -39,7 +60,7 @@ export default function LogMealPage() {
     const file = event.target.files?.[0];
     if (file) {
       setPhotoFile(file);
-      setAnalysisResult(null); // Reset previous results
+      setAnalysisResult(null); 
       setError(null);
     }
   };
@@ -49,14 +70,24 @@ export default function LogMealPage() {
       setError('Please upload a photo of your meal.');
       return;
     }
+
+    if (userPlan === 'free' && !canUseAIScan(userPlan)) {
+      toast({
+        variant: "destructive",
+        title: "AI Scan Limit Reached",
+        description: "You've used all your free AI scans for this month. Upgrade to Pro for unlimited scans.",
+      });
+      setError('AI Scan limit reached for free plan.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setAnalysisResult(null);
 
     try {
-      const photoDataUri = photoPreview; // Already in data URI format
+      const photoDataUri = photoPreview; 
 
-      // Perform AI analyses in parallel
       const [foodDetails, macroDetails] = await Promise.all([
         analyzeFoodPhoto({ photoDataUri }),
         autoLogMacros({ photoDataUri, description: description || 'A meal' })
@@ -69,6 +100,17 @@ export default function LogMealPage() {
         fats: macroDetails.fats,
         proteins: macroDetails.proteins,
       });
+
+      if (userPlan === 'free') {
+        incrementAIScanCount();
+        const usage = getAIScanUsage(); // update remaining count
+        setAiScansRemaining(usage.limit - usage.count);
+        toast({
+          title: "AI Scan Used",
+          description: `You have ${usage.limit - usage.count} free scans remaining this month. Results may be watermarked.`,
+          action: <Info className="h-5 w-5 text-blue-500" />
+        });
+      }
 
     } catch (err) {
       console.error('AI analysis failed:', err);
@@ -109,12 +151,7 @@ export default function LogMealPage() {
       action: <Leaf className="h-5 w-5 text-green-500" />,
     });
 
-    // Reset form
-    setPhotoFile(null);
-    setPhotoPreview(null);
-    setDescription('');
-    setAnalysisResult(null);
-    setError(null);
+    resetForm();
   };
   
   const resetForm = () => {
@@ -129,6 +166,8 @@ export default function LogMealPage() {
       fileInput.value = "";
     }
   };
+  
+  const canAnalyze = isClient && (userPlan !== 'free' || (userPlan === 'free' && aiScansRemaining > 0));
 
   return (
     <div className="space-y-8">
@@ -140,6 +179,11 @@ export default function LogMealPage() {
           </CardTitle>
           <CardDescription>
             Upload a photo of your meal and let EcoAI analyze it for you.
+            {isClient && userPlan === 'free' && (
+              <span className="block text-xs mt-1">
+                {aiScansRemaining > 0 ? `${aiScansRemaining} AI scans remaining this month.` : "No AI scans remaining."} Results may be watermarked.
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -196,7 +240,7 @@ export default function LogMealPage() {
 
           <Button
             onClick={handleAnalyzeMeal}
-            disabled={!photoFile || isLoading}
+            disabled={!photoFile || isLoading || !canAnalyze}
             className="w-full text-lg py-6"
           >
             {isLoading ? (
@@ -204,8 +248,11 @@ export default function LogMealPage() {
             ) : (
               <Sparkles className="mr-2 h-5 w-5" />
             )}
-            {isLoading ? 'Analyzing...' : 'Analyze Meal with AI'}
+            {isLoading ? 'Analyzing...' : (canAnalyze ? 'Analyze Meal with AI' : 'AI Scan Limit Reached')}
           </Button>
+          {!canAnalyze && isClient && userPlan === 'free' && (
+            <p className="text-xs text-center text-muted-foreground mt-2">Upgrade to Pro or EcoPro for unlimited AI scans.</p>
+          )}
         </CardContent>
       </Card>
 
@@ -216,6 +263,9 @@ export default function LogMealPage() {
               <Leaf className="h-7 w-7 text-primary" />
               AI Analysis Results
             </CardTitle>
+             {isClient && userPlan === 'free' && (
+              <CardDescription className="text-xs text-muted-foreground">Note: Results for free tier may be illustrative or watermarked.</CardDescription>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="text-3xl font-bold text-primary text-center">

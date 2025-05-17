@@ -4,9 +4,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { getMealLogs, clearMealLogs } from '@/lib/localStorage';
+import { getMealLogs, clearMealLogs, getSelectedPlan, type UserPlan } from '@/lib/localStorage';
 import type { MealEntry } from '@/types';
-import { CalendarDays, Utensils, Leaf, Trash2, Info } from 'lucide-react';
+import { CalendarDays, Utensils, Leaf, Trash2, Info, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -20,24 +20,27 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { Badge } from '@/components/ui/badge';
 
 
 const DAILY_CALORIE_GOAL = 2000; // Example goal
 
 const MACRO_COLORS = {
-  protein: 'hsl(var(--chart-1))', // Primary Green
-  carbs: 'hsl(var(--chart-2))', // Moss Green
-  fat: 'hsl(var(--chart-3))', // Earthy Yellow/Brown
+  protein: 'hsl(var(--chart-1))', 
+  carbs: 'hsl(var(--chart-2))', 
+  fat: 'hsl(var(--chart-3))', 
 };
 
 export default function StatsPage() {
   const [mealLogs, setMealLogs] = useState<MealEntry[]>([]);
   const [isClient, setIsClient] = useState(false);
+  const [userPlan, setUserPlan] = useState<UserPlan>('free');
   const { toast } = useToast();
 
   useEffect(() => {
     setIsClient(true);
     setMealLogs(getMealLogs());
+    setUserPlan(getSelectedPlan());
   }, []);
   
   const refreshLogs = () => {
@@ -74,7 +77,7 @@ export default function StatsPage() {
     { name: 'Protein', value: parseFloat(totalMacrosToday.protein.toFixed(1)), fill: MACRO_COLORS.protein },
     { name: 'Carbs', value: parseFloat(totalMacrosToday.carbs.toFixed(1)), fill: MACRO_COLORS.carbs },
     { name: 'Fat', value: parseFloat(totalMacrosToday.fat.toFixed(1)), fill: MACRO_COLORS.fat },
-  ].filter(macro => macro.value > 0); // Filter out macros with 0 value to avoid chart errors if no logs
+  ].filter(macro => macro.value > 0);
 
   const recentMeals = useMemo(() => 
     [...mealLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5),
@@ -91,9 +94,7 @@ export default function StatsPage() {
     });
   };
 
-
   if (!isClient) {
-    // Render a loading state or null during SSR/ första renderingen på klienten
     return (
         <div className="space-y-6">
             <Card><CardHeader><CardTitle>Loading Stats...</CardTitle></CardHeader><CardContent><div className="h-20 bg-muted animate-pulse rounded-md"></div></CardContent></Card>
@@ -107,11 +108,18 @@ export default function StatsPage() {
     <div className="space-y-6">
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-2xl">
-            <CalendarDays className="h-7 w-7 text-primary" />
-            Today's Summary
-          </CardTitle>
-          <CardDescription>Your caloric intake and progress for today.</CardDescription>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <CalendarDays className="h-7 w-7 text-primary" />
+                Today's Summary
+              </CardTitle>
+              <CardDescription>Your caloric intake and progress for today.</CardDescription>
+            </div>
+            {isClient && (userPlan === 'pro' || userPlan === 'ecopro') && (
+                 <Badge variant="default"><ShieldCheck className="mr-1 h-4 w-4" /> Pro Insights Enabled</Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="mb-4">
@@ -133,7 +141,9 @@ export default function StatsPage() {
             <Leaf className="h-7 w-7 text-primary" />
             Macronutrient Breakdown (Today)
           </CardTitle>
-          <CardDescription>Protein, Carbohydrates, and Fats consumed today.</CardDescription>
+          <CardDescription>Protein, Carbohydrates, and Fats consumed today. 
+            {isClient && (userPlan === 'pro' || userPlan === 'ecopro') && " Micro-nutrient details available with Pro."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {todaysLogs.length > 0 && macroChartData.length > 0 ? (
@@ -189,7 +199,7 @@ export default function StatsPage() {
                     </p>
                   </div>
                   {log.photoDataUri && (
-                     <Image src={log.photoDataUri} alt={log.description || "Meal"} width={40} height={40} className="rounded-sm object-cover" />
+                     <Image src={log.photoDataUri} alt={log.description || "Meal"} width={40} height={40} className="rounded-sm object-cover" data-ai-hint="food meal"/>
                   )}
                 </li>
               ))}
@@ -229,4 +239,3 @@ export default function StatsPage() {
     </div>
   );
 }
-
