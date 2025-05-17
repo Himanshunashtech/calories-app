@@ -28,6 +28,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { auth } from '@/lib/firebase'; // Import Firebase auth
+import { signOut } from 'firebase/auth';
 
 
 const defaultProfile: UserProfile = {
@@ -221,8 +223,19 @@ export default function ProfilePage() {
     });
   };
 
-  const handleLogout = () => {
-    fakeLogout();
+  const handleLogout = async () => {
+    try {
+      await signOut(auth); // Sign out from Firebase
+    } catch (error) {
+      console.error("Error signing out from Firebase: ", error);
+      toast({
+        variant: "destructive",
+        title: "Logout Error",
+        description: "Could not sign out from Google. Please try again.",
+      });
+      // Optionally, still proceed with local logout
+    }
+    fakeLogout(); // Clears local logged-in flag
     toast({
         title: "Logged Out",
         description: "You have been successfully logged out.",
@@ -232,6 +245,7 @@ export default function ProfilePage() {
 
   const handleDeleteAccount = () => {
     clearAllUserData();
+    signOut(auth).catch(err => console.error("Error signing out Firebase during account deletion:", err)); // Also sign out from Firebase
     toast({
       title: 'Account Deleted',
       description: 'All your data has been removed. We hope to see you again!',
@@ -510,4 +524,3 @@ export default function ProfilePage() {
   );
 }
     
-

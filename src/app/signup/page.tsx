@@ -11,8 +11,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import { UserPlus, Mail, Lock, ExternalLink, LogIn } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { fakeSignup, isUserLoggedIn, isOnboardingComplete } from '@/lib/localStorage';
-
+import { fakeSignup, isUserLoggedIn, isOnboardingComplete, getUserProfile, saveUserProfile } from '@/lib/localStorage';
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '@/lib/firebase';
+import type { UserProfile } from '@/types';
 
 export default function SignupPage() {
   const [name, setName] = useState('');
@@ -21,6 +23,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -45,7 +48,7 @@ export default function SignupPage() {
     checkPasswordStrength(newPassword);
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleEmailPasswordSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       toast({ variant: 'destructive', title: 'Name Required', description: 'Please enter your name.' });
@@ -69,6 +72,70 @@ export default function SignupPage() {
     router.push('/onboarding'); 
   };
 
+  const handleGoogleSignUp = async () => {
+    setIsGoogleLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      if (user && user.email) {
+        // For Google Sign-Up, we create a new profile or update if one somehow exists (e.g. user backed out)
+        const newProfile: UserProfile = {
+          name: user.displayName || user.email.split('@')[0] || 'User',
+          email: user.email,
+          profileImageUri: user.photoURL || null,
+          // Initialize other onboarding fields to defaults or empty
+          age: '', 
+          gender: '',
+          height: '',
+          weight: '',
+          activityLevel: '',
+          healthGoals: [],
+          dietType: '',
+          dietaryRestrictions: [],
+          alsoTrackSustainability: false,
+          enableCarbonTracking: false,
+          exerciseFrequency: '',
+          favoriteCuisines: '',
+          dislikedIngredients: '',
+          sleepHours: '',
+          stressLevel: '',
+          waterGoal: 8,
+          heightUnit: 'cm',
+          weightUnit: 'kg',
+          macroSplit: { carbs: 50, protein: 25, fat: 25 },
+          reminderSettings: { /* default reminders */ 
+            mealRemindersEnabled: true, breakfastTime: '08:00', lunchTime: '12:30', dinnerTime: '18:30',
+            waterReminderEnabled: false, waterReminderInterval: 60, snoozeDuration: 5,
+          },
+          appSettings: { /* default app settings */ 
+            darkModeEnabled: false, unitPreferences: { weight: 'kg', height: 'cm', volume: 'ml' }, hideNonCompliantRecipes: false,
+          },
+        };
+        
+        saveUserProfile(newProfile); // Save this new profile
+        fakeSignup(user.email, newProfile.name); // Sets loggedIn = true, onboardingComplete = false
+
+        toast({
+          title: 'Signed up with Google!',
+          description: `Welcome, ${user.displayName || user.email}! Let's personalize your experience.`,
+        });
+        router.push('/onboarding'); // Always go to onboarding after Google sign up
+      } else {
+         throw new Error("Google sign-up did not return user email.");
+      }
+    } catch (error: any) {
+      console.error("Google Sign-Up Error: ", error);
+      toast({
+        variant: 'destructive',
+        title: 'Google Sign-Up Failed',
+        description: error.message || 'An unexpected error occurred. Please ensure pop-ups are allowed and try again.',
+      });
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
   return (
     <Card className="shadow-2xl">
       <CardHeader className="text-center">
@@ -77,7 +144,7 @@ export default function SignupPage() {
         <CardDescription>Join EcoAI and start your sustainable health journey.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleEmailPasswordSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Full Name</Label>
             <Input
@@ -112,18 +179,18 @@ export default function SignupPage() {
                 <Input id="confirmPassword" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="pl-10"/>
             </div>
           </div>
-          <Button type="submit" className="w-full text-lg py-3" disabled={isLoading}>
-            {isLoading ? 'Creating Account...' : 'Sign Up'}
+          <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || isGoogleLoading}>
+            {isLoading ? 'Creating Account...' : 'Sign Up with Email'}
           </Button>
         </form>
          <div className="mt-4 relative">
           <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
           <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or sign up with</span></div>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <Button variant="outline" disabled><ExternalLink className="mr-2 h-4 w-4"/> Google (Placeholder)</Button>
-          <Button variant="outline" disabled><ExternalLink className="mr-2 h-4 w-4"/> Apple (Placeholder)</Button>
-        </div>
+        <Button variant="outline" className="w-full mt-4" onClick={handleGoogleSignUp} disabled={isLoading || isGoogleLoading}>
+            <ExternalLink className="mr-2 h-4 w-4"/> 
+            {isGoogleLoading ? 'Signing up...' : 'Sign up with Google'}
+        </Button>
       </CardContent>
       <CardFooter className="justify-center text-sm">
         <p>Already have an account?&nbsp;</p>

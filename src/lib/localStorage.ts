@@ -1,6 +1,7 @@
 
 import type { MealEntry, UserPlan, AIScanUsage, UserProfile, OnboardingData, WaterIntakeData, ReminderSettings, MealCategory, AppSettings } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
+import { signOut, type Auth } from 'firebase/auth'; // Import signOut and Auth type
 
 const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
 const SELECTED_PLAN_KEY = 'ecoAi_selectedPlan';
@@ -335,34 +336,35 @@ export function setOnboardingComplete(status: boolean): void {
   }
 }
 
+// Updated fakeLogin for the new flow
 export function fakeLogin(email: string): void {
-    if (typeof window === 'undefined') return;
-    
-    let profile = getUserProfile(); 
-    
-    if (profile) {
-        profile = { ...profile, email: email };
-    } else {
-        // If no profile exists at all (e.g. user cleared storage then tries to "login")
-        // Create a basic one with this email. Onboarding data would be lost in this edge case.
-        console.warn("fakeLogin: No existing profile found. Creating a new minimal profile for login.");
-        profile = { 
-            ...defaultUserProfile,
-            email: email, 
-            name: 'User', // Or derive from email if possible
-        };
-    }
-    saveUserProfile(profile); 
+  if (typeof window === 'undefined') return;
+  
+  let profile = getUserProfile(); 
+  
+  if (profile) {
+      profile = { ...profile, email: email };
+  } else {
+      // If no profile exists from onboarding (unlikely in this flow, but fallback)
+      console.warn("fakeLogin: No existing profile found from onboarding. Creating a new minimal profile.");
+      profile = { 
+          ...defaultUserProfile,
+          email: email, 
+          name: email.split('@')[0] || 'User',
+      };
+  }
+  saveUserProfile(profile); 
 
-    try {
-        localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-        // In this new flow, login is the final step after onboarding and plan selection.
-        // So, we mark onboarding as complete here.
-        localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
-    } catch (error) {
-        console.error(`Error writing '${USER_LOGGED_IN_KEY}' or '${ONBOARDING_COMPLETE_KEY}' to localStorage:`, error);
-    }
+  try {
+      localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
+      // In this new flow, login is the final step after onboarding and plan selection.
+      // So, we mark onboarding as complete here.
+      setOnboardingComplete(true);
+  } catch (error) {
+      console.error(`Error writing auth keys to localStorage:`, error);
+  }
 }
+
 
 export function fakeSignup(email: string, name: string): void {
     if (typeof window === 'undefined') return;
@@ -377,21 +379,22 @@ export function fakeSignup(email: string, name: string): void {
     try {
         localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
         // For direct signup, onboarding is NOT yet complete.
-        localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'false'); 
+        setOnboardingComplete(false); 
     } catch (error) {
         console.error(`Error writing auth keys to localStorage:`, error);
     }
 }
 
 
-export function fakeLogout(): void {
+export function fakeLogout(firebaseAuthInstance?: Auth): void {
     if (typeof window === 'undefined') return;
     try {
         localStorage.removeItem(USER_LOGGED_IN_KEY);
+        if (firebaseAuthInstance) {
+            signOut(firebaseAuthInstance).catch(err => console.error("Firebase sign out error during local fakeLogout:", err));
+        }
         // Optionally, clear selected plan or other session-like data if desired
         // localStorage.removeItem(SELECTED_PLAN_KEY); 
-        // Keeping ONBOARDING_COMPLETE_KEY and USER_PROFILE_KEY intact for now,
-        // so user doesn't have to re-onboard if they log back in.
     } catch (error) {
         console.error(`Error removing '${USER_LOGGED_IN_KEY}' from localStorage:`, error);
     }
