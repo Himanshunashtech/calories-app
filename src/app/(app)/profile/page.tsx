@@ -492,12 +492,6 @@ export default function ProfilePage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-           <Button variant="outline" onClick={() => router.push('/settings')} className="w-full mt-2">
-              <Cog className="mr-2 h-5 w-5"/> App Settings
-          </Button>
-           <Button variant="outline" onClick={() => router.push('/meal-planner')} className="w-full mt-2">
-              <CalendarDays className="mr-2 h-5 w-5"/> Go to Meal Planner
-          </Button>
         </CardFooter>
       </Card>
     </div>
