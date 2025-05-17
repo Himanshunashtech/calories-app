@@ -1,8 +1,11 @@
-import type { MealEntry, UserPlan, AIScanUsage } from '@/types';
+
+import type { MealEntry, UserPlan, AIScanUsage, UserProfile, OnboardingData } from '@/types';
 
 const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
 const SELECTED_PLAN_KEY = 'selectedPlan';
 const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage';
+const ONBOARDING_DATA_KEY = 'onboardingData'; // Old key
+const USER_PROFILE_KEY = 'userProfile'; // New consolidated key
 
 // Meal Logs
 export function getMealLogs(): MealEntry[] {
@@ -52,7 +55,7 @@ export function clearMealLogs(): void {
 
 // User Plan
 export function getSelectedPlan(): UserPlan {
-  if (typeof window === 'undefined') return 'free'; // Default to 'free' if SSR or no plan set
+  if (typeof window === 'undefined') return 'free';
   const plan = localStorage.getItem(SELECTED_PLAN_KEY) as UserPlan | null;
   return plan || 'free';
 }
@@ -77,20 +80,19 @@ export function getAIScanUsage(): AIScanUsage {
     usage = { count: 0, limit: FREE_TIER_SCAN_LIMIT, lastResetMonth: new Date().getMonth() };
   }
 
-  // Check if month has changed to reset count
   const currentMonth = new Date().getMonth();
   if (usage.lastResetMonth !== currentMonth) {
     usage.count = 0;
     usage.lastResetMonth = currentMonth;
     localStorage.setItem(AI_SCAN_USAGE_KEY, JSON.stringify(usage));
   }
-  usage.limit = FREE_TIER_SCAN_LIMIT; // Ensure limit is always up-to-date
+  usage.limit = FREE_TIER_SCAN_LIMIT;
   return usage;
 }
 
 export function incrementAIScanCount(): void {
   if (typeof window === 'undefined') return;
-  const usage = getAIScanUsage(); // This also handles reset if month changed
+  const usage = getAIScanUsage();
   usage.count += 1;
   localStorage.setItem(AI_SCAN_USAGE_KEY, JSON.stringify(usage));
 }
@@ -99,8 +101,46 @@ export function canUseAIScan(plan: UserPlan): boolean {
   if (plan === 'pro' || plan === 'ecopro') {
     return true;
   }
-  // Free plan logic
-  if (typeof window === 'undefined') return false; // Cannot determine on server for free plan
+  if (typeof window === 'undefined') return false;
   const usage = getAIScanUsage();
   return usage.count < usage.limit;
+}
+
+// User Profile Data
+export function getUserProfile(): UserProfile | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const profileJson = localStorage.getItem(USER_PROFILE_KEY);
+    if (profileJson) {
+      return JSON.parse(profileJson) as UserProfile;
+    }
+
+    // Check for old onboarding data and migrate
+    const onboardingJson = localStorage.getItem(ONBOARDING_DATA_KEY);
+    if (onboardingJson) {
+      const onboardingData = JSON.parse(onboardingJson) as OnboardingData;
+      const migratedProfile: UserProfile = {
+        ...onboardingData,
+        email: '',
+        phone: '',
+        profileImageUri: null,
+      };
+      localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(migratedProfile));
+      // Optionally remove old key: localStorage.removeItem(ONBOARDING_DATA_KEY);
+      return migratedProfile;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error reading user profile from localStorage:", error);
+    return null;
+  }
+}
+
+export function saveUserProfile(profile: UserProfile): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+  } catch (error) {
+    console.error("Error saving user profile to localStorage:", error);
+  }
 }

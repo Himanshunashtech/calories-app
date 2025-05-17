@@ -1,7 +1,8 @@
+
 import { AppLogo } from '@/components/AppLogo';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Settings } from 'lucide-react';
+import { Settings, User } from 'lucide-react';
 
 interface HeaderProps {
   title?: string;
@@ -15,11 +16,18 @@ export function Header({ title }: HeaderProps) {
           <AppLogo />
         </Link>
         {title && <h1 className="text-xl font-semibold text-foreground">{title}</h1>}
-        <Link href="/subscription" passHref>
-          <Button variant="ghost" size="icon" aria-label="Settings and Subscription">
-            <Settings className="h-5 w-5" />
-          </Button>
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link href="/profile" passHref>
+            <Button variant="ghost" size="icon" aria-label="User Profile">
+              <User className="h-5 w-5" />
+            </Button>
+          </Link>
+          <Link href="/subscription" passHref>
+            <Button variant="ghost" size="icon" aria-label="Settings and Subscription">
+              <Settings className="h-5 w-5" />
+            </Button>
+          </Link>
+        </div>
       </div>
     </header>
   );
