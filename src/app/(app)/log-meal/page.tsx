@@ -465,8 +465,20 @@ export default function LogMealPage() {
               </div>
             )}
             <div className="flex flex-col sm:flex-row gap-2 pt-4">
-              <Button onClick={handleLogMeal} className="w-full" size="lg" disabled={!mealCategory}> <ListPlus className="mr-2 h-5 w-5" /> Log This Meal </Button>
-              <Button onClick={resetForm} className="w-full" variant="outline" size="lg"> Clear & Start New </Button>
+              <Button 
+                onClick={handleLogMeal} 
+                className="w-full whitespace-normal text-center sm:whitespace-nowrap" 
+                size="lg" 
+                disabled={!mealCategory}> 
+                  <ListPlus className="mr-2 h-5 w-5" /> Log This Meal 
+              </Button>
+              <Button 
+                onClick={resetForm} 
+                className="w-full whitespace-normal text-center sm:whitespace-nowrap" 
+                variant="outline" 
+                size="lg"> 
+                  Clear & Start New 
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -474,3 +486,4 @@ export default function LogMealPage() {
     </div>
   );
 }
+
