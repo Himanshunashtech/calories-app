@@ -64,6 +64,7 @@ const chatWithAICoachFlow = ai.defineFlow(
     
     try {
       const modelResponse = await ai.generate({
+        model: 'googleai/gemini-2.0-flash', // Explicitly specify the model
         prompt: { messages: messagesForAI },
         // Consider adjusting safety settings if responses are often blocked.
         // config: {
@@ -76,7 +77,7 @@ const chatWithAICoachFlow = ai.defineFlow(
 
       const aiTextResponse = modelResponse.text;
       if (!aiTextResponse) {
-        console.error("AI response was empty or undefined. Full model response object:", JSON.stringify(modelResponse, null, 2));
+        console.error("AI response was empty or undefined. Full model response object from Genkit:", JSON.stringify(modelResponse, null, 2));
         let detailedError = "AI did not return a text response.";
         if (modelResponse.candidates && modelResponse.candidates.length > 0) {
             const candidate = modelResponse.candidates[0];
@@ -88,9 +89,11 @@ const chatWithAICoachFlow = ai.defineFlow(
             }
             if (candidate.safetyRatings && candidate.safetyRatings.length > 0) {
                 console.warn("Safety ratings from AI model:", JSON.stringify(candidate.safetyRatings, null, 2));
-                const blockedRating = candidate.safetyRatings.find(r => r.blocked); // Check for explicitly blocked
+                const blockedRating = candidate.safetyRatings.find(r => r.blocked); 
                 if(blockedRating) {
                    detailedError += ` Content may have been blocked due to safety settings (Category: ${blockedRating.category}).`;
+                } else if (candidate.safetyRatings.some(r => r.probability && r.probability !== 'NEGLIGIBLE')) {
+                    detailedError += ` Content may have triggered safety filters. Please check server logs for details.`;
                 }
             }
         }
@@ -100,12 +103,13 @@ const chatWithAICoachFlow = ai.defineFlow(
       return { aiResponse: aiTextResponse };
 
     } catch (error: any) {
-      console.error("Error in chatWithAICoachFlow during ai.generate() or processing:", error.message || error);
+      console.error("Error in chatWithAICoachFlow during ai.generate() or processing:", error.message || JSON.stringify(error, null, 2));
       // Provide a more specific error to the client if possible
-      const clientErrorMessage = error.message && error.message.includes("AI did not return") 
+      const clientErrorMessage = error.message && (error.message.includes("AI did not return") || error.message.includes("API key not valid"))
         ? error.message 
-        : "Sorry, I encountered a technical problem trying to respond. Please try again later or contact support.";
+        : "Sorry, I encountered a technical problem trying to respond. This could be due to API key issues, network problems, or content safety filters. Please check server logs and try again later.";
       return { aiResponse: clientErrorMessage };
     }
   }
 );
+

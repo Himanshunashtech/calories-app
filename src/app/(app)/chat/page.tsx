@@ -185,25 +185,37 @@ export default function ChatPage() {
       const aiMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        text: result.aiResponse,
+        text: result.aiResponse, // This will now contain potentially more detailed error info
         timestamp: new Date().toISOString(),
       };
       setChatHistory((prevHistory) => [...prevHistory, aiMessage]);
+
+      // If the AI response indicates an error, show a toast
+      if (result.aiResponse.startsWith("Sorry, I encountered an issue:") || result.aiResponse.startsWith("Sorry, I encountered a technical problem")) {
+        toast({
+          variant: 'destructive',
+          title: 'Chat Error',
+          description: result.aiResponse,
+          duration: 8000,
+        });
+      }
+
     } catch (error) {
       console.error('Error calling chat AI flow from client:', error);
-      let desc = 'Could not get a response from the AI coach. Please try again.';
+      let desc = 'An unexpected error occurred while trying to reach the AI coach. Please check your connection and try again.';
       if (error instanceof Error && error.message) {
-          desc = error.message.includes("AI did not return") ? error.message : desc;
+          desc = error.message; // Display the direct error message if available
       }
       toast({
         variant: 'destructive',
-        title: 'Chat Error',
+        title: 'Chat Connection Error',
         description: desc,
+        duration: 8000,
       });
        const errorMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        text: "Sorry, I'm having trouble connecting right now. Please try again in a moment.",
+        text: "I'm having trouble connecting to the AI services. Please check your internet connection or try again in a moment.",
         timestamp: new Date().toISOString(),
       };
       setChatHistory((prevHistory) => [...prevHistory, errorMessage]);
@@ -321,3 +333,4 @@ export default function ChatPage() {
     </Card>
   );
 }
+
