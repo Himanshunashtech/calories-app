@@ -1,8 +1,9 @@
+
 import { Button } from '@/components/ui/button';
 import { AppLogo } from '@/components/AppLogo';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Leaf, Zap, BarChart3 } from 'lucide-react';
+import { Leaf, Zap, BarChart3, LogIn } from 'lucide-react';
 
 export default function LandingPage() {
   return (
@@ -27,10 +28,10 @@ export default function LandingPage() {
           Effortlessly track your meals and nutrition with the power of AI, wrapped in an eco-conscious design.
         </p>
 
-        <Link href="/log-meal" passHref>
+        <Link href="/onboarding" passHref> {/* Changed href to /onboarding */}
           <Button size="lg" className="mb-10">
             Get Started
-            <Leaf className="ml-2 h-5 w-5" />
+            <LogIn className="ml-2 h-5 w-5" />
           </Button>
         </Link>
 
