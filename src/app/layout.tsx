@@ -30,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head> {/* Removed model-viewer script */}
+      <head>
       </head>
       <body
         className={cn(
