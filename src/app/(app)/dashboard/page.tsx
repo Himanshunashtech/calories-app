@@ -23,9 +23,11 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useRouter } from 'next/navigation';
 import { 
   BarChart3, Camera, Leaf, Utensils, ShieldCheck, Zap, Brain, Trees, BarChartBig, Users, MessageSquareHeart, 
-  CheckCircle, AlertTriangle, Info, Droplet, Footprints, TrendingUp, PlusCircle, Target as TargetIcon, Maximize2, Grape, Fish, Shell
+  CheckCircle, AlertTriangle, Info, Droplet, Footprints, TrendingUp, PlusCircle, Target as TargetIcon, 
+  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -336,6 +338,46 @@ export default function DashboardPage() {
                <Button variant="outline" className="mt-4" disabled>View Coach Recommendations (Coming Soon)</Button>
             </CardContent>
           </Card>
+
+          {/* Weekly Progress Graph Card (Pro/EcoPro) */}
+          <Card className="shadow-md border-l-4 border-indigo-500">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-indigo-700">
+                <TrendingUp className="h-6 w-6" /> Weekly Progress
+              </CardTitle>
+              <CardDescription>Track your trends and get AI forecasts.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="weight" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="weight">Weight Trend</TabsTrigger>
+                  <TabsTrigger value="carbon">Carbon Savings</TabsTrigger>
+                  <TabsTrigger value="forecast">AI Forecast</TabsTrigger>
+                </TabsList>
+                <TabsContent value="weight">
+                  <div className="mt-4 h-48 bg-muted/50 rounded-md flex items-center justify-center p-4">
+                    <p className="text-muted-foreground text-center">Weight trend chart placeholder. (e.g., Line graph showing weight changes over the last 7-30 days).</p>
+                  </div>
+                </TabsContent>
+                <TabsContent value="carbon">
+                  <div className="mt-4 h-48 bg-muted/50 rounded-md flex items-center justify-center p-4">
+                    <p className="text-muted-foreground text-center">Carbon savings chart placeholder. (e.g., "You've saved an estimated 4kg CO₂ this week compared to last!").</p>
+                  </div>
+                </TabsContent>
+                <TabsContent value="forecast">
+                  <div className="mt-4 p-4 border rounded-md bg-muted/30">
+                    <p className="text-sm font-semibold text-primary">AI Forecast (Example):</p>
+                    <p className="text-muted-foreground text-sm mt-1">"Keep up your current efforts! At this rate, you’re projected to lose an additional 0.5kg by the end of next week and reach your 2kg goal by June 10th."</p>
+                    <Button variant="link" size="sm" className="p-0 h-auto mt-2 text-primary" disabled>Learn more about this forecast</Button>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+             <CardFooter>
+                <Button className="w-full" variant="outline" disabled>View Detailed Progress Report (Coming Soon)</Button>
+            </CardFooter>
+          </Card>
+
         </section>
       )}
 
@@ -377,6 +419,70 @@ export default function DashboardPage() {
               <Button className="mt-4" disabled>Generate My Eco Meal Plan (Coming Soon)</Button>
             </CardContent>
           </Card>
+
+          {/* Food Mood Correlation Card (EcoPro Only) */}
+          <Card className="shadow-md border-l-4 border-purple-500">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-purple-700">
+                <SmilePlus className="h-6 w-6" /> Food Mood Correlation
+              </CardTitle>
+              <CardDescription>Log your mood after meals to uncover hidden patterns.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">How are you feeling after your last meal?</p>
+              <div className="flex justify-around items-center py-2">
+                <Button variant="ghost" size="icon" className="h-14 w-14 hover:bg-green-100 rounded-full" aria-label="Happy">
+                  <Smile className="h-8 w-8 text-green-500" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-14 w-14 hover:bg-yellow-100 rounded-full" aria-label="Neutral">
+                  <Meh className="h-8 w-8 text-yellow-500" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-14 w-14 hover:bg-red-100 rounded-full" aria-label="Sad">
+                  <Frown className="h-8 w-8 text-red-500" />
+                </Button>
+              </div>
+              <div className="mt-3 p-3 bg-muted/50 rounded-md">
+                <p className="text-sm font-semibold text-primary">AI Insights (Example):</p>
+                <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1 mt-1">
+                  <li>"You often feel sluggish after high-sugar lunches."</li>
+                  <li>"Plant-based dinners correlate with better sleep quality ratings."</li>
+                  <li>"After logging a 'Happy' mood, you often consume meals with higher fiber."</li>
+                </ul>
+              </div>
+               <Button variant="outline" className="w-full" disabled>View Full Mood Analysis (Coming Soon)</Button>
+            </CardContent>
+          </Card>
+
+          {/* Sustainability Impact Card (EcoPro Only) */}
+          <Card className="shadow-md border-l-4 border-sky-500">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sky-700">
+                <Globe2 className="h-6 w-6" /> Sustainability Impact
+              </CardTitle>
+              <CardDescription>See how your diet compares and find offset actions.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center p-2 border rounded-md">
+                  <span>Your Diet vs. Local Average:</span> 
+                  <Badge variant="secondary" className="text-green-700 bg-green-100">40% Less CO₂</Badge>
+                </div>
+                <div className="flex justify-between items-center p-2 border rounded-md">
+                  <span>Your Diet vs. Global Goals:</span> 
+                  <Badge variant="outline" className="text-orange-700 border-orange-300">1.5x Limit</Badge>
+                </div>
+              </div>
+              <Alert variant="default" className="bg-primary/5 border-primary/20">
+                <Leaf className="h-4 w-4 text-primary" />
+                <AlertTitle className="text-primary">Suggested Offset Action (Example):</AlertTitle>
+                <AlertDescription className="text-muted-foreground">
+                  "Walk 2 miles or cycle for 30 minutes to neutralize the carbon footprint of your recent pasta meal! This small change can make a big difference."
+                </AlertDescription>
+              </Alert>
+              <Button variant="outline" className="w-full" disabled>Explore More Impact Data (Coming Soon)</Button>
+            </CardContent>
+          </Card>
+
            <div className="mt-4 p-3 bg-primary/10 rounded-md text-primary flex items-center gap-2">
             <ShieldCheck className="h-5 w-5"/>
             <p className="text-sm">As an EcoPro member, you also get Priority Support!</p>
@@ -395,3 +501,4 @@ export default function DashboardPage() {
   );
 
     
+}
