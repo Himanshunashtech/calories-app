@@ -3,12 +3,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line } from 'recharts'; // Renamed to avoid conflict
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { getMealLogs, clearMealLogs, getSelectedPlan, type UserPlan } from '@/lib/localStorage';
 import type { MealEntry } from '@/types';
-import { CalendarDays, Utensils, Leaf, Trash2, Info, ShieldCheck, TrendingUp, Activity, PieChart as PieChartIcon, NotebookText, ListFilter } from 'lucide-react';
+import { CalendarDays, Utensils, Leaf, Trash2, Info, ShieldCheck, TrendingUp, Activity, PieChartIcon, NotebookText, ListFilter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -55,7 +55,7 @@ export default function StatsPage() {
   }
 
   const todayISO = useMemo(() => {
-    if (!isClient) return new Date().toISOString().split('T')[0]; 
+    if (!isClient) return new Date().toISOString().split('T')[0]; // Fallback for SSR, though might not be perfectly accurate
     return new Date().toISOString().split('T')[0];
   }, [isClient]);
 
@@ -241,7 +241,7 @@ export default function StatsPage() {
           {todaysLogs.length > 0 && macroPieChartDataToday.length > 0 ? (
             <div style={{ width: '100%', height: 250 }}>
               <ResponsiveContainer>
-                <PieChart>
+                <RechartsPieChart>
                   <Pie
                     data={macroPieChartDataToday}
                     cx="50%"
@@ -258,7 +258,7 @@ export default function StatsPage() {
                   </Pie>
                   <Tooltip formatter={(value, name) => [`${value}g`, name]}/>
                   <Legend />
-                </PieChart>
+                </RechartsPieChart>
               </ResponsiveContainer>
             </div>
           ) : (
@@ -299,7 +299,7 @@ export default function StatsPage() {
           {weeklyCalorieTrendData.length > 0 ? (
             <div style={{ width: '100%', height: 300 }}>
               <ResponsiveContainer>
-                <BarChart data={weeklyCalorieTrendData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                <RechartsBarChart data={weeklyCalorieTrendData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
                   <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
@@ -309,7 +309,7 @@ export default function StatsPage() {
                     itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                   />
                   <Bar dataKey="calories" name="Calories" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                </RechartsBarChart>
               </ResponsiveContainer>
             </div>
           ) : (
@@ -327,7 +327,7 @@ export default function StatsPage() {
           {overallMacroDistribution.length > 0 ? (
             <div style={{ width: '100%', height: 250 }}>
               <ResponsiveContainer>
-                <PieChart>
+                <RechartsPieChart>
                   <Pie
                     data={overallMacroDistribution}
                     cx="50%"
@@ -343,7 +343,7 @@ export default function StatsPage() {
                   </Pie>
                   <Tooltip formatter={(value, name) => [`${value}% of Calories`, name]} />
                   <Legend />
-                </PieChart>
+                </RechartsPieChart>
               </ResponsiveContainer>
             </div>
           ) : (
@@ -382,10 +382,10 @@ export default function StatsPage() {
               {recentMeals.map(log => (
                 <li key={log.id} className="flex items-center justify-between p-3 bg-card rounded-md border">
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">
+                    <div className="font-medium truncate flex items-center">
                       {log.category && <Badge variant="secondary" className="mr-2 capitalize">{log.category}</Badge>}
-                      {log.description || "Meal Photo"}
-                    </p>
+                      <span className="truncate">{log.description || "Meal Photo"}</span>
+                    </div>
                     <p className="text-sm text-muted-foreground">
                       {log.calories.toFixed(0)} kcal - {new Date(log.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </p>
@@ -431,3 +431,4 @@ export default function StatsPage() {
     </div>
   );
 }
+
