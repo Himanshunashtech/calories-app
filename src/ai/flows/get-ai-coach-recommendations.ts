@@ -28,7 +28,7 @@ const MealEntrySchema = z.object({
     protein: z.number(),
     carbs: z.number(),
     fat: z.number(),
-    date: z.string(),
+    date: z.string(), // ISO string for date
 });
 
 const GetAICoachRecommendationsInputSchema = z.object({
@@ -60,13 +60,13 @@ Based on the user's profile and their recent meal history (if available), provid
 
 User Profile:
 - Health Goals: {{#if userProfile.healthGoals}} {{#each userProfile.healthGoals}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}} {{else}}Not specified{{/if}}
-- Activity Level: {{userProfile.activityLevel | default:"Not specified"}}
-- Diet Type: {{userProfile.dietType | default:"Not specified"}}
+- Activity Level: {{#if userProfile.activityLevel}}{{userProfile.activityLevel}}{{else}}Not specified{{/if}}
+- Diet Type: {{#if userProfile.dietType}}{{userProfile.dietType}}{{else}}Not specified{{/if}}
 
 Recent Meals (if any):
 {{#if recentMeals}}
 {{#each recentMeals}}
-- {{date}}: {{description | default:"Meal"}} ({{calories}} kcal, P:{{protein}}g, C:{{carbs}}g, F:{{fat}}g)
+- {{this.date}}: {{#if this.description}}{{this.description}}{{else}}Meal{{/if}} ({{this.calories}} kcal, P:{{this.protein}}g, C:{{this.carbs}}g, F:{{this.fat}}g)
 {{/each}}
 {{else}}
 No recent meal data provided.
@@ -95,3 +95,4 @@ const getAICoachRecommendationsFlow = ai.defineFlow(
     };
   }
 );
+
