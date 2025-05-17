@@ -45,6 +45,24 @@ export function addMealLog(entry: Omit<MealEntry, 'id' | 'date'>): MealEntry {
   return newEntry;
 }
 
+export function updateMealLogWithMood(mealId: string, mood: 'happy' | 'neutral' | 'sad'): MealEntry | null {
+  if (typeof window === 'undefined') return null;
+  const logs = getMealLogs();
+  const mealIndex = logs.findIndex(log => log.id === mealId);
+  if (mealIndex !== -1) {
+    logs[mealIndex].mood = mood;
+    try {
+      localStorage.setItem(MEAL_LOGS_KEY, JSON.stringify(logs));
+      return logs[mealIndex];
+    } catch (error) {
+      console.error("Error updating meal log mood in localStorage:", error);
+      return null;
+    }
+  }
+  return null;
+}
+
+
 export function clearMealLogs(): void {
   if (typeof window === 'undefined') return;
   try {
@@ -67,11 +85,7 @@ export function setSelectedPlan(plan: UserPlan): void {
 }
 
 // AI Scan Usage for Free Tier
-const FREE_TIER_SCAN_LIMIT = 3; // This represents scans per day as per original prompt, not month
-// The dashboard shows "scans / month" due to previous interpretation.
-// For this iteration, I'll keep the monthly logic from previous step for AI scans,
-// but ideally, this should be clarified if it's daily or monthly.
-// For now, using the existing monthly logic to avoid breaking current display.
+const FREE_TIER_SCAN_LIMIT = 3; 
 
 export function getAIScanUsage(): AIScanUsage {
   if (typeof window === 'undefined') {
@@ -91,7 +105,7 @@ export function getAIScanUsage(): AIScanUsage {
     usage.lastResetMonth = currentMonth;
     localStorage.setItem(AI_SCAN_USAGE_KEY, JSON.stringify(usage));
   }
-  usage.limit = FREE_TIER_SCAN_LIMIT; // Ensure limit is always up-to-date if it changes
+  usage.limit = FREE_TIER_SCAN_LIMIT; 
   return usage;
 }
 
@@ -106,7 +120,7 @@ export function canUseAIScan(plan: UserPlan): boolean {
   if (plan === 'pro' || plan === 'ecopro') {
     return true;
   }
-  if (typeof window === 'undefined') return false; // Should not happen in client component
+  if (typeof window === 'undefined') return false;
   const usage = getAIScanUsage();
   return usage.count < usage.limit;
 }
@@ -130,6 +144,7 @@ export function getUserProfile(): UserProfile | null {
         profileImageUri: null,
       };
       localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(migratedProfile));
+      // localStorage.removeItem(ONBOARDING_DATA_KEY); // Optional: remove old key after migration
       return migratedProfile;
     }
     return null;
@@ -149,7 +164,7 @@ export function saveUserProfile(profile: UserProfile): void {
 }
 
 // Water Intake
-const DAILY_WATER_GOAL_GLASSES = 8; // Example goal: 8 glasses
+const DAILY_WATER_GOAL_GLASSES = 8; 
 
 export function getWaterIntake(): WaterIntakeData {
   if (typeof window === 'undefined') {
@@ -162,14 +177,14 @@ export function getWaterIntake(): WaterIntakeData {
   if (intakeJson) {
     intake = JSON.parse(intakeJson);
     if (intake.lastUpdatedDate !== today) {
-      // Reset for the new day
       intake.current = 0;
       intake.lastUpdatedDate = today;
     }
   } else {
     intake = { current: 0, goal: DAILY_WATER_GOAL_GLASSES, lastUpdatedDate: today };
   }
-  intake.goal = DAILY_WATER_GOAL_GLASSES; // Ensure goal is always current
+  intake.goal = DAILY_WATER_GOAL_GLASSES; 
+  saveWaterIntake(intake); // Save to ensure lastUpdatedDate is current if reset
   return intake;
 }
 
@@ -184,7 +199,22 @@ export function saveWaterIntake(intake: WaterIntakeData): void {
 
 export function addWater(amountInGlasses: number = 1): WaterIntakeData {
   const intake = getWaterIntake();
-  intake.current = Math.min(intake.current + amountInGlasses, intake.goal * 2); // Cap at double goal to prevent absurd values
+  intake.current = Math.max(0, Math.min(intake.current + amountInGlasses, intake.goal * 3)); // Cap at triple goal, ensure not negative
   saveWaterIntake(intake);
   return intake;
+}
+
+export function getTodaysMealLogs(): MealEntry[] {
+  if (typeof window === 'undefined') return [];
+  const allLogs = getMealLogs();
+  const todayISO = new Date().toISOString().split('T')[0];
+  return allLogs.filter(log => log.date.startsWith(todayISO));
+}
+
+export function getRecentMealLogs(days: number = 7): MealEntry[] {
+  if (typeof window === 'undefined') return [];
+  const allLogs = getMealLogs();
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  return allLogs.filter(log => new Date(log.date) >= cutoffDate);
 }
