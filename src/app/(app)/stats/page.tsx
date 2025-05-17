@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { getMealLogs, clearMealLogs, getSelectedPlan, type UserPlan } from '@/lib/localStorage';
 import type { MealEntry } from '@/types';
 import { CalendarDays, Utensils, Leaf, Trash2, Info, ShieldCheck, TrendingUp, Activity, PieChartIcon, NotebookText, ListFilter, Maximize2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -55,7 +55,7 @@ export default function StatsPage() {
   }
 
   const todayISO = useMemo(() => {
-    if (!isClient) return new Date().toISOString().split('T')[0];
+    if (!isClient) return new Date().toISOString().split('T')[0]; // Fallback for SSR, though ideally this page is fully client-rendered for localStorage
     return new Date().toISOString().split('T')[0];
   }, [isClient]);
 
