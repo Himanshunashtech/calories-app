@@ -9,8 +9,8 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/log-meal', label: 'Log Meal', icon: Camera },
-  { href: '/app/recipes', label: 'Recipes', icon: Utensils },
-  { href: '/app/meal-planner', label: 'Planner', icon: CalendarDays },
+  { href: '/recipes', label: 'Recipes', icon: Utensils },
+  { href: '/meal-planner', label: 'Planner', icon: CalendarDays },
   { href: '/stats', label: 'Stats', icon: BarChart3 },
 ];
 
@@ -27,7 +27,7 @@ export function BottomNavigationBar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors duration-200 flex-1', // Use flex-1 for equal spacing
+                'flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors duration-200 flex-1', 
                 isActive ? 'text-primary font-semibold scale-105' : 'text-muted-foreground hover:text-foreground'
               )}
               aria-current={isActive ? 'page' : undefined}

@@ -69,7 +69,6 @@ export default function DashboardPage() {
   const fetchDashboardData = useCallback(async (currentPlan: UserPlan, profile: UserProfileType | null, meals: MealEntry[]) => {
     if (!profile) return;
 
-    // Always fetch some data if profile exists, then gate features based on plan
     const recentMealsForTrends = getRecentMealLogs(7); 
     const allMealsForCarbon = getRecentMealLogs(30); 
     const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood);
@@ -88,7 +87,7 @@ export default function DashboardPage() {
     if (currentPlan === 'ecopro') {
       setIsLoadingAI(prev => ({ ...prev, carbon: true, mood: true }));
       
-      if (profile.enableCarbonTracking) { // Check if user enabled carbon tracking
+      if (profile.enableCarbonTracking) { 
         getCarbonComparison({ userMeals: allMealsForCarbon.filter(m => m.carbonFootprintEstimate !== undefined).map(m => ({...m, date: m.date, carbonFootprintEstimate: m.carbonFootprintEstimate})) })
           .then(setCarbonComparison).catch(err => console.error("Error fetching carbon comparison:", err))
           .finally(() => setIsLoadingAI(prev => ({ ...prev, carbon: false })));
@@ -98,7 +97,7 @@ export default function DashboardPage() {
       }
 
       if(mealsWithMood.length >= 3) { 
-        analyzeFoodMoodCorrelation({ mealsWithMood: mealsWithMood.map(m => ({...m, date:m.date, mood: m.mood!})) })
+        analyzeFoodMoodCorrelation({ mealsWithMood: mealsWithMood.map(m => ({...m, date:m.date, mood: m.mood!, calories: m.calories, protein: m.protein, carbs: m.carbs, fat: m.fat})) })
           .then(setFoodMoodInsights).catch(err => console.error("Error fetching food-mood insights:", err))
           .finally(() => setIsLoadingAI(prev => ({ ...prev, mood: false })));
       } else {
@@ -119,7 +118,7 @@ export default function DashboardPage() {
     if (currentPlan === 'free') {
       setAiScanUsage(getAIScanUsage());
     }
-    setWaterIntake(getWaterIntake()); // This will use profile?.waterGoal internally
+    setWaterIntake(getWaterIntake()); 
     const todayLogs = getTodaysMealLogs();
     setTodaysMealLogs(todayLogs);
 
@@ -127,7 +126,7 @@ export default function DashboardPage() {
         fetchDashboardData(currentPlan, profile, todayLogs);
     }
 
-  }, [fetchDashboardData]); // Water intake now updates if profile.waterGoal changes
+  }, [fetchDashboardData]); 
 
   const refreshMealLogs = () => {
     const todayLogs = getTodaysMealLogs();
@@ -247,7 +246,7 @@ export default function DashboardPage() {
       }
     });
     
-    const illustrativeRDAGoals: {[key:string]: number} = { iron: 18, vitaminD: 20, fiber: 30, calcium: 1000, vitaminC: 90, potassium: 3500 }; // Case-insensitive keys
+    const illustrativeRDAGoals: {[key:string]: number} = { iron: 18, vitaminD: 20, fiber: 30, calcium: 1000, vitaminC: 90, potassium: 3500 }; 
 
     const calculatedNutrients = Object.entries(aggregatedNutrients).map(([name, data]) => {
         const rdaGoal = illustrativeRDAGoals[name.toLowerCase()] || 100; 
@@ -293,7 +292,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardFooter className="flex-wrap gap-2"> 
             <Button onClick={() => router.push('/subscription')} variant="outline"> Manage Subscription </Button> 
-            <Button onClick={() => router.push('/app/settings')} variant="ghost"><Cog className="mr-2 h-4 w-4"/> App Settings</Button>
+            <Button onClick={() => router.push('/settings')} variant="ghost"><Cog className="mr-2 h-4 w-4"/> App Settings</Button>
         </CardFooter>
       </Card>
 
@@ -364,14 +363,14 @@ export default function DashboardPage() {
       <Card className="shadow-md">
         <CardHeader><CardTitle className="flex items-center gap-2"><Utensils className="text-primary"/> Today's Meals</CardTitle><CardDescription>Timeline of your meals logged today. <Button variant="ghost" size="sm" onClick={refreshMealLogs} className="text-xs"><Edit3 className="mr-1 h-3 w-3"/>Refresh</Button></CardDescription></CardHeader>
         <CardContent>
-          {todaysMealLogs.length > 0 ? (<ScrollArea className="w-full whitespace-nowrap"><div className="flex space-x-4 pb-4">{todaysMealLogs.map(meal => (<Card key={meal.id} className="min-w-[220px] max-w-[280px] shrink-0"><CardHeader className="p-3">{meal.photoDataUri && (<Image src={meal.photoDataUri} alt={meal.description || "Meal"} width={200} height={120} className="rounded-md object-cover w-full aspect-[16/9]" data-ai-hint="food meal"/>)}<CardTitle className="text-base mt-2 truncate">{meal.category ? `${meal.category}: ` : ''}{meal.description || "Meal Photo"}</CardTitle><CardDescription className="text-xs">{new Date(meal.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}{meal.mood && ` - Mood: ${meal.mood.charAt(0).toUpperCase() + meal.mood.slice(1)}`}</CardDescription></CardHeader><CardContent className="p-3 text-xs space-y-1"><p><span className="font-medium">{meal.calories.toFixed(0)} kcal</span></p><p className="text-muted-foreground">P: {meal.protein.toFixed(1)}g, C: {meal.carbs.toFixed(1)}g, F: {meal.fat.toFixed(1)}g</p>{(plan === 'ecopro' && userProfile?.enableCarbonTracking) && meal.carbonFootprintEstimate !== undefined && <p className="text-teal-600 text-xs flex items-center gap-1"><Trees className="h-3 w-3"/>~{meal.carbonFootprintEstimate.toFixed(2)} kg CO₂e</p>}</CardContent><CardFooter className="p-3"><Button variant="ghost" size="sm" className="w-full text-xs" disabled>Recreate Meal</Button></CardFooter></Card>))}</div><ScrollBar orientation="horizontal" /></ScrollArea>) : (<p className="text-muted-foreground text-center py-4">No meals logged today.</p>)}
+          {todaysMealLogs.length > 0 ? (<ScrollArea className="w-full whitespace-nowrap"><div className="flex space-x-4 pb-4">{todaysMealLogs.map(meal => (<Card key={meal.id} className="min-w-[220px] max-w-[280px] shrink-0"><CardHeader className="p-3">{meal.photoDataUri && (<Image src={meal.photoDataUri} alt={meal.description || "Meal"} width={200} height={120} className="rounded-md object-cover w-full aspect-[16/9]" data-ai-hint="food meal"/>)}<CardTitle className="text-base mt-2 truncate">{meal.category ? `${meal.category}: ` : ''}{meal.description || "Meal Photo"}</CardTitle><CardDescription className="text-xs">{new Date(meal.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}{meal.mood && ` - Mood: ${meal.mood.charAt(0).toUpperCase() + meal.mood.slice(1)}`}</CardDescription></CardHeader><CardContent className="p-3 text-xs space-y-1"><p><span className="font-medium">{meal.calories.toFixed(0)} kcal</span></p><p className="text-muted-foreground">P: {meal.protein.toFixed(1)}g, C: {meal.carbs.toFixed(1)}g, F: {meal.fat.toFixed(1)}g</p>{(plan === 'pro' || plan === 'ecopro') && userProfile?.enableCarbonTracking && meal.carbonFootprintEstimate !== undefined && <p className="text-teal-600 text-xs flex items-center gap-1"><Trees className="h-3 w-3"/>~{meal.carbonFootprintEstimate.toFixed(2)} kg CO₂e</p>}</CardContent><CardFooter className="p-3"><Button variant="ghost" size="sm" className="w-full text-xs" disabled>Recreate Meal</Button></CardFooter></Card>))}</div><ScrollBar orientation="horizontal" /></ScrollArea>) : (<p className="text-muted-foreground text-center py-4">No meals logged today.</p>)}
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="shadow-md hover:shadow-lg transition-shadow"><CardHeader><CardTitle className="flex items-center gap-2"><Camera className="text-primary"/> Log Meal</CardTitle><CardDescription>Quickly log meals, manually or with AI.</CardDescription></CardHeader><CardFooter><Link href="/log-meal" passHref legacyBehavior><Button className="w-full">Go to Log Meal</Button></Link></CardFooter></Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow"><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="text-primary"/> View Stats</CardTitle><CardDescription>Track progress and nutritional trends.</CardDescription></CardHeader><CardFooter><Link href="/stats" passHref legacyBehavior><Button className="w-full">Go to Stats</Button></Link></CardFooter></Card>
-        <Card className="shadow-md hover:shadow-lg transition-shadow md:col-span-2"><CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="text-primary"/> Meal Planner</CardTitle><CardDescription>Plan your meals for the week (Coming Soon).</CardDescription></CardHeader><CardFooter><Link href="/app/meal-planner" passHref legacyBehavior><Button className="w-full" variant="outline">Open Meal Planner</Button></Link></CardFooter></Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow md:col-span-2"><CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="text-primary"/> Meal Planner</CardTitle><CardDescription>Plan your meals for the week.</CardDescription></CardHeader><CardFooter><Link href="/meal-planner" passHref legacyBehavior><Button className="w-full" variant="outline">Open Meal Planner</Button></Link></CardFooter></Card>
       </div>
 
       {(plan === 'pro' || plan === 'ecopro') && (
@@ -394,7 +393,7 @@ export default function DashboardPage() {
         </Card>
       )}
       
-      <Card className="shadow-md"><CardHeader><CardTitle className="flex items-center gap-2"><Search className="text-primary"/> Explore Recipes</CardTitle></CardHeader><CardContent><Button variant="link" onClick={() => router.push('/app/recipes')} className="p-0 h-auto">{plan === 'free' ? "Access 5 complimentary eco-friendly recipes." : "Access 50+ premium recipes." }</Button></CardContent></Card>
+      <Card className="shadow-md"><CardHeader><CardTitle className="flex items-center gap-2"><Search className="text-primary"/> Explore Recipes</CardTitle></CardHeader><CardContent><Button variant="link" onClick={() => router.push('/recipes')} className="p-0 h-auto">{plan === 'free' ? "Access 5 complimentary eco-friendly recipes." : "Access 50+ premium recipes." }</Button></CardContent></Card>
 
       {(plan === 'pro' || plan === 'ecopro') && (
         <section className="space-y-6">

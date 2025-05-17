@@ -24,7 +24,7 @@ export function Header({ title }: HeaderProps) {
               <User className="h-5 w-5" />
             </Button>
           </Link>
-          <Link href="/app/settings" passHref> {/* Updated link to /app/settings */}
+          <Link href="/settings" passHref> 
             <Button variant="ghost" size="icon" aria-label="App Settings">
               <Settings className="h-5 w-5" />
             </Button>

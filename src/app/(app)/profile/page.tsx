@@ -4,7 +4,7 @@
 import { useState, useEffect, ChangeEvent, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Button, buttonVariants } from '@/components/ui/button'; // Added buttonVariants
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -105,7 +105,7 @@ export default function ProfilePage() {
       };
       setProfile(completeProfile);
     } else {
-      setProfile(defaultProfile); // Should ideally not happen if onboarding is enforced
+      setProfile(defaultProfile); 
     }
     setIsLoading(false);
   }, []);
@@ -418,11 +418,11 @@ export default function ProfilePage() {
             <Save className="mr-2 h-5 w-5" />
             Save Profile &amp; Preferences
           </Button>
-           <Button onClick={() => router.push('/app/settings')} className="w-full" variant="outline">
+           <Button onClick={() => router.push('/settings')} className="w-full" variant="outline">
             <Cog className="mr-2 h-5 w-5"/>
             Go to App Settings
           </Button>
-          <Button onClick={() => router.push('/app/meal-planner')} className="w-full" variant="outline">
+          <Button onClick={() => router.push('/meal-planner')} className="w-full" variant="outline">
             <CalendarDays className="mr-2 h-5 w-5"/>
             Go to Meal Planner
           </Button>
@@ -453,5 +453,3 @@ export default function ProfilePage() {
   );
 }
     
-
-      
