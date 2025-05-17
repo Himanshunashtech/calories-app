@@ -4,49 +4,57 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { CalendarDays, ShoppingBag, Sparkles, PlusCircle, ArrowLeft, ArrowRight, Printer, Download } from 'lucide-react';
+import { CalendarDays, ShoppingBag, Sparkles, PlusCircle, ArrowLeft, ArrowRight, Printer, Download, Loader2 } from 'lucide-react';
 import { getSelectedPlan, type UserPlan, getUserProfile, type UserProfile } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
 import { generateEcoMealPlan, type GenerateEcoMealPlanOutput } from '@/ai/flows/generate-eco-meal-plan';
-import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-// Placeholder Meal Item Type
 interface PlannerMealItem {
   id: string;
   name: string;
   category: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
   calories?: number;
   ecoScore?: string;
+  description?: string;
 }
 
-// Placeholder structure for weekly plan
+interface WeeklyPlanDay {
+  Breakfast?: PlannerMealItem[];
+  Lunch?: PlannerMealItem[];
+  Dinner?: PlannerMealItem[];
+  Snack?: PlannerMealItem[];
+}
+
 interface WeeklyPlan {
-  [day: string]: {
-    Breakfast?: PlannerMealItem[];
-    Lunch?: PlannerMealItem[];
-    Dinner?: PlannerMealItem[];
-    Snack?: PlannerMealItem[];
-  };
+  [day: string]: WeeklyPlanDay;
 }
 
 export default function MealPlannerPage() {
   const [userPlan, setUserPlan] = useState<UserPlan>('free');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlan>({});
-  const [generatedPlan, setGeneratedPlan] = useState<GenerateEcoMealPlanOutput | null>(null);
+  const [generatedPlanOutput, setGeneratedPlanOutput] = useState<GenerateEcoMealPlanOutput | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
-  const [currentWeekOffset, setCurrentWeekOffset] = useState(0); // 0 for current week, -1 for last, 1 for next
+  const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const { toast } = useToast();
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
     setUserPlan(getSelectedPlan());
-    setUserProfile(getUserProfile());
-    // Load saved plan from localStorage or initialize empty
+    const profile = getUserProfile();
+    setUserProfile(profile);
+    
     const savedPlan = localStorage.getItem('mealPlan');
     if (savedPlan) {
       setWeeklyPlan(JSON.parse(savedPlan));
+    }
+    const savedGeneratedOutput = localStorage.getItem('generatedMealPlanOutput');
+    if (savedGeneratedOutput) {
+        setGeneratedPlanOutput(JSON.parse(savedGeneratedOutput));
     }
   }, []);
   
@@ -63,25 +71,38 @@ export default function MealPlannerPage() {
           healthGoals: userProfile.healthGoals,
           dietaryRestrictions: Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietaryRestrictions,
         },
-        durationDays: 7, // Generate for a full week
+        durationDays: 7,
       });
-      setGeneratedPlan(planOutput);
-      // Placeholder: Convert generated plan to weeklyPlan structure
+      setGeneratedPlanOutput(planOutput);
+      localStorage.setItem('generatedMealPlanOutput', JSON.stringify(planOutput));
+
       const newWeeklyPlan: WeeklyPlan = {};
+      daysOfWeek.forEach(day => newWeeklyPlan[day] = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] }); // Initialize all days
+
       planOutput.mealPlan.forEach((dayPlan, dayIndex) => {
-        const dayName = daysOfWeek[dayIndex % 7]; // Cycle through days if duration > 7
-        newWeeklyPlan[dayName] = {
-          Breakfast: dayPlan.meals[0] ? [{ id: `ai-bf-${dayIndex}`, name: dayPlan.meals[0].name, category: 'Breakfast', ecoScore: dayPlan.meals[0].lowCarbonScore.toString()}] : [],
-          Lunch: dayPlan.meals[1] ? [{ id: `ai-ln-${dayIndex}`, name: dayPlan.meals[1].name, category: 'Lunch', ecoScore: dayPlan.meals[1].lowCarbonScore.toString()}] : [],
-          Dinner: dayPlan.meals[2] ? [{ id: `ai-dn-${dayIndex}`, name: dayPlan.meals[2].name, category: 'Dinner', ecoScore: dayPlan.meals[2].lowCarbonScore.toString()}] : [],
-        };
+        const dayName = daysOfWeek[dayIndex % 7];
+        if (!newWeeklyPlan[dayName]) newWeeklyPlan[dayName] = {};
+        
+        const breakfastMeal = dayPlan.meals.find(m => m.name.toLowerCase().includes('breakfast')) || dayPlan.meals[0];
+        const lunchMeal = dayPlan.meals.find(m => m.name.toLowerCase().includes('lunch')) || dayPlan.meals[1];
+        const dinnerMeal = dayPlan.meals.find(m => m.name.toLowerCase().includes('dinner')) || dayPlan.meals[2];
+
+        if (breakfastMeal) {
+          newWeeklyPlan[dayName].Breakfast = [{ id: `ai-bf-${dayName}-${dayIndex}`, name: breakfastMeal.name, category: 'Breakfast', ecoScore: breakfastMeal.lowCarbonScore.toString(), description: breakfastMeal.description }];
+        }
+        if (lunchMeal) {
+          newWeeklyPlan[dayName].Lunch = [{ id: `ai-ln-${dayName}-${dayIndex}`, name: lunchMeal.name, category: 'Lunch', ecoScore: lunchMeal.lowCarbonScore.toString(), description: lunchMeal.description }];
+        }
+        if (dinnerMeal) {
+          newWeeklyPlan[dayName].Dinner = [{ id: `ai-dn-${dayName}-${dayIndex}`, name: dinnerMeal.name, category: 'Dinner', ecoScore: dinnerMeal.lowCarbonScore.toString(), description: dinnerMeal.description }];
+        }
       });
       setWeeklyPlan(newWeeklyPlan);
       localStorage.setItem('mealPlan', JSON.stringify(newWeeklyPlan));
       toast({ title: "AI Meal Plan Generated!", description: "Your 7-day meal plan has been created." });
     } catch (error) {
       console.error("Error generating AI meal plan:", error);
-      toast({ variant: "destructive", title: "AI Plan Error", description: "Could not generate meal plan." });
+      toast({ variant: "destructive", title: "AI Plan Error", description: "Could not generate meal plan. Please try again." });
     } finally {
       setIsLoadingAI(false);
     }
@@ -90,51 +111,76 @@ export default function MealPlannerPage() {
   const getWeekDisplay = () => {
     const today = new Date();
     today.setDate(today.getDate() + currentWeekOffset * 7);
-    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1))); // Monday as start
+    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)));
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
     return `${startOfWeek.toLocaleDateString(undefined, options)} - ${endOfWeek.toLocaleDateString(undefined, options)}`;
   };
 
+  if (!isClient) {
+    return (
+      <div className="space-y-6">
+        <Card className="shadow-xl"><CardHeader><div className="h-8 w-1/2 bg-muted rounded animate-pulse"></div></CardHeader><CardContent><div className="h-64 bg-muted rounded animate-pulse"></div></CardContent></Card>
+        <Card className="shadow-xl"><CardHeader><div className="h-6 w-1/3 bg-muted rounded animate-pulse"></div></CardHeader><CardContent><div className="h-20 bg-muted rounded animate-pulse"></div></CardContent></Card>
+      </div>
+    );
+  }
+  
+  const canUseAIPlanner = userPlan === 'pro' || userPlan === 'ecopro';
+
   return (
     <div className="space-y-6">
       <Card className="shadow-xl">
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <CalendarDays /> Meal Planner
             </CardTitle>
-            {(userPlan === 'pro' || userPlan === 'ecopro') && (
+            {canUseAIPlanner && (
               <Button onClick={handleGenerateAIMealPlan} disabled={isLoadingAI}>
-                {isLoadingAI ? <Loader2 className="animate-spin mr-2"/> : <Sparkles className="mr-2 h-4 w-4" />}
-                AI Generate Week
+                {isLoadingAI ? <Loader2 className="animate-spin mr-2 h-4 w-4"/> : <Sparkles className="mr-2 h-4 w-4" />}
+                AI Generate Week Plan
               </Button>
             )}
           </div>
-          <CardDescription>Plan your meals for the week. Drag and drop coming soon!</CardDescription>
+          <CardDescription>
+            {canUseAIPlanner ? "Use AI to generate a weekly meal plan or add meals manually (manual add coming soon)." : "Upgrade to Pro or EcoPro for AI-powered meal plan generation. Manual planning coming soon!"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between mb-4">
-            <Button variant="outline" size="icon" onClick={() => setCurrentWeekOffset(prev => prev - 1)}><ArrowLeft/></Button>
+            <Button variant="outline" size="icon" onClick={() => setCurrentWeekOffset(prev => prev - 1)} disabled><ArrowLeft/></Button>
             <h3 className="text-lg font-semibold">{getWeekDisplay()}</h3>
-            <Button variant="outline" size="icon" onClick={() => setCurrentWeekOffset(prev => prev + 1)}><ArrowRight/></Button>
+            <Button variant="outline" size="icon" onClick={() => setCurrentWeekOffset(prev => prev + 1)} disabled><ArrowRight/></Button>
           </div>
+
+          {Object.keys(weeklyPlan).length === 0 && !isLoadingAI && (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Your meal planner is empty for this week.</p>
+              {canUseAIPlanner && <p>Try using the "AI Generate Week Plan" button above!</p>}
+              <p className="text-xs mt-2">Manual meal adding coming soon.</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
             {daysOfWeek.map(day => (
-              <Card key={day} className="min-h-[200px] flex flex-col">
+              <Card key={day} className="min-h-[250px] flex flex-col bg-muted/20">
                 <CardHeader className="p-2 bg-muted/50">
                   <CardTitle className="text-sm font-semibold text-center">{day}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-2 space-y-1 flex-grow">
                   {['Breakfast', 'Lunch', 'Dinner', 'Snack'].map(mealType => (
-                    <div key={mealType} className="text-xs p-1 border-b border-dashed last:border-b-0">
+                    <div key={mealType} className="text-xs p-1.5 border-b border-dashed last:border-b-0 min-h-[50px]">
                       <p className="font-medium text-muted-foreground">{mealType}</p>
-                      {weeklyPlan[day]?.[mealType as keyof WeeklyPlan[string]]?.map(item => (
-                        <p key={item.id} className="truncate text-xs">{item.name} {item.ecoScore && `(Eco: ${item.ecoScore})`}</p>
+                      {weeklyPlan[day]?.[mealType as keyof WeeklyPlanDay]?.map(item => (
+                        <div key={item.id} className="p-1 my-0.5 rounded bg-card shadow-sm">
+                            <p className="font-semibold truncate text-primary/90">{item.name}</p>
+                            {item.description && <p className="text-xs text-muted-foreground truncate">{item.description}</p>}
+                            {item.ecoScore && <p className="text-xs text-green-600">Eco: {item.ecoScore}/5</p>}
+                        </div>
                       ))}
-                      {(!weeklyPlan[day]?.[mealType as keyof WeeklyPlan[string]] || weeklyPlan[day]?.[mealType as keyof WeeklyPlan[string]]?.length === 0) && <p className="text-gray-400 italic">Empty</p>}
+                      {(!weeklyPlan[day]?.[mealType as keyof WeeklyPlanDay] || weeklyPlan[day]?.[mealType as keyof WeeklyPlanDay]?.length === 0) && <p className="text-gray-400 italic text-xs">No meal planned</p>}
                     </div>
                   ))}
                 </CardContent>
@@ -150,20 +196,22 @@ export default function MealPlannerPage() {
       <Card className="shadow-xl">
         <CardHeader>
           <CardTitle className="text-xl font-bold text-primary flex items-center gap-2">
-            <ShoppingBag /> Grocery List (Conceptual)
+            <ShoppingBag /> Grocery List
           </CardTitle>
-          <CardDescription>Auto-generated based on your planned meals.</CardDescription>
+          <CardDescription>
+            {canUseAIPlanner ? "Auto-generated based on your AI-planned meals." : "Upgrade to Pro/EcoPro for AI-generated grocery lists."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {generatedPlan && generatedPlan.groceryList.length > 0 ? (
-            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground columns-2 sm:columns-3">
-              {generatedPlan.groceryList.map((item, index) => <li key={index}>{item}</li>)}
+          {generatedPlanOutput && generatedPlanOutput.groceryList.length > 0 ? (
+            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground columns-1 sm:columns-2 md:columns-3">
+              {generatedPlanOutput.groceryList.map((item, index) => <li key={index}>{item}</li>)}
             </ul>
           ) : (
             <p className="text-muted-foreground">
-              {userPlan === 'pro' || userPlan === 'ecopro' ? 
-              "Generate an AI meal plan to see your grocery list here, or add meals manually to populate." : 
-              "Upgrade to Pro/EcoPro for AI-generated meal plans and grocery lists."}
+              {canUseAIPlanner ? 
+              "Generate an AI meal plan to see your grocery list here." : 
+              "Your grocery list will appear here once meals are planned."}
             </p>
           )}
         </CardContent>
@@ -175,3 +223,5 @@ export default function MealPlannerPage() {
     </div>
   );
 }
+
+    
