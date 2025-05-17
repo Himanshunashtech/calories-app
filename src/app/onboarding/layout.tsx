@@ -2,19 +2,9 @@
 import { AppLogo } from '@/components/AppLogo';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
-import { Geist, Geist_Mono } from 'next/font/google';
+// Removed Geist and Geist_Mono imports as they are handled by RootLayout
 import type { Metadata } from 'next';
 import '../globals.css'; // Ensure global styles are applied
-
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
 
 export const metadata: Metadata = {
   title: 'Onboarding - EcoAI Calorie Tracker',
@@ -27,24 +17,25 @@ export default function OnboardingLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body
-        className={cn(
-          geistSans.variable,
-          geistMono.variable,
-          'antialiased font-sans bg-background text-foreground'
-        )}
-      >
-        <div className="flex flex-col min-h-screen items-center justify-center p-4">
-          <header className="mb-8">
-            <AppLogo />
-          </header>
-          <main className="w-full max-w-2xl">
-            {children}
-          </main>
-        </div>
-        <Toaster />
-      </body>
-    </html>
+    // Removed <html> and <body> tags.
+    // The main div now takes the necessary styling.
+    // Font variables and 'antialiased font-sans' are inherited from RootLayout.
+    <div
+      className={cn(
+        'flex flex-col min-h-screen items-center justify-center p-4 bg-background text-foreground'
+        // geistSans.variable, // Handled by RootLayout
+        // geistMono.variable,  // Handled by RootLayout
+        // 'antialiased font-sans' // Handled by RootLayout
+      )}
+    >
+      <header className="mb-8">
+        <AppLogo />
+      </header>
+      <main className="w-full max-w-2xl">
+        {children}
+      </main>
+      {/* Toaster is already in RootLayout, so it's removed from here to avoid duplication */}
+    </div>
   );
 }
+
