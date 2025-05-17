@@ -13,7 +13,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, Coffee, CheckCircle, Leaf, Droplets, Moon, Activity, Scale, Ruler } from 'lucide-react';
+import { User, Target, Salad, Coffee, CheckCircle, Leaf } from 'lucide-react'; // Removed unused icons like Droplets, Moon, Activity, Scale, Ruler
+import { cn } from '@/lib/utils'; // Added import for cn
 
 const TOTAL_STEPS = 5;
 
@@ -293,7 +294,7 @@ export default function OnboardingPage() {
                 <Select name="sleepHours" value={formData.sleepHours} onValueChange={handleSelectChange('sleepHours')}>
                   <SelectTrigger id="sleepHours"><SelectValue placeholder="Select sleep hours" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="<5">&lt;5 hours</SelectItem>
+                    <SelectItem value="&lt;5">&lt;5 hours</SelectItem>
                     <SelectItem value="5-6">5-6 hours</SelectItem>
                     <SelectItem value="7-8">7-8 hours</SelectItem>
                     <SelectItem value="8+">8+ hours</SelectItem>
@@ -383,3 +384,5 @@ const Sparkles = ({ className }: { className?: string }) => (
   </svg>
 );
 
+
+    
