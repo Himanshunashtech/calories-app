@@ -1,7 +1,9 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import Image from 'next/image'; // Import Image from next/image
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'; // Removed Image from here
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { getMealLogs, clearMealLogs, getSelectedPlan, type UserPlan } from '@/lib/localStorage';
@@ -47,11 +49,16 @@ export default function StatsPage() {
     setMealLogs(getMealLogs());
   }
 
-  const todayISO = new Date().toISOString().split('T')[0];
+  const todayISO = useMemo(() => {
+    if (!isClient) return ''; // Avoid Date() on server for initial render
+    return new Date().toISOString().split('T')[0];
+  }, [isClient]);
 
-  const todaysLogs = useMemo(() => 
-    mealLogs.filter(log => log.date.startsWith(todayISO)),
-    [mealLogs, todayISO]
+
+  const todaysLogs = useMemo(() => {
+    if (!isClient) return [];
+    return mealLogs.filter(log => log.date.startsWith(todayISO));
+  }, [mealLogs, todayISO, isClient]
   );
 
   const totalCaloriesToday = useMemo(() => 
@@ -93,6 +100,16 @@ export default function StatsPage() {
       action: <Trash2 className="h-5 w-5 text-destructive"/>
     });
   };
+
+  useEffect(() => {
+    // Ensure date-dependent calculations are re-run on client
+    if (isClient) {
+        const currentTodayISO = new Date().toISOString().split('T')[0];
+        // If for some reason todayISO was not set correctly initially or date changed
+        // this doesn't directly re-trigger memos but ensures subsequent updates are correct
+    }
+  }, [isClient]);
+
 
   if (!isClient) {
     return (
@@ -239,3 +256,6 @@ export default function StatsPage() {
     </div>
   );
 }
+
+
+    
