@@ -13,12 +13,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, Coffee, CheckCircle, Leaf, Utensils, ShieldQuestion, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, CloudLightning, Users, Search, Sparkles as LucideSparklesIcon } from 'lucide-react';
+import { User, Target, Salad, Utensils, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, CloudLightning, Users, Search, Sparkles as LucideSparklesIcon, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import type { OnboardingData, UserProfile } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
-import { isUserLoggedIn, isOnboardingComplete, getUserProfile, saveUserProfile, setOnboardingComplete } from '@/lib/localStorage';
+import { isUserLoggedIn, getUserProfile, saveUserProfile } from '@/lib/localStorage';
 
 const TOTAL_STEPS = 8; 
 
@@ -63,21 +63,14 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     setIsClient(true);
-    if (!isUserLoggedIn()) {
-      router.replace('/login'); // If not logged in, cannot start onboarding
-      return;
-    }
-    if (isOnboardingComplete()) {
-      router.replace('/dashboard'); // If already onboarded, go to dashboard
-      return;
-    }
-    // Pre-fill from existing profile if available (e.g., if user logged in and then came here)
+    // In this new flow, user might not be "logged in" yet when starting onboarding.
+    // We pre-fill if there's any existing data, but don't strictly require login here.
     const existingProfile = getUserProfile();
     if (existingProfile) {
         setFormData(prev => ({
-            ...prev, // keep defaults for fields not in profile
-            ...existingProfile, // override with profile data
-            reminderSettings: { // deep merge reminders
+            ...prev, 
+            ...existingProfile, 
+            reminderSettings: { 
                 ...prev.reminderSettings,
                 ...(existingProfile.reminderSettings || {})
             }
@@ -174,32 +167,24 @@ export default function OnboardingPage() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const existingProfile = getUserProfile();
-    if (existingProfile) {
-        const updatedProfile: UserProfile = {
-            ...existingProfile, // Keep existing email, etc.
-            ...formData, // Merge onboarding data
-            // Ensure reminderSettings and appSettings are merged properly if they exist
-            reminderSettings: {
-                ...(existingProfile.reminderSettings || {}),
-                ...formData.reminderSettings,
-            },
-            appSettings: {
-                ...(existingProfile.appSettings || {}),
-                // formData might not contain appSettings, so this is fine
-            }
-        };
-        saveUserProfile(updatedProfile);
-    } else {
-        // This case should ideally not happen if signup/login precedes onboarding
-        console.error("Onboarding: No existing profile found to update. This shouldn't happen in the new flow.");
-        saveUserProfile(formData as UserProfile); // Save as a new profile if somehow no profile exists
-    }
+    const profileToSave: UserProfile = {
+        ...(existingProfile || {}), // Keep existing fields like email if user re-onboards
+        ...formData,
+        reminderSettings: {
+            ...(existingProfile?.reminderSettings || defaultFormData.reminderSettings),
+            ...formData.reminderSettings,
+        },
+        appSettings: {
+            ...(existingProfile?.appSettings || {}),
+            // appSettings are not collected during onboarding in this version
+        }
+    };
+    saveUserProfile(profileToSave);
     
-    setOnboardingComplete(true);
-
+    // DO NOT setOnboardingComplete(true) here. This will be done after login.
     toast({
-      title: 'Onboarding Complete!',
-      description: "Let's choose a plan that's right for you.",
+      title: 'Preferences Saved!',
+      description: "Next, let's choose a plan that's right for you.",
       action: <CheckCircle className="text-green-500" />,
     });
     router.push('/subscription');
@@ -225,7 +210,7 @@ export default function OnboardingPage() {
           { currentStep === 1 ? <User className="h-10 w-10 text-primary"/> :
             currentStep === 2 ? <BarChart3 className="h-10 w-10 text-primary"/> :
             currentStep === 3 ? <Target className="h-10 w-10 text-primary"/> :
-            currentStep === 4 ? <Utensils className="h-10 w-10 text-primary"/> :
+            currentStep === 4 ? <Salad className="h-10 w-10 text-primary"/> :
             currentStep === 5 ? <LucideSparklesIcon className="h-10 w-10 text-primary"/> :
             currentStep === 6 ? <HeartHandshake className="h-10 w-10 text-primary"/> :
             currentStep === 7 ? <BellRing className="h-10 w-10 text-primary"/> :
@@ -237,14 +222,14 @@ export default function OnboardingPage() {
           { currentStep === 2 && "Physical Metrics"}
           { currentStep === 3 && "Your Health Goals"}
           { currentStep === 4 && "Diet & Food Preferences"}
-          { currentStep === 5 && "AI Feature & Eco Mission"}
+          { currentStep === 5 && "Our Eco Mission & AI"}
           { currentStep === 6 && "Lifestyle Habits"}
           { currentStep === 7 && "Notification Preferences"}
           { currentStep === TOTAL_STEPS && "Review & Get Started!"}
           { currentStep > 1 && currentStep < TOTAL_STEPS && ` (Step ${currentStep}/${TOTAL_STEPS-1})`}
         </CardTitle>
         <CardDescription className="text-center">
-          { currentStep === 1 && "Let's personalize your journey. Your name and age help us tailor recommendations."}
+          { currentStep === 1 && "Let's personalize your journey. Basic info helps us tailor recommendations."}
           { currentStep === 2 && "Tell us a bit about yourself for accurate tracking."}
           { currentStep === 3 && "What are you aiming to achieve? You can select multiple goals."}
           { currentStep === 4 && "Customize your diet and food preferences."}
@@ -326,7 +311,7 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground text-center">BMI will be calculated based on these values (placeholder).</p>
+                <p className="text-xs text-muted-foreground text-center">BMI will be calculated (placeholder).</p>
                  <div>
                   <Label>Typical Activity Level</Label>
                   <RadioGroup name="activityLevel" value={formData.activityLevel} onValueChange={handleRadioChange('activityLevel')} className="mt-2 space-y-1">
@@ -338,14 +323,14 @@ export default function OnboardingPage() {
                 </div>
                  <div className="p-3 border rounded-md flex items-center justify-between">
                     <Label htmlFor="fitnessSync" className="text-sm">Sync fitness tracker?</Label>
-                    <Button size="sm" variant="outline" disabled>Connect Google Fit/Apple Health</Button>
+                    <Button size="sm" variant="outline" disabled>Connect Health App (Placeholder)</Button>
                  </div>
               </section>
             )}
 
             {currentStep === 3 && (
               <section className="space-y-4 animate-in fade-in duration-500">
-                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Target className="h-6 w-6" /> Goals & Exercise</h3>
+                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Target className="h-6 w-6" /> Health Goals & Exercise</h3>
                 <div>
                   <Label>Primary Health Goals (select all that apply)</Label>
                   <div className="space-y-2 mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -373,7 +358,7 @@ export default function OnboardingPage() {
                  <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
                     <Label htmlFor="alsoTrackSustainability" className="flex flex-col">
                         <span>Also track sustainability?</span>
-                        <span className="text-xs text-muted-foreground">Focus on eco-friendly choices alongside health.</span>
+                        <span className="text-xs text-muted-foreground">Focus on eco-friendly choices.</span>
                     </Label>
                     <Switch id="alsoTrackSustainability" name="alsoTrackSustainability" checked={formData.alsoTrackSustainability} onCheckedChange={handleSwitchChange('alsoTrackSustainability')} />
                 </div>
@@ -402,7 +387,7 @@ export default function OnboardingPage() {
 
             {currentStep === 4 && (
               <section className="space-y-4 animate-in fade-in duration-500">
-                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Utensils className="h-6 w-6" /> Diet & Food Preferences</h3>
+                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Salad className="h-6 w-6" /> Diet & Food Preferences</h3>
                  <div>
                   <Label htmlFor="dietType">Are you following any specific diet?</Label>
                   <Select name="dietType" value={formData.dietType} onValueChange={handleSelectChange('dietType')}>
@@ -457,25 +442,26 @@ export default function OnboardingPage() {
                  <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
                   <Label htmlFor="enableCarbonTracking" className="flex flex-col">
                     <span>Enable Carbon Tracking?</span>
-                    <span className="text-xs text-muted-foreground">Track the environmental impact of your meals (EcoPro feature).</span>
+                    <span className="text-xs text-muted-foreground">Understand your food's eco-impact.</span>
                   </Label>
                   <Switch id="enableCarbonTracking" name="enableCarbonTracking" checked={formData.enableCarbonTracking} onCheckedChange={handleSwitchChange('enableCarbonTracking')} />
                 </div>
               </section>
             )}
-             {currentStep === 5 && (
-              <section className="space-y-4 animate-in fade-in duration-500 text-center">
+
+            {currentStep === 5 && (
+              <section className="space-y-6 animate-in fade-in duration-500 text-center">
+                 <h3 className="text-xl font-semibold flex items-center justify-center gap-2 text-primary"><LucideSparklesIcon className="h-6 w-6" /> Our Eco Mission & AI</h3>
                  <div className="p-4 border rounded-lg bg-muted/30">
-                    <LucideSparklesIcon className="h-12 w-12 text-primary mx-auto mb-3"/>
+                    <LucideSparklesIcon className="h-10 w-10 text-primary mx-auto mb-3"/>
                     <p className="font-semibold text-lg mb-2">Snap a Photo, Get Instant Insights!</p>
                     <img src="https://placehold.co/300x180.png?text=AI+Scan+Demo" alt="AI Feature Demo" data-ai-hint="app scanner food" className="rounded-md shadow-md mx-auto mb-3"/>
-                    <p className="text-sm text-muted-foreground">Our AI (powered by Gemini) analyzes your meal photo to estimate calories, macros, and even micronutrients in seconds. Logging food has never been easier!</p>
-                    <Button variant="link" className="mt-2" disabled>See Example Scan</Button>
+                    <p className="text-sm text-muted-foreground">Our AI analyzes your meal photo to estimate calories, macros, and micronutrients in seconds. Logging food has never been easier!</p>
                  </div>
                  <div className="p-4 border rounded-lg bg-primary/10">
                     <Users className="h-10 w-10 text-primary mx-auto mb-2"/>
                     <p className="font-semibold text-lg text-primary">Join Our Eco Mission!</p>
-                    <p className="text-sm text-muted-foreground">Become one of the 50,000+ users collectively saving an estimated 1 Million kg of CO2 monthly by making informed, sustainable food choices. Every meal counts!</p>
+                    <p className="text-sm text-muted-foreground">Join 50,000+ users collectively saving an estimated 1 Million kg of CO2 monthly by making informed, sustainable food choices. Every meal counts!</p>
                     <Progress value={75} className="w-3/4 mx-auto mt-2 h-2 [&>div]:bg-green-500" aria-label="Eco mission progress"/>
                  </div>
               </section>
@@ -590,7 +576,7 @@ export default function OnboardingPage() {
                 </div>
                 <div className="flex items-center gap-2 mt-4 p-3 bg-primary/10 rounded-md">
                     <Users className="h-5 w-5 text-primary"/>
-                    <p className="text-sm text-primary-foreground">You're joining a community dedicated to health and sustainability!</p>
+                    <p className="text-sm text-muted-foreground">You're joining a community dedicated to health and sustainability!</p>
                 </div>
               </section>
             )}
@@ -605,7 +591,7 @@ export default function OnboardingPage() {
                 </Button>
               ) : (
                 <Button type="submit" className="ml-auto bg-green-600 hover:bg-green-700">
-                  Complete Onboarding <Smile className="ml-2 h-4 w-4"/>
+                  Save & Choose Plan <Smile className="ml-2 h-4 w-4"/>
                 </Button>
               )}
             </CardFooter>

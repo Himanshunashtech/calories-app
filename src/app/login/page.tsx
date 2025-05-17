@@ -9,8 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { LogIn, Mail, Lock, ExternalLink, UserPlus } from 'lucide-react';
-import { fakeLogin, isUserLoggedIn, isOnboardingComplete } from '@/lib/localStorage';
+import { LogIn, Mail, Lock, UserPlus, UserCheck } from 'lucide-react';
+import { fakeLogin, isUserLoggedIn, isOnboardingComplete, getUserProfile, saveUserProfile, getSelectedPlan, setSelectedPlan, setOnboardingComplete } from '@/lib/localStorage';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -20,11 +20,11 @@ export default function LoginPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // If user is already logged in and onboarded, go to dashboard
+    // This page is now part of the primary onboarding flow
+    // If user lands here directly and is fully set up, redirect.
     if (isUserLoggedIn() && isOnboardingComplete()) {
       router.replace('/dashboard');
     }
-    // If logged in but not onboarded, this page is fine, or they might be redirected from /app layout
   }, [router]);
 
   const handleSubmit = (e: FormEvent) => {
@@ -32,22 +32,19 @@ export default function LoginPage() {
     setIsLoading(true);
 
     if (email && password) {
-      fakeLogin(email); // This will set userLoggedIn = true and associate email with profile
+      // In this flow, 'fakeLogin' finalizes the account creation process
+      // by associating the email with the previously gathered onboarding data.
+      fakeLogin(email); // This function now also handles setting onboarding to complete
 
       toast({
-        title: 'Login Successful!',
-        description: 'Welcome back!',
+        title: 'Account Finalized!',
+        description: 'Welcome to EcoAI Calorie Tracker!',
       });
-
-      if (isOnboardingComplete()) {
-        router.push('/dashboard');
-      } else {
-        router.push('/onboarding');
-      }
+      router.push('/dashboard');
     } else {
       toast({
         variant: 'destructive',
-        title: 'Login Failed',
+        title: 'Setup Failed',
         description: 'Please enter your email and password.',
       });
       setIsLoading(false);
@@ -57,9 +54,9 @@ export default function LoginPage() {
   return (
     <Card className="shadow-2xl">
       <CardHeader className="text-center">
-        <LogIn className="mx-auto h-10 w-10 text-primary mb-2" />
-        <CardTitle className="text-2xl font-bold text-primary">Log In to Your Account</CardTitle>
-        <CardDescription>Access your EcoAI Calorie Tracker.</CardDescription>
+        <UserCheck className="mx-auto h-10 w-10 text-primary mb-2" />
+        <CardTitle className="text-2xl font-bold text-primary">Set Up Your Account</CardTitle>
+        <CardDescription>Finalize your account with an email and password.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -92,35 +89,16 @@ export default function LoginPage() {
                 className="pl-10"
               />
             </div>
-            <div className="text-right">
-              <Link href="/password-reset" passHref>
-                <Button variant="link" size="sm" className="p-0 h-auto text-xs">Forgot password?</Button>
-              </Link>
-            </div>
           </div>
           <Button type="submit" className="w-full text-lg py-3" disabled={isLoading}>
-            {isLoading ? 'Logging In...' : 'Log In'}
+            {isLoading ? 'Finalizing...' : 'Complete Account Setup'}
           </Button>
         </form>
-        <div className="mt-4 relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">
-              Or (for demo)
-            </span>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <Button variant="outline" disabled><ExternalLink className="mr-2 h-4 w-4"/> Google (Placeholder)</Button>
-          <Button variant="outline" disabled><ExternalLink className="mr-2 h-4 w-4"/> Apple (Placeholder)</Button>
-        </div>
       </CardContent>
       <CardFooter className="justify-center text-sm">
-        <p>Don't have an account?&nbsp;</p>
+        <p>Want to sign up separately?&nbsp;</p>
         <Link href="/signup" passHref>
-          <Button variant="link" className="p-0 h-auto"><UserPlus className="mr-1 h-4 w-4"/>Sign Up</Button>
+          <Button variant="link" className="p-0 h-auto"><UserPlus className="mr-1 h-4 w-4"/>Sign Up Separately</Button>
         </Link>
       </CardFooter>
     </Card>

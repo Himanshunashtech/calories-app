@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { setSelectedPlan as saveSelectedPlan, type UserPlan } from '@/lib/localStorage';
+import { setSelectedPlan as saveSelectedPlan, type UserPlan, saveUserProfile, getUserProfile } from '@/lib/localStorage';
 
 const plans = [
   {
@@ -22,7 +22,7 @@ const plans = [
       'Calorie tracking (manual & AI-assisted)',
       'Limited AI analysis (3 scans/month)',
     ],
-    cta: 'Get Started Free',
+    cta: 'Continue Free',
     tier: 'free',
     variant: 'outline' as 'outline' | 'default',
   },
@@ -68,24 +68,21 @@ export default function SubscriptionPage() {
   const { toast } = useToast();
 
   const handleSelectPlan = (tier: string, planName: string) => {
-    saveSelectedPlan(tier as UserPlan);
+    saveSelectedPlan(tier as UserPlan); 
+    
+    // Optionally, update the user profile with this plan choice if needed
+    // const userProfile = getUserProfile();
+    // if (userProfile) {
+    //   saveUserProfile({ ...userProfile, selectedPlan: tier as UserPlan });
+    // }
+
     toast({
       title: 'Plan Selected!',
-      description: `You've chosen the ${planName} plan. Let's set up your account.`,
+      description: `You've chosen the ${planName} plan. Let's finalize your account.`,
       action: <Check className="text-green-500" />,
     });
-    router.push('/login'); // Redirect to login page
+    router.push('/login'); 
   };
-
-  const handleContinueFree = () => {
-    saveSelectedPlan('free');
-     toast({
-      title: 'Free Plan Selected!',
-      description: `You're starting with the Free plan. Let's set up your account.`,
-    });
-    router.push('/login'); // Redirect to login page
-  };
-
 
   return (
     <div className="space-y-8">
@@ -140,10 +137,6 @@ export default function SubscriptionPage() {
 
       <div className="text-center mt-6 space-y-2">
         <p className="text-muted-foreground">All plans are commitment-free. Cancel anytime.</p>
-        <Button variant="link" onClick={handleContinueFree} className="text-primary hover:underline">
-          Or continue with the Free plan for now
-          <ArrowRight className="ml-1 h-4 w-4" />
-        </Button>
       </div>
     </div>
   );

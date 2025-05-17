@@ -3,14 +3,14 @@ import type { MealEntry, UserPlan, AIScanUsage, UserProfile, OnboardingData, Wat
 import { ALLERGY_OPTIONS } from '@/types';
 
 const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
-const SELECTED_PLAN_KEY = 'selectedPlan';
+const SELECTED_PLAN_KEY = 'ecoAi_selectedPlan';
 const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage';
-const USER_PROFILE_KEY = 'userProfile';
+const USER_PROFILE_KEY = 'ecoAi_userProfile';
 const WATER_INTAKE_KEY = 'ecoAi_waterIntake';
-const ONBOARDING_COMPLETE_KEY = 'onboardingComplete';
-const USER_LOGGED_IN_KEY = 'userLoggedIn';
-const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'generatedMealPlanOutput';
-const MEAL_PLAN_KEY = 'mealPlan';
+const ONBOARDING_COMPLETE_KEY = 'ecoAi_onboardingComplete';
+const USER_LOGGED_IN_KEY = 'ecoAi_userLoggedIn';
+const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput';
+const MEAL_PLAN_KEY = 'ecoAi_mealPlan';
 
 
 // Meal Logs
@@ -343,8 +343,8 @@ export function fakeLogin(email: string): void {
     if (profile) {
         profile = { ...profile, email: email };
     } else {
-        // If no profile exists at all, create a very basic one.
-        // This might happen if a user tries to log in without ever signing up or onboarding.
+        // If no profile exists at all (e.g. user cleared storage then tries to "login")
+        // Create a basic one with this email. Onboarding data would be lost in this edge case.
         console.warn("fakeLogin: No existing profile found. Creating a new minimal profile for login.");
         profile = { 
             ...defaultUserProfile,
@@ -356,18 +356,19 @@ export function fakeLogin(email: string): void {
 
     try {
         localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
+        // In this new flow, login is the final step after onboarding and plan selection.
+        // So, we mark onboarding as complete here.
+        localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
     } catch (error) {
-        console.error(`Error writing '${USER_LOGGED_IN_KEY}' to localStorage:`, error);
+        console.error(`Error writing '${USER_LOGGED_IN_KEY}' or '${ONBOARDING_COMPLETE_KEY}' to localStorage:`, error);
     }
 }
 
 export function fakeSignup(email: string, name: string): void {
     if (typeof window === 'undefined') return;
 
-    // Check if a profile with this email already exists. For a fake system, we might overwrite or just log.
-    // For simplicity, we'll create/overwrite.
     const newProfile: UserProfile = { 
-      ...defaultUserProfile, // Start with defaults
+      ...defaultUserProfile, 
       email: email, 
       name: name,
     };
@@ -375,14 +376,10 @@ export function fakeSignup(email: string, name: string): void {
 
     try {
         localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-    } catch (error) {
-        console.error(`Error writing '${USER_LOGGED_IN_KEY}' to localStorage:`, error);
-    }
-    try {
-        // Crucially, set onboarding to false after signup, so they are directed to onboarding.
+        // For direct signup, onboarding is NOT yet complete.
         localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'false'); 
     } catch (error) {
-        console.error(`Error writing '${ONBOARDING_COMPLETE_KEY}' to localStorage:`, error);
+        console.error(`Error writing auth keys to localStorage:`, error);
     }
 }
 
@@ -391,8 +388,10 @@ export function fakeLogout(): void {
     if (typeof window === 'undefined') return;
     try {
         localStorage.removeItem(USER_LOGGED_IN_KEY);
-        // Optionally, you might want to clear other session-specific data here,
-        // but not the entire user profile or meal logs unless that's the desired behavior.
+        // Optionally, clear selected plan or other session-like data if desired
+        // localStorage.removeItem(SELECTED_PLAN_KEY); 
+        // Keeping ONBOARDING_COMPLETE_KEY and USER_PROFILE_KEY intact for now,
+        // so user doesn't have to re-onboard if they log back in.
     } catch (error) {
         console.error(`Error removing '${USER_LOGGED_IN_KEY}' from localStorage:`, error);
     }

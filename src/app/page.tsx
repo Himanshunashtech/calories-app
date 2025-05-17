@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { AppLogo } from '@/components/AppLogo';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Leaf, Zap, BarChart3, UserPlus, ArrowRight, LogInIcon } from 'lucide-react';
+import { Leaf, Zap, BarChart3, ArrowRight } from 'lucide-react';
 
 export default function LandingPage() {
   return (
@@ -32,14 +32,9 @@ export default function LandingPage() {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-10">
-          <Link href="/signup" passHref>
+          <Link href="/onboarding" passHref>
             <Button size="lg" className="w-full sm:w-auto text-lg py-6 px-8">
-              Get Started <UserPlus className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-          <Link href="/login" passHref>
-            <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg py-6 px-8">
-              Log In <LogInIcon className="ml-2 h-5 w-5" />
+              Get Started <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </Link>
         </div>
