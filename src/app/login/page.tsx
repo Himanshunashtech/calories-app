@@ -10,11 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, Mail, Lock, UserPlus, ExternalLink } from 'lucide-react';
-import { fakeLogin, isUserLoggedIn, isOnboardingComplete, getUserProfile, saveUserProfile, setOnboardingComplete } from '@/lib/localStorage';
+import { fakeLogin, isUserLoggedIn, isOnboardingComplete, getUserProfile, saveUserProfile, setSelectedPlan, setIsAdmin } from '@/lib/localStorage';
 import { Skeleton } from '@/components/ui/skeleton';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase'; // Import Firebase auth and provider
 import type { UserProfile } from '@/types';
+
+const ADMIN_EMAIL = 'admin@ecoai.app';
+const ADMIN_PASSWORD = 'adminpass123';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -27,6 +30,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     setIsClient(true);
+    // This check is more for users trying to access /login directly after being fully set up.
+    // The main app layout also has redirects.
     if (isUserLoggedIn() && isOnboardingComplete()) {
       router.replace('/dashboard');
     }
@@ -36,8 +41,44 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
 
+    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      fakeLogin(email); // Logs in the "admin" user conceptually
+      setIsAdmin(true);
+      toast({
+        title: 'Admin Login Successful',
+        description: 'Redirecting to Admin Dashboard...',
+      });
+      router.push('/admin/dashboard');
+      setIsLoading(false);
+      return;
+    }
+
     if (email && password) {
-      fakeLogin(email); // This updates profile email, sets loggedIn and onboardingComplete
+      // For regular users, this is the final step after onboarding & plan selection.
+      let userProfile = getUserProfile(); // Should contain onboarding data
+
+      if (userProfile) {
+        userProfile = { ...userProfile, email };
+      } else {
+        // Fallback if onboarding data is somehow missing (unlikely in this flow)
+        console.warn("Login: No profile found from onboarding. Creating new minimal profile.");
+        userProfile = {
+          name: email.split('@')[0] || 'User',
+          email: email,
+          profileImageUri: null,
+          // Initialize other fields to defaults
+          age: '', gender: '', height: '', weight: '', activityLevel: '', healthGoals: [],
+          dietType: '', dietaryRestrictions: [], alsoTrackSustainability: false, 
+          enableCarbonTracking: false, exerciseFrequency: '', favoriteCuisines: '',
+          dislikedIngredients: '', sleepHours: '', stressLevel: '', waterGoal: 8,
+          heightUnit: 'cm', weightUnit: 'kg', macroSplit: {carbs: 50, protein: 25, fat: 25},
+          reminderSettings: { mealRemindersEnabled: true, breakfastTime: '08:00', lunchTime: '12:30', dinnerTime: '18:30', waterReminderEnabled: false, waterReminderInterval: 60, snoozeDuration: 5 },
+          appSettings: { darkModeEnabled: false, unitPreferences: { weight: 'kg', height: 'cm', volume: 'ml'}, hideNonCompliantRecipes: false }
+        } as UserProfile;
+      }
+      saveUserProfile(userProfile);
+      fakeLogin(email); // This also sets onboardingComplete to true
+
       toast({
         title: 'Account Finalized!',
         description: 'Welcome to EcoAI Calorie Tracker!',
@@ -49,8 +90,8 @@ export default function LoginPage() {
         title: 'Login Failed',
         description: 'Please enter your email and password.',
       });
-      setIsLoading(false);
     }
+    setIsLoading(false);
   };
 
   const handleGoogleSignIn = async () => {
@@ -62,41 +103,53 @@ export default function LoginPage() {
       if (user && user.email) {
         let userProfile = getUserProfile(); // Check if profile exists from onboarding
         
-        if (!userProfile || userProfile.email !== user.email) { // If no profile, or email mismatch (new Google user)
+        if (!userProfile || userProfile.email !== user.email) { 
+            const googleName = user.displayName || user.email.split('@')[0] || 'User';
             userProfile = {
-                ...(userProfile || {}), // Keep onboarding data if any, but overwrite personal details from Google
-                name: user.displayName || user.email.split('@')[0] || 'User',
+                ...(userProfile || {}), 
+                name: googleName,
                 email: user.email,
                 profileImageUri: user.photoURL || null,
-                // Reset other fields if it's a truly new user identified by Google
-                age: userProfile?.age || '', // Keep if onboarding was done
+                // Ensure defaults for fields not from Google or onboarding
+                age: userProfile?.age || '', 
                 gender: userProfile?.gender || '',
                 height: userProfile?.height || '',
+                heightUnit: userProfile?.heightUnit || 'cm',
                 weight: userProfile?.weight || '',
+                weightUnit: userProfile?.weightUnit || 'kg',
                 activityLevel: userProfile?.activityLevel || '',
                 healthGoals: userProfile?.healthGoals || [],
+                alsoTrackSustainability: userProfile?.alsoTrackSustainability || false,
+                exerciseFrequency: userProfile?.exerciseFrequency || '',
+                dietType: userProfile?.dietType || '',
+                dietaryRestrictions: userProfile?.dietaryRestrictions || [],
+                favoriteCuisines: userProfile?.favoriteCuisines || '',
+                dislikedIngredients: userProfile?.dislikedIngredients || '',
+                enableCarbonTracking: userProfile?.enableCarbonTracking || false,
+                sleepHours: userProfile?.sleepHours || '',
+                stressLevel: userProfile?.stressLevel || '',
+                waterGoal: userProfile?.waterGoal || 8,
+                macroSplit: userProfile?.macroSplit || { carbs: 50, protein: 25, fat: 25 },
+                reminderSettings: userProfile?.reminderSettings || { mealRemindersEnabled: true, breakfastTime: '08:00', lunchTime: '12:30', dinnerTime: '18:30', waterReminderEnabled: false, waterReminderInterval: 60, snoozeDuration: 5 },
+                appSettings: userProfile?.appSettings || { darkModeEnabled: false, unitPreferences: { weight: 'kg', height: 'cm', volume: 'ml' }, hideNonCompliantRecipes: false },
             } as UserProfile;
-        } else { // Google user matches an existing profile (e.g., from onboarding or previous email login)
+        } else { 
              userProfile = {
                 ...userProfile,
-                name: user.displayName || userProfile.name || 'User', // Prefer Google name
-                profileImageUri: user.photoURL || userProfile.profileImageUri, // Prefer Google photo
+                name: user.displayName || userProfile.name || 'User',
+                profileImageUri: user.photoURL || userProfile.profileImageUri,
             };
         }
         
         saveUserProfile(userProfile);
-        fakeLogin(user.email); // Sets loggedIn, and importantly, onboardingComplete from profile context
+        fakeLogin(user.email); // Sets loggedIn, and onboardingComplete to true
 
         toast({
           title: 'Signed in with Google!',
           description: `Welcome, ${user.displayName || user.email}!`,
         });
         
-        if (isOnboardingComplete()) {
-          router.push('/dashboard');
-        } else {
-          router.push('/onboarding');
-        }
+        router.push('/dashboard');
 
       } else {
         throw new Error("Google sign-in did not return user email.");
@@ -112,7 +165,6 @@ export default function LoginPage() {
       setIsGoogleLoading(false);
     }
   };
-
 
   if (!isClient) {
     return (

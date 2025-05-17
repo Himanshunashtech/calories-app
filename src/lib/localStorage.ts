@@ -12,6 +12,7 @@ const ONBOARDING_COMPLETE_KEY = 'ecoAi_onboardingComplete';
 const USER_LOGGED_IN_KEY = 'ecoAi_userLoggedIn';
 const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput';
 const MEAL_PLAN_KEY = 'ecoAi_mealPlan';
+const IS_ADMIN_KEY = 'ecoAi_isAdmin';
 
 
 // Meal Logs
@@ -336,7 +337,6 @@ export function setOnboardingComplete(status: boolean): void {
   }
 }
 
-// Updated fakeLogin for the new flow
 export function fakeLogin(email: string): void {
   if (typeof window === 'undefined') return;
   
@@ -345,8 +345,6 @@ export function fakeLogin(email: string): void {
   if (profile) {
       profile = { ...profile, email: email };
   } else {
-      // If no profile exists from onboarding (unlikely in this flow, but fallback)
-      console.warn("fakeLogin: No existing profile found from onboarding. Creating a new minimal profile.");
       profile = { 
           ...defaultUserProfile,
           email: email, 
@@ -357,9 +355,7 @@ export function fakeLogin(email: string): void {
 
   try {
       localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-      // In this new flow, login is the final step after onboarding and plan selection.
-      // So, we mark onboarding as complete here.
-      setOnboardingComplete(true);
+      setOnboardingComplete(true); // In this flow, login IS the final step after onboarding & plan selection.
   } catch (error) {
       console.error(`Error writing auth keys to localStorage:`, error);
   }
@@ -378,8 +374,7 @@ export function fakeSignup(email: string, name: string): void {
 
     try {
         localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-        // For direct signup, onboarding is NOT yet complete.
-        setOnboardingComplete(false); 
+        setOnboardingComplete(false); // For direct signup, onboarding is NOT yet complete.
     } catch (error) {
         console.error(`Error writing auth keys to localStorage:`, error);
     }
@@ -390,13 +385,12 @@ export function fakeLogout(firebaseAuthInstance?: Auth): void {
     if (typeof window === 'undefined') return;
     try {
         localStorage.removeItem(USER_LOGGED_IN_KEY);
+        localStorage.removeItem(IS_ADMIN_KEY); // Clear admin flag on logout
         if (firebaseAuthInstance) {
             signOut(firebaseAuthInstance).catch(err => console.error("Firebase sign out error during local fakeLogout:", err));
         }
-        // Optionally, clear selected plan or other session-like data if desired
-        // localStorage.removeItem(SELECTED_PLAN_KEY); 
     } catch (error) {
-        console.error(`Error removing '${USER_LOGGED_IN_KEY}' from localStorage:`, error);
+        console.error(`Error removing auth keys from localStorage:`, error);
     }
 }
 
@@ -408,6 +402,30 @@ export function isUserLoggedIn(): boolean {
         console.error(`Error reading '${USER_LOGGED_IN_KEY}' from localStorage:`, error);
         return false;
     }
+}
+
+// Admin Status
+export function setIsAdmin(status: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (status) {
+      localStorage.setItem(IS_ADMIN_KEY, 'true');
+    } else {
+      localStorage.removeItem(IS_ADMIN_KEY);
+    }
+  } catch (error) {
+    console.error(`Error writing '${IS_ADMIN_KEY}' to localStorage:`, error);
+  }
+}
+
+export function getIsAdmin(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(IS_ADMIN_KEY) === 'true';
+  } catch (error) {
+    console.error(`Error reading '${IS_ADMIN_KEY}' from localStorage:`, error);
+    return false;
+  }
 }
 
 export function clearAllUserData(): void {
@@ -422,6 +440,7 @@ export function clearAllUserData(): void {
     USER_LOGGED_IN_KEY,
     GENERATED_MEAL_PLAN_OUTPUT_KEY,
     MEAL_PLAN_KEY,
+    IS_ADMIN_KEY, // Ensure admin flag is cleared too
   ];
   
   keysToRemove.forEach(key => {
