@@ -12,6 +12,7 @@ import { Utensils, Search, Filter, Leaf, Sparkles, ArrowRight, ChefHat, BarChart
 import { getSelectedPlan, type UserPlan, getUserProfile, type UserProfile } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge'; // Added import for Badge
 
 // Placeholder recipe data
 const placeholderRecipes = [
@@ -64,6 +65,11 @@ export default function RecipesPage() {
       
       restrictionMatch = !userProfile.dietaryRestrictions.some(restriction => {
         const lowerRestriction = restriction.toLowerCase();
+        // A simple check: if the restriction keyword is part of the recipe's ingredients or tags
+        // This is a basic implementation and might need refinement for accuracy (e.g., "gluten" vs "gluten-free")
+        if (lowerRestriction === 'gluten' && recipeDietTagsString.includes('gluten-free')) {
+          return false; // Don't hide if it's explicitly gluten-free
+        }
         return recipeIngredientsString.includes(lowerRestriction) || recipeDietTagsString.includes(lowerRestriction);
       });
     }
@@ -79,13 +85,7 @@ export default function RecipesPage() {
             title: "Bon Appétit!",
             description: `Opening recipe: ${filteredRecipes[randomIndex].name}`
         });
-        // Assuming you have a router instance if not already available
-        // import { useRouter } from 'next/navigation';
-        // const router = useRouter();
-        // router.push(`/app/recipes/${randomRecipeId}`);
-        // For now, we'll just log it as router might not be in scope here without adding hook
-        console.log(`Would navigate to /app/recipes/${randomRecipeId}`);
-         window.location.href = `/app/recipes/${randomRecipeId}`; // Simple navigation for now
+        window.location.href = `/recipes/${randomRecipeId}`; 
     } else {
         toast({
             title: "No Recipes Found",
@@ -170,7 +170,7 @@ export default function RecipesPage() {
           {filteredRecipes.map(recipe => (
             <Card key={recipe.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 ease-in-out">
               <CardHeader className="p-0 relative">
-                <Link href={`/app/recipes/${recipe.id}`} passHref>
+                <Link href={`/recipes/${recipe.id}`} passHref>
                   <Image 
                     src={recipe.image} 
                     alt={recipe.name} 
@@ -183,7 +183,7 @@ export default function RecipesPage() {
               </CardHeader>
               <CardContent className="p-4 flex-grow">
                 <CardTitle className="text-lg mb-1 hover:text-primary transition-colors">
-                    <Link href={`/app/recipes/${recipe.id}`}>{recipe.name}</Link>
+                    <Link href={`/recipes/${recipe.id}`}>{recipe.name}</Link>
                 </CardTitle>
                 <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     <Badge variant={recipe.ecoScore === 'A' ? 'default' : 'secondary'} className={cn('text-xs', recipe.ecoScore === 'A' ? 'bg-green-600 hover:bg-green-700 text-white' : recipe.ecoScore === 'B' ? 'bg-yellow-500 text-yellow-foreground' : 'bg-orange-500 text-orange-foreground' )}>
@@ -194,7 +194,7 @@ export default function RecipesPage() {
                 <CardDescription className="text-sm text-muted-foreground line-clamp-3">{recipe.description}</CardDescription>
               </CardContent>
               <CardFooter className="p-4 border-t">
-                <Link href={`/app/recipes/${recipe.id}`} passHref legacyBehavior>
+                <Link href={`/recipes/${recipe.id}`} passHref legacyBehavior>
                   <Button className="w-full">View Recipe <ArrowRight className="ml-2 h-4 w-4"/></Button>
                 </Link>
               </CardFooter>
