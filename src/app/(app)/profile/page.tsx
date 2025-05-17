@@ -137,7 +137,7 @@ export default function ProfilePage() {
   };
 
 
-  const handleSwitchChange = (name: keyof UserProfile | `reminderSettings.${keyof ReminderSettings}`) => (checked: boolean) => {
+  const handleSwitchChange = (name: keyof UserProfile | `reminderSettings.${keyof ReminderSettings}` | `appSettings.${keyof AppSettings}`) => (checked: boolean) => {
      if (name === 'enableCarbonTracking') {
       setProfile((prev) => ({ ...prev, enableCarbonTracking: checked }));
     } else if (name === 'alsoTrackSustainability') {
@@ -152,14 +152,36 @@ export default function ProfilePage() {
         ...prev,
         reminderSettings: { ...(prev.reminderSettings || defaultProfile.reminderSettings!), mealRemindersEnabled: checked },
       }));
-    } else {
+    } else if (name === 'appSettings.darkModeEnabled') {
+        setProfile(prev => ({ ...prev, appSettings: { ...(prev.appSettings || defaultProfile.appSettings!), darkModeEnabled: checked } }));
+        if (typeof window !== 'undefined') {
+            document.documentElement.classList.toggle('dark', checked);
+        }
+    } else if (name === 'appSettings.hideNonCompliantRecipes') {
+        setProfile(prev => ({ ...prev, appSettings: { ...(prev.appSettings || defaultProfile.appSettings!), hideNonCompliantRecipes: checked } }));
+    }
+     else {
         console.warn("Unhandled switch change on profile page:", name);
     }
   };
 
 
-  const handleSelectChange = (name: keyof UserProfile) => (value: string) => {
-    setProfile((prev) => ({ ...prev, [name]: value as any }));
+  const handleSelectChange = (name: keyof UserProfile | `appSettings.unitPreferences.${keyof AppSettings['unitPreferences']}`) => (value: string) => {
+     if (name.startsWith('appSettings.unitPreferences.')) {
+        const unitKey = name.split('.').pop() as keyof AppSettings['unitPreferences'];
+        setProfile(prev => ({
+            ...prev,
+            appSettings: {
+                ...(prev.appSettings || defaultProfile.appSettings!),
+                unitPreferences: {
+                    ...(prev.appSettings?.unitPreferences || defaultProfile.appSettings!.unitPreferences!),
+                    [unitKey]: value,
+                }
+            }
+        }));
+    } else {
+        setProfile((prev) => ({ ...prev, [name]: value as any }));
+    }
   };
   
   const handleDietaryRestrictionChange = (restriction: string) => (checked: boolean) => {
@@ -417,14 +439,6 @@ export default function ProfilePage() {
           <Button onClick={handleSubmit} className="w-full text-lg py-6">
             <Save className="mr-2 h-5 w-5" />
             Save Profile &amp; Preferences
-          </Button>
-           <Button onClick={() => router.push('/settings')} className="w-full" variant="outline">
-            <Cog className="mr-2 h-5 w-5"/>
-            Go to App Settings
-          </Button>
-          <Button onClick={() => router.push('/meal-planner')} className="w-full" variant="outline">
-            <CalendarDays className="mr-2 h-5 w-5"/>
-            Go to Meal Planner
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
