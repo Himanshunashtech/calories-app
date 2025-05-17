@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { setSelectedPlan as saveSelectedPlan, type UserPlan } from '@/lib/localStorage';
 
 const plans = [
   {
@@ -19,7 +20,7 @@ const plans = [
     features: [
       'Basic meal logging',
       'Calorie tracking (manual & AI-assisted)',
-      'Limited AI analysis (3 scans/day)',
+      'Limited AI analysis (3 scans/month)',
     ],
     cta: 'Get Started Free',
     tier: 'free',
@@ -67,22 +68,22 @@ export default function SubscriptionPage() {
   const { toast } = useToast();
 
   const handleSelectPlan = (tier: string, planName: string) => {
-    localStorage.setItem('selectedPlan', tier);
+    saveSelectedPlan(tier as UserPlan);
     toast({
       title: 'Plan Selected!',
-      description: `You've chosen the ${planName} plan. Welcome aboard!`,
+      description: `You've chosen the ${planName} plan. Let's set up your account.`,
       action: <Check className="text-green-500" />,
     });
-    router.push('/log-meal');
+    router.push('/login'); // Redirect to login page
   };
 
   const handleContinueFree = () => {
-    localStorage.setItem('selectedPlan', 'free');
+    saveSelectedPlan('free');
      toast({
-      title: 'Welcome!',
-      description: `You're starting with the Free plan. Enjoy EcoAI!`,
+      title: 'Free Plan Selected!',
+      description: `You're starting with the Free plan. Let's set up your account.`,
     });
-    router.push('/log-meal');
+    router.push('/login'); // Redirect to login page
   };
 
 

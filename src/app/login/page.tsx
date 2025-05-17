@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, Mail, Lock, ExternalLink, UserPlus } from 'lucide-react';
-import { fakeLogin, isOnboardingComplete } from '@/lib/localStorage';
+import { fakeLogin, getUserProfile, saveUserProfile, type UserProfile } from '@/lib/localStorage';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -23,23 +23,51 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Placeholder for actual authentication
     if (email && password) {
-      fakeLogin(email); // Use the fakeLogin
-      toast({
-        title: 'Login Successful (Demo)',
-        description: 'Welcome back to EcoAI Tracker!',
-      });
-      if (isOnboardingComplete()) {
+      let profile = getUserProfile();
+      
+      if (profile) {
+        // Onboarding data exists, associate email and log in
+        const updatedProfile: UserProfile = { ...profile, email: email };
+        saveUserProfile(updatedProfile);
+        fakeLogin(email); // Sets loggedIn flag and ensures profile email is current
+
+        toast({
+          title: 'Account Ready!',
+          description: 'Welcome to EcoAI Tracker! You are now logged in.',
+        });
         router.push('/dashboard');
       } else {
-        router.push('/onboarding');
+        // This case should be rare if user followed onboarding -> plan -> login
+        // Treat as a new user sign-up using this email and password
+        // For demo, we'll create a minimal profile. A real app might need a name field here too.
+        const newProfile: UserProfile = {
+          name: 'New User', // Or derive from email, or have a name field on this page
+          email: email,
+          age: '', gender: '', height: '', heightUnit: 'cm', weight: '', weightUnit: 'kg',
+          activityLevel: '', healthGoals: [], alsoTrackSustainability: false, exerciseFrequency: '', dietaryRestrictions: [],
+          dietType: '', favoriteCuisines: '', dislikedIngredients: '', enableCarbonTracking: false,
+          sleepHours: '', stressLevel: '', waterGoal: 8, macroSplit: { carbs: 50, protein: 25, fat: 25}, 
+          phone: '', profileImageUri: null,
+          // Assuming onboarding was skipped, these would be defaults
+          reminderSettings: { mealRemindersEnabled: true, breakfastTime: '08:00', lunchTime: '12:30', dinnerTime: '18:30', waterReminderEnabled: false, waterReminderInterval: 60, snoozeDuration: 5 },
+          appSettings: { darkModeEnabled: false, unitPreferences: { weight: 'kg', height: 'cm', volume: 'ml' }, hideNonCompliantRecipes: false }
+        };
+        saveUserProfile(newProfile);
+        fakeLogin(email); // This will now use the newly created profile
+        localStorage.setItem('onboardingComplete', 'true'); // Since they are "logging in" after plan selection
+
+        toast({
+          title: 'Account Created & Logged In!',
+          description: 'Welcome to EcoAI Tracker!',
+        });
+        router.push('/dashboard');
       }
     } else {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: 'Please enter valid credentials (demo).',
+        description: 'Please enter your email and password.',
       });
       setIsLoading(false);
     }
@@ -49,8 +77,8 @@ export default function LoginPage() {
     <Card className="shadow-2xl">
       <CardHeader className="text-center">
         <LogIn className="mx-auto h-10 w-10 text-primary mb-2" />
-        <CardTitle className="text-2xl font-bold text-primary">Welcome Back!</CardTitle>
-        <CardDescription>Log in to continue your eco-health journey.</CardDescription>
+        <CardTitle className="text-2xl font-bold text-primary">Set Up Your Account</CardTitle>
+        <CardDescription>Enter your email and a password to access your plan.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -90,7 +118,7 @@ export default function LoginPage() {
             </div>
           </div>
           <Button type="submit" className="w-full text-lg py-3" disabled={isLoading}>
-            {isLoading ? 'Logging In...' : 'Log In'}
+            {isLoading ? 'Setting Up...' : 'Continue to Dashboard'}
           </Button>
         </form>
         <div className="mt-4 relative">
@@ -99,7 +127,7 @@ export default function LoginPage() {
           </div>
           <div className="relative flex justify-center text-xs uppercase">
             <span className="bg-background px-2 text-muted-foreground">
-              Or continue with
+              Or (for existing users)
             </span>
           </div>
         </div>
@@ -109,9 +137,9 @@ export default function LoginPage() {
         </div>
       </CardContent>
       <CardFooter className="justify-center text-sm">
-        <p>Don't have an account?&nbsp;</p>
+        <p>Want to create a separate account?&nbsp;</p>
         <Link href="/signup" passHref>
-          <Button variant="link" className="p-0 h-auto"><UserPlus className="mr-1 h-4 w-4"/>Sign Up</Button>
+          <Button variant="link" className="p-0 h-auto"><UserPlus className="mr-1 h-4 w-4"/>Sign Up Separately</Button>
         </Link>
       </CardFooter>
     </Card>

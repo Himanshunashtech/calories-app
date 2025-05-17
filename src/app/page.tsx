@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { AppLogo } from '@/components/AppLogo';
 import Link from 'next/link';
 import Image from 'next/image'; 
-import { Leaf, Zap, BarChart3, LogIn, UserPlus } from 'lucide-react';
+import { Leaf, Zap, BarChart3, UserPlus, ArrowRight } from 'lucide-react';
 
 export default function LandingPage() {
   return (
@@ -32,21 +32,12 @@ export default function LandingPage() {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-10">
-          <Link href="/signup" passHref>
-            <Button size="lg" className="w-full sm:w-auto">
-              Sign Up <UserPlus className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-          <Link href="/login" passHref>
-            <Button size="lg" variant="outline" className="w-full sm:w-auto">
-              Log In <LogIn className="ml-2 h-5 w-5" />
+          <Link href="/onboarding" passHref>
+            <Button size="lg" className="w-full sm:w-auto text-lg py-6 px-8">
+              Get Started <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </Link>
         </div>
-         <Link href="/onboarding" passHref>
-             <p className="text-sm text-muted-foreground hover:text-primary underline mb-10">Or, start with onboarding first</p>
-         </Link>
-
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl">
           <FeatureCard

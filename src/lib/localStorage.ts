@@ -157,70 +157,52 @@ export function getUserProfile(): UserProfile | null {
   if (typeof window === 'undefined') return null;
   try {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
-    let existingProfileData: Partial<UserProfile> = {};
-
     if (profileJson) {
-      existingProfileData = JSON.parse(profileJson) as UserProfile;
+      // Ensure existing profile has all fields with defaults if missing
+      const parsedProfile = JSON.parse(profileJson) as Partial<UserProfile>;
+      const completeProfile: UserProfile = {
+        name: parsedProfile.name || '',
+        age: parsedProfile.age || '',
+        gender: parsedProfile.gender || '',
+        height: parsedProfile.height || '',
+        heightUnit: parsedProfile.heightUnit || 'cm',
+        weight: parsedProfile.weight || '',
+        weightUnit: parsedProfile.weightUnit || 'kg',
+        activityLevel: parsedProfile.activityLevel || '',
+        healthGoals: parsedProfile.healthGoals || [],
+        alsoTrackSustainability: parsedProfile.alsoTrackSustainability || false,
+        exerciseFrequency: parsedProfile.exerciseFrequency || '',
+        dietType: parsedProfile.dietType || '',
+        dietaryRestrictions: Array.isArray(parsedProfile.dietaryRestrictions) ? parsedProfile.dietaryRestrictions : (parsedProfile.dietaryRestrictions ? [String(parsedProfile.dietaryRestrictions)] : []),
+        favoriteCuisines: parsedProfile.favoriteCuisines || '',
+        dislikedIngredients: parsedProfile.dislikedIngredients || '',
+        enableCarbonTracking: parsedProfile.enableCarbonTracking === undefined ? false : parsedProfile.enableCarbonTracking,
+        sleepHours: parsedProfile.sleepHours || '',
+        stressLevel: parsedProfile.stressLevel || '',
+        waterGoal: parsedProfile.waterGoal || 8,
+        macroSplit: parsedProfile.macroSplit || { carbs: 50, protein: 25, fat: 25},
+        email: parsedProfile.email || '',
+        phone: parsedProfile.phone || '',
+        profileImageUri: parsedProfile.profileImageUri || null,
+        reminderSettings: {
+          ...defaultReminderSettings,
+          ...(parsedProfile.reminderSettings || {}),
+        },
+        appSettings: {
+          ...defaultAppSettings,
+          ...(parsedProfile.appSettings || {}),
+          unitPreferences: {
+            ...defaultAppSettings.unitPreferences!,
+            ...(parsedProfile.appSettings?.unitPreferences || {}),
+          }
+        },
+      };
+      return completeProfile;
     }
-    
-    const completeProfile: UserProfile = {
-      name: existingProfileData.name || '',
-      age: existingProfileData.age || '',
-      gender: existingProfileData.gender || '',
-      height: existingProfileData.height || '',
-      heightUnit: existingProfileData.heightUnit || 'cm',
-      weight: existingProfileData.weight || '',
-      weightUnit: existingProfileData.weightUnit || 'kg',
-      activityLevel: existingProfileData.activityLevel || '',
-      healthGoals: existingProfileData.healthGoals || [],
-      alsoTrackSustainability: existingProfileData.alsoTrackSustainability || false,
-      exerciseFrequency: existingProfileData.exerciseFrequency || '',
-      dietType: existingProfileData.dietType || '',
-      dietaryRestrictions: Array.isArray(existingProfileData.dietaryRestrictions) ? existingProfileData.dietaryRestrictions : (existingProfileData.dietaryRestrictions ? [String(existingProfileData.dietaryRestrictions)] : []),
-      favoriteCuisines: existingProfileData.favoriteCuisines || '',
-      dislikedIngredients: existingProfileData.dislikedIngredients || '',
-      enableCarbonTracking: existingProfileData.enableCarbonTracking === undefined ? false : existingProfileData.enableCarbonTracking,
-      sleepHours: existingProfileData.sleepHours || '',
-      stressLevel: existingProfileData.stressLevel || '',
-      waterGoal: existingProfileData.waterGoal || 8,
-      macroSplit: existingProfileData.macroSplit || { carbs: 50, protein: 25, fat: 25}, // Placeholder
-      email: existingProfileData.email || '',
-      phone: existingProfileData.phone || '',
-      profileImageUri: existingProfileData.profileImageUri || null,
-      reminderSettings: {
-        ...defaultReminderSettings,
-        ...(existingProfileData.reminderSettings || {}),
-      },
-      appSettings: {
-        ...defaultAppSettings,
-        ...(existingProfileData.appSettings || {}),
-        unitPreferences: {
-          ...defaultAppSettings.unitPreferences!,
-          ...(existingProfileData.appSettings?.unitPreferences || {}),
-        }
-      },
-    };
-    
-    // Save the potentially migrated/defaulted profile back if it wasn't loaded from USER_PROFILE_KEY
-    if (!profileJson && existingProfileData.name ) { 
-         saveUserProfile(completeProfile);
-    }
-
-    return completeProfile;
-
+    return null; // No profile exists
   } catch (error) {
     console.error("Error reading user profile from localStorage:", error);
-    // Return a deeply defaulted profile on error
-    const fallbackProfile: UserProfile = {
-        name: '', age: '', gender: '', height: '', heightUnit: 'cm', weight: '', weightUnit: 'kg',
-        activityLevel: '', healthGoals: [], alsoTrackSustainability: false, exerciseFrequency: '', dietaryRestrictions: [],
-        dietType: '', favoriteCuisines: '', dislikedIngredients: '', enableCarbonTracking: false,
-        sleepHours: '', stressLevel: '', waterGoal: 8, macroSplit: { carbs: 50, protein: 25, fat: 25}, 
-        email: '', phone: '', profileImageUri: null,
-        reminderSettings: { ...defaultReminderSettings },
-        appSettings: { ...defaultAppSettings, unitPreferences: {...defaultAppSettings.unitPreferences!} }
-    };
-    return fallbackProfile;
+    return null; // Return null on error or if no profile
   }
 }
 
@@ -258,7 +240,7 @@ export function getWaterIntake(): WaterIntakeData {
     intake = { current: 0, goal: goalFromProfile, lastUpdatedDate: today };
   }
   intake.goal = goalFromProfile; 
-  saveWaterIntake(intake); // Save to ensure lastUpdatedDate is current if reset
+  saveWaterIntake(intake); 
   return intake;
 }
 
@@ -273,7 +255,7 @@ export function saveWaterIntake(intake: WaterIntakeData): void {
 
 export function addWater(amountInGlasses: number = 1): WaterIntakeData {
   const intake = getWaterIntake();
-  intake.current = Math.max(0, Math.min(intake.current + amountInGlasses, intake.goal * 3)); // Cap at triple goal, ensure not negative
+  intake.current = Math.max(0, Math.min(intake.current + amountInGlasses, intake.goal * 3)); 
   saveWaterIntake(intake);
   return intake;
 }
@@ -293,35 +275,64 @@ export function getRecentMealLogs(days: number = 7): MealEntry[] {
   return allLogs.filter(log => new Date(log.date) >= cutoffDate);
 }
 
-// Helper to check if onboarding is complete
 export function isOnboardingComplete(): boolean {
   if (typeof window === 'undefined') return false;
   return localStorage.getItem(ONBOARDING_COMPLETE_KEY) === 'true';
 }
 
-// For authentication stub
 export function fakeLogin(email: string): void {
     if (typeof window === 'undefined') return;
-    // In a real app, you'd get a token from a server.
-    // For now, just store email to simulate logged-in state.
-    const profile = getUserProfile() || {} as Partial<UserProfile>;
-    saveUserProfile({ ...profile, email } as UserProfile);
+    let profile = getUserProfile();
+    
+    if (profile) {
+        // Profile from onboarding exists, update its email
+        profile = { ...profile, email: email };
+    } else {
+        // No profile from onboarding (edge case), create a new minimal one
+        console.warn("fakeLogin: No existing profile found from onboarding. Creating a new minimal profile.");
+        profile = { 
+            email: email, 
+            name: 'New User', // Default name
+            age: '', gender: '', height: '', heightUnit: 'cm', weight: '', weightUnit: 'kg',
+            activityLevel: '', healthGoals: [], alsoTrackSustainability: false, exerciseFrequency: '', dietaryRestrictions: [],
+            dietType: '', favoriteCuisines: '', dislikedIngredients: '', enableCarbonTracking: false,
+            sleepHours: '', stressLevel: '', waterGoal: 8, macroSplit: { carbs: 50, protein: 25, fat: 25}, 
+            phone: '', profileImageUri: null,
+            reminderSettings: { ...defaultReminderSettings },
+            appSettings: { ...defaultAppSettings, unitPreferences: {...defaultAppSettings.unitPreferences!} }
+        };
+    }
+    saveUserProfile(profile);
     localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
+    // Ensure onboarding is marked complete, as this step follows plan selection
+    if (!isOnboardingComplete()) {
+        localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
+    }
 }
 
 export function fakeSignup(email: string, name: string): void {
     if (typeof window === 'undefined') return;
-    const profile = getUserProfile() || {} as Partial<UserProfile>;
-    saveUserProfile({ ...profile, email, name } as UserProfile);
+    // Create a new profile. If user goes through onboarding later, this will be updated.
+    const newProfile: UserProfile = { 
+        email: email, 
+        name: name, 
+        age: '', gender: '', height: '', heightUnit: 'cm', weight: '', weightUnit: 'kg',
+        activityLevel: '', healthGoals: [], alsoTrackSustainability: false, exerciseFrequency: '', dietaryRestrictions: [],
+        dietType: '', favoriteCuisines: '', dislikedIngredients: '', enableCarbonTracking: false,
+        sleepHours: '', stressLevel: '', waterGoal: 8, macroSplit: { carbs: 50, protein: 25, fat: 25}, 
+        phone: '', profileImageUri: null,
+        reminderSettings: { ...defaultReminderSettings },
+        appSettings: { ...defaultAppSettings, unitPreferences: {...defaultAppSettings.unitPreferences!} }
+    };
+    saveUserProfile(newProfile);
     localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-    localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'false'); // New users need onboarding
+    localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'false'); // User signed up directly, needs onboarding
 }
 
 
 export function fakeLogout(): void {
     if (typeof window === 'undefined') return;
     localStorage.removeItem(USER_LOGGED_IN_KEY);
-    // Optionally clear more user-specific data or redirect
 }
 
 export function isUserLoggedIn(): boolean {
@@ -341,7 +352,6 @@ export function clearAllUserData(): void {
     localStorage.removeItem(USER_LOGGED_IN_KEY);
     localStorage.removeItem(GENERATED_MEAL_PLAN_OUTPUT_KEY);
     localStorage.removeItem(MEAL_PLAN_KEY);
-    // Add any other keys specific to your app that need clearing
     console.log("All user data cleared from localStorage.");
   } catch (error) {
     console.error("Error clearing all user data from localStorage:", error);
