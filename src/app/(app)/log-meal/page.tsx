@@ -59,10 +59,6 @@ export default function LogMealPage() {
       };
       reader.readAsDataURL(photoFile);
       if (isCameraMode) setIsCameraMode(false); // Switch out of camera mode if a file is chosen
-    } else if (!isCameraMode && !photoPreview) { 
-      // If not in camera mode and no file, clear preview
-      // This condition is tricky, ensure it doesn't clear captured camera preview unintentionally
-      // setPhotoPreview(null); // This might be too aggressive
     }
   }, [photoFile, isCameraMode]);
 
@@ -76,15 +72,31 @@ export default function LogMealPage() {
         setHasCameraPermission(true);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(e => console.error("Video play failed:", e));
+          const playPromise = videoRef.current.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(err => {
+              if (err.name === "AbortError") {
+                console.warn("Video play() request was interrupted (AbortError). This is often normal when the source changes or the video element is reloaded.", err);
+              } else {
+                console.error("Video play failed:", err);
+                if (err.name === "NotAllowedError") {
+                  toast({
+                    variant: 'destructive',
+                    title: 'Playback Error',
+                    description: 'Video playback was not allowed. You might need to interact with the page first or check browser settings.',
+                  });
+                }
+              }
+            });
+          }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error accessing camera:', err);
         setHasCameraPermission(false);
         toast({
           variant: 'destructive',
           title: 'Camera Access Denied',
-          description: 'Please enable camera permissions in your browser settings to use this feature.',
+          description: `Please enable camera permissions in your browser settings to use this feature. (${err.name})`,
         });
       }
     };
@@ -112,20 +124,20 @@ export default function LogMealPage() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setPhotoFile(file); // This will trigger the useEffect for photoFile
-      setPhotoPreview(null); // Clear any existing preview (e.g., from camera)
+      setPhotoFile(file); 
+      setPhotoPreview(null); 
       setAnalysisResult(null); 
       setError(null);
-      setIsCameraMode(false); // Ensure we are in file upload mode
+      setIsCameraMode(false); 
     }
   };
   
   const handleCapturePhoto = useCallback(() => {
-    if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+    if (videoRef.current && videoRef.current.readyState >= videoRef.current.HAVE_METADATA) { // Check HAVE_METADATA or HAVE_ENOUGH_DATA
         const canvas = document.createElement('canvas');
-        // Ensure video dimensions are available
         const videoWidth = videoRef.current.videoWidth;
         const videoHeight = videoRef.current.videoHeight;
+
         if (videoWidth === 0 || videoHeight === 0) {
             console.error("Video dimensions are zero, cannot capture photo.");
             toast({ variant: "destructive", title: "Capture Error", description: "Could not get video dimensions. Try again."});
@@ -138,12 +150,13 @@ export default function LogMealPage() {
             context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
             const dataUri = canvas.toDataURL('image/jpeg');
             setPhotoPreview(dataUri);
-            setPhotoFile(null); // Clear selected file if any
+            setPhotoFile(null); 
             setAnalysisResult(null);
             setError(null);
+            // isCameraMode will remain true, photoPreview being set will stop the stream via useEffect
         }
     } else {
-        toast({ variant: "destructive", title: "Camera Not Ready", description: "Please wait for the camera to initialize."});
+        toast({ variant: "destructive", title: "Camera Not Ready", description: "Please wait for the camera to initialize or ensure video has loaded."});
     }
   }, [videoRef, toast]);
 
@@ -251,23 +264,24 @@ export default function LogMealPage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-    setIsCameraMode(false);
-    setHasCameraPermission(null); 
+    // If in camera mode, retaking will clear preview and restart stream via useEffect.
+    // If switching out of camera mode, this is handled by handleToggleCameraMode.
+    // No need to explicitly set isCameraMode to false here unless that's desired general reset behavior.
   };
   
   const handleToggleCameraMode = () => {
     setIsCameraMode(prev => {
       const newMode = !prev;
-      if (newMode) { // Switching to camera mode
-        setPhotoFile(null); // Clear any selected file
-        setPhotoPreview(null); // Clear preview
-        setHasCameraPermission(null); // Reset permission to allow re-check
-      } else { // Switching to file upload mode
+      if (newMode) { 
+        setPhotoFile(null); 
+        setPhotoPreview(null); 
+        setHasCameraPermission(null); 
+      } else { 
          if (videoRef.current && videoRef.current.srcObject) {
             const stream = videoRef.current.srcObject as MediaStream;
             stream.getTracks().forEach(track => track.stop());
          }
-         videoRef.current && (videoRef.current.srcObject = null);
+         if(videoRef.current) videoRef.current.srcObject = null;
       }
       return newMode;
     });
@@ -276,16 +290,10 @@ export default function LogMealPage() {
   };
 
   const handleRetakePhoto = () => {
-    setPhotoPreview(null);
+    setPhotoPreview(null); // This will trigger useEffect to re-enable camera if in camera mode
     setAnalysisResult(null);
     setError(null);
-    // The useEffect for camera stream will re-enable the camera
-    // if isCameraMode is true and hasCameraPermission is not false.
-    // Ensure hasCameraPermission is not false or it won't re-enable.
-    // If permission was denied, user has to change it in browser settings.
-    // If it was null or true, it should try again.
     if(hasCameraPermission === false) {
-      // If permanently denied, prompt user or guide them. For now, it just won't show the stream.
       toast({
         title: "Camera Access Denied",
         description: "Please enable camera permissions in your browser settings to retake.",
@@ -323,7 +331,7 @@ export default function LogMealPage() {
           {isCameraMode ? (
             <div className="space-y-4">
               <div className="relative w-full aspect-[4/3] bg-muted rounded-md overflow-hidden border">
-                <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
+                <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
                 {photoPreview && (
                    <Image src={photoPreview} alt="Captured meal" layout="fill" objectFit="cover" className="absolute inset-0 z-10"/>
                 )}
@@ -360,7 +368,7 @@ export default function LogMealPage() {
               <Label htmlFor="meal-photo-input" className="text-base sr-only">Meal Photo Upload</Label>
               <div className="mt-2 flex justify-center rounded-lg border border-dashed border-input px-6 py-10 hover:border-primary transition-colors">
                 <div className="text-center">
-                  {photoPreview && photoFile && ( // Only show this preview if a file was uploaded
+                  {photoPreview && photoFile && ( 
                     <div className="relative group">
                       <Image
                         src={photoPreview}
@@ -372,7 +380,7 @@ export default function LogMealPage() {
                        <Button variant="ghost" size="sm" className="absolute top-1 right-1 bg-background/50 hover:bg-background/80" onClick={() => {setPhotoFile(null); setPhotoPreview(null); setAnalysisResult(null); if(fileInputRef.current) fileInputRef.current.value = "";}}>Clear</Button>
                     </div>
                   )}
-                  {(!photoPreview || !photoFile) && ( // Show upload prompt if no file-based preview
+                  {(!photoPreview || !photoFile) && ( 
                      <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" aria-hidden="true" />
                   )}
                   <div className="mt-4 flex text-sm leading-6 text-muted-foreground justify-center">
@@ -475,4 +483,3 @@ export default function LogMealPage() {
     </div>
   );
 }
-
