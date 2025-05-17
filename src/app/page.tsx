@@ -37,6 +37,11 @@ export default function LandingPage() {
               Get Started <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </Link>
+          <Link href="/login" passHref>
+            <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg py-6 px-8 border-primary text-primary hover:bg-primary/10">
+              Log In
+            </Button>
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl">
