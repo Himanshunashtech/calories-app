@@ -29,7 +29,7 @@ import { useRouter } from 'next/navigation';
 import { 
   BarChart3, Camera, Leaf, Utensils, ShieldCheck, Zap, Brain, Trees, BarChartBig, Users, MessageSquareHeart, 
   CheckCircle, AlertTriangle, Info, Droplet, Footprints, TrendingUp, PlusCircle, Target as TargetIcon, 
-  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3, Settings, Dumbbell
+  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3, Settings, Dumbbell, Cog, Search, Filter, CalendarDays, Activity, Bike
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -119,7 +119,7 @@ export default function DashboardPage() {
     if (currentPlan === 'free') {
       setAiScanUsage(getAIScanUsage());
     }
-    setWaterIntake(getWaterIntake());
+    setWaterIntake(getWaterIntake()); // This will use profile?.waterGoal internally
     const todayLogs = getTodaysMealLogs();
     setTodaysMealLogs(todayLogs);
 
@@ -127,7 +127,7 @@ export default function DashboardPage() {
         fetchDashboardData(currentPlan, profile, todayLogs);
     }
 
-  }, [fetchDashboardData]);
+  }, [fetchDashboardData]); // Water intake now updates if profile.waterGoal changes
 
   const refreshMealLogs = () => {
     const todayLogs = getTodaysMealLogs();
@@ -140,7 +140,7 @@ export default function DashboardPage() {
     [todaysMealLogs]
   );
 
-  const calorieProgressPercentage = Math.min((totalCaloriesToday / DAILY_CALORIE_GOAL) * 100, 100);
+  const calorieProgressPercentage = Math.min((totalCaloriesToday / (userProfile?.healthGoals?.includes('Lose Weight') ? DAILY_CALORIE_GOAL*0.8 : userProfile?.healthGoals?.includes('Gain Muscle') ? DAILY_CALORIE_GOAL*1.2 : DAILY_CALORIE_GOAL)) * 100, 100);
 
   const getCalorieProgressColor = () => {
     if (calorieProgressPercentage < 75) return 'bg-primary';
@@ -151,9 +151,10 @@ export default function DashboardPage() {
   const handleAddWater = (amount: number) => {
     const newIntake = addWater(amount);
     setWaterIntake(newIntake);
+    const volumeUnit = userProfile?.appSettings?.unitPreferences?.volume === 'fl oz' ? 'fl oz' : 'glasses';
     toast({
-      title: amount === 1 ? "+1 Glass Water Logged" : `+${amount*2}/2 Glass Water Logged`,
-      description: `Current: ${newIntake.current}/${newIntake.goal} glasses. Keep it up!`,
+      title: amount === 1 ? `+1 ${volumeUnit} Water Logged` : `+${amount * (volumeUnit === 'fl oz' ? 8 : 0.5)} ${volumeUnit} Water Logged`,
+      description: `Current: ${newIntake.current}/${newIntake.goal} ${volumeUnit}. Keep it up!`,
     });
   };
 
@@ -168,7 +169,7 @@ export default function DashboardPage() {
         userProfile: {
           dietType: userProfile.dietType,
           healthGoals: userProfile.healthGoals,
-          dietaryRestrictions: userProfile.dietaryRestrictions,
+          dietaryRestrictions: Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietaryRestrictions,
         },
         durationDays: 3,
       });
@@ -192,21 +193,19 @@ export default function DashboardPage() {
       updateMealLogWithMood(lastMeal.id, mood);
       toast({ title: `Mood logged: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`, description: "AI will analyze correlations soon." });
     } else {
-       // If no meal today, perhaps we log a general mood or just inform the user
        toast({ title: `Mood logged: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`, description: "Consider logging meals to correlate with mood." });
     }
 
-    refreshMealLogs(); // This will also re-trigger fetchDashboardData if mood is part of its dependency.
+    refreshMealLogs(); 
 
-    // Immediately try to fetch new insights if enough mood data exists
     const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood);
     if (mealsWithMood.length >= 3 && userProfile) {
       setIsLoadingAI(prev => ({ ...prev, mood: true }));
-      analyzeFoodMoodCorrelation({ mealsWithMood: mealsWithMood.map(m => ({...m, date:m.date, mood: m.mood!})) })
+      analyzeFoodMoodCorrelation({ mealsWithMood: mealsWithMood.map(m => ({...m, date:m.date, mood: m.mood!, calories: m.calories, protein: m.protein, carbs: m.carbs, fat: m.fat})) })
           .then(setFoodMoodInsights)
           .catch(err => console.error("Error fetching food-mood insights after mood log:", err))
           .finally(() => setIsLoadingAI(prev => ({ ...prev, mood: false })));
-    } else if (userProfile) { // Still update with potentially insufficient data message
+    } else if (userProfile) { 
         setFoodMoodInsights({ insights: ["Log mood after a few more meals to discover potential patterns with your diet!"], sufficientData: false });
     }
   }, [todaysMealLogs, userProfile, toast, refreshMealLogs]);
@@ -248,7 +247,7 @@ export default function DashboardPage() {
       }
     });
     
-    const illustrativeRDAGoals: {[key:string]: number} = { iron: 18, vitaminD: 20, fiber: 30, calcium: 1000, vitaminC: 90, potassium: 3500 };
+    const illustrativeRDAGoals: {[key:string]: number} = { iron: 18, vitaminD: 20, fiber: 30, calcium: 1000, vitaminC: 90, potassium: 3500 }; // Case-insensitive keys
 
     const calculatedNutrients = Object.entries(aggregatedNutrients).map(([name, data]) => {
         const rdaGoal = illustrativeRDAGoals[name.toLowerCase()] || 100; 
@@ -279,6 +278,9 @@ export default function DashboardPage() {
   }
 
   const reminderSettings = userProfile?.reminderSettings;
+  const actualDailyCalorieGoal = userProfile?.healthGoals?.includes('Lose Weight') ? DAILY_CALORIE_GOAL * 0.8 : userProfile?.healthGoals?.includes('Gain Muscle') ? DAILY_CALORIE_GOAL * 1.2 : DAILY_CALORIE_GOAL;
+  const waterVolumeUnit = userProfile?.appSettings?.unitPreferences?.volume === 'fl oz' ? 'fl oz' : 'glasses';
+
 
   return (
     <div className="space-y-8">
@@ -291,7 +293,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardFooter className="flex-wrap gap-2"> 
             <Button onClick={() => router.push('/subscription')} variant="outline"> Manage Subscription </Button> 
-            <Button onClick={() => router.push('/app/settings')} variant="ghost"><Settings className="mr-2 h-4 w-4"/> App Settings</Button>
+            <Button onClick={() => router.push('/app/settings')} variant="ghost"><Cog className="mr-2 h-4 w-4"/> App Settings</Button>
         </CardFooter>
       </Card>
 
@@ -309,10 +311,9 @@ export default function DashboardPage() {
       <Card className="shadow-md">
         <CardHeader><CardTitle className="flex items-center gap-2"><TargetIcon className="text-primary"/> Today's Vitals</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="space-y-2 p-3 rounded-lg border bg-card"><div className="flex justify-between items-center text-sm font-medium"><span>Calories</span><span className="text-muted-foreground">{totalCaloriesToday.toFixed(0)} / {DAILY_CALORIE_GOAL} kcal</span></div><Progress value={calorieProgressPercentage} className={cn("h-3", getCalorieProgressColor())} /><p className="text-xs text-muted-foreground text-center pt-1">{calorieProgressPercentage >= 100 ? "Goal reached!" : `${(DAILY_CALORIE_GOAL - totalCaloriesToday).toFixed(0)} kcal remaining.`}</p></div>
-          <div className="space-y-2 p-3 rounded-lg border bg-card"><div className="flex justify-between items-center text-sm font-medium"><span className="flex items-center gap-1"><Droplet className="h-4 w-4 text-blue-500"/>Water Intake</span><span className="text-muted-foreground">{waterIntake?.current || 0} / {waterIntake?.goal || 8} glasses</span></div><Progress value={waterIntake ? (waterIntake.current / waterIntake.goal) * 100 : 0} className="h-3 [&>div]:bg-blue-500" /><div className="flex gap-2 pt-1"><Button size="sm" variant="outline" onClick={() => handleAddWater(1)} className="flex-1 text-xs">+1 Glass</Button><Button size="sm" variant="outline" onClick={() => handleAddWater(0.5)} className="flex-1 text-xs">+0.5 Glass</Button></div></div>
+          <div className="space-y-2 p-3 rounded-lg border bg-card"><div className="flex justify-between items-center text-sm font-medium"><span>Calories</span><span className="text-muted-foreground">{totalCaloriesToday.toFixed(0)} / {actualDailyCalorieGoal.toFixed(0)} kcal</span></div><Progress value={calorieProgressPercentage} className={cn("h-3", getCalorieProgressColor())} /><p className="text-xs text-muted-foreground text-center pt-1">{calorieProgressPercentage >= 100 ? "Goal reached!" : `${(actualDailyCalorieGoal - totalCaloriesToday).toFixed(0)} kcal remaining.`}</p></div>
+          <div className="space-y-2 p-3 rounded-lg border bg-card"><div className="flex justify-between items-center text-sm font-medium"><span className="flex items-center gap-1"><Droplet className="h-4 w-4 text-blue-500"/>Water Intake</span><span className="text-muted-foreground">{waterIntake?.current || 0} / {waterIntake?.goal || 8} {waterVolumeUnit}</span></div><Progress value={waterIntake ? (waterIntake.current / waterIntake.goal) * 100 : 0} className="h-3 [&>div]:bg-blue-500" /><div className="flex gap-2 pt-1"><Button size="sm" variant="outline" onClick={() => handleAddWater(1)} className="flex-1 text-xs">+1 {waterVolumeUnit === 'glasses' ? 'Glass' : 'Serving'}</Button><Button size="sm" variant="outline" onClick={() => handleAddWater(0.5)} className="flex-1 text-xs">+{waterVolumeUnit === 'glasses' ? '0.5 Glass' : '0.5 Serving'}</Button></div></div>
           <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center"><Footprints className="h-8 w-8 text-primary mb-1"/><p className="text-lg font-semibold">7,532</p><p className="text-xs text-muted-foreground">Steps Today</p><Button size="sm" variant="ghost" className="text-xs mt-1 text-primary hover:underline" disabled>Sync Health App</Button></div>
-          {/* Eco-Score Widget Placeholder */}
           <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center">
             <Leaf className="h-8 w-8 text-green-600 mb-1"/>
             <p className="text-lg font-semibold">B+</p>
@@ -322,7 +323,7 @@ export default function DashboardPage() {
         </CardContent>
          <CardFooter className="pt-4 flex gap-2">
             <Button onClick={() => router.push('/log-meal')} className="flex-1"><Camera className="mr-2 h-4 w-4"/> Log Meal</Button>
-            <Button onClick={() => router.push('/log-meal')} variant="outline" className="flex-1" disabled><Dumbbell className="mr-2 h-4 w-4" /> Log Exercise</Button> {/* Placeholder */}
+            <Button onClick={() => toast({title: "Feature Coming Soon!", description: "Exercise logging will be available shortly."})} variant="outline" className="flex-1" disabled><Bike className="mr-2 h-4 w-4" /> Log Exercise</Button>
         </CardFooter>
       </Card>
 
@@ -330,25 +331,31 @@ export default function DashboardPage() {
         <Card className="shadow-md">
           <CardHeader><CardTitle className="flex items-center gap-2"><BellRing className="text-primary"/> Reminders</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <div className="flex items-center justify-between p-2 border rounded-md">
-              <span className="flex items-center gap-1"><Clock3 className="h-4 w-4 text-muted-foreground"/> Breakfast:</span>
-              <Badge variant="outline">{reminderSettings.breakfastTime || 'Not set'}</Badge>
-            </div>
-            <div className="flex items-center justify-between p-2 border rounded-md">
-              <span className="flex items-center gap-1"><Clock3 className="h-4 w-4 text-muted-foreground"/> Lunch:</span>
-              <Badge variant="outline">{reminderSettings.lunchTime || 'Not set'}</Badge>
-            </div>
-            <div className="flex items-center justify-between p-2 border rounded-md">
-              <span className="flex items-center gap-1"><Clock3 className="h-4 w-4 text-muted-foreground"/> Dinner:</span>
-              <Badge variant="outline">{reminderSettings.dinnerTime || 'Not set'}</Badge>
-            </div>
+            {reminderSettings.mealRemindersEnabled ? (
+              <>
+                <div className="flex items-center justify-between p-2 border rounded-md">
+                  <span className="flex items-center gap-1"><Clock3 className="h-4 w-4 text-muted-foreground"/> Breakfast:</span>
+                  <Badge variant="outline">{reminderSettings.breakfastTime || 'Not set'}</Badge>
+                </div>
+                <div className="flex items-center justify-between p-2 border rounded-md">
+                  <span className="flex items-center gap-1"><Clock3 className="h-4 w-4 text-muted-foreground"/> Lunch:</span>
+                  <Badge variant="outline">{reminderSettings.lunchTime || 'Not set'}</Badge>
+                </div>
+                <div className="flex items-center justify-between p-2 border rounded-md">
+                  <span className="flex items-center gap-1"><Clock3 className="h-4 w-4 text-muted-foreground"/> Dinner:</span>
+                  <Badge variant="outline">{reminderSettings.dinnerTime || 'Not set'}</Badge>
+                </div>
+              </>
+            ) : (
+                 <p className="text-muted-foreground text-center p-2 border rounded-md">Meal reminders are disabled.</p>
+            )}
             <div className="flex items-center justify-between p-2 border rounded-md">
               <span className="flex items-center gap-1"><Droplet className="h-4 w-4 text-blue-500"/> Water Reminder:</span>
               <Badge variant={reminderSettings.waterReminderEnabled ? "secondary" : "outline"}>
                 {reminderSettings.waterReminderEnabled ? `Every ${reminderSettings.waterReminderInterval} mins` : 'Disabled'}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground pt-2 text-center">Notification functionality is browser-dependent and will be enhanced soon. Set preferences in your Profile or App Settings.</p>
+            <p className="text-xs text-muted-foreground pt-2 text-center">Notification functionality is browser-dependent. Set preferences in your Profile.</p>
           </CardContent>
         </Card>
       )}
@@ -357,13 +364,14 @@ export default function DashboardPage() {
       <Card className="shadow-md">
         <CardHeader><CardTitle className="flex items-center gap-2"><Utensils className="text-primary"/> Today's Meals</CardTitle><CardDescription>Timeline of your meals logged today. <Button variant="ghost" size="sm" onClick={refreshMealLogs} className="text-xs"><Edit3 className="mr-1 h-3 w-3"/>Refresh</Button></CardDescription></CardHeader>
         <CardContent>
-          {todaysMealLogs.length > 0 ? (<ScrollArea className="w-full whitespace-nowrap"><div className="flex space-x-4 pb-4">{todaysMealLogs.map(meal => (<Card key={meal.id} className="min-w-[220px] max-w-[280px] shrink-0"><CardHeader className="p-3">{meal.photoDataUri && (<Image src={meal.photoDataUri} alt={meal.description || "Meal"} width={200} height={120} className="rounded-md object-cover w-full aspect-[16/9]" data-ai-hint="food meal"/>)}<CardTitle className="text-base mt-2 truncate">{meal.category ? `${meal.category}: ` : ''}{meal.description || "Meal Photo"}</CardTitle><CardDescription className="text-xs">{new Date(meal.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}{meal.mood && ` - Mood: ${meal.mood.charAt(0).toUpperCase() + meal.mood.slice(1)}`}</CardDescription></CardHeader><CardContent className="p-3 text-xs space-y-1"><p><span className="font-medium">{meal.calories.toFixed(0)} kcal</span></p><p className="text-muted-foreground">P: {meal.protein.toFixed(1)}g, C: {meal.carbs.toFixed(1)}g, F: {meal.fat.toFixed(1)}g</p>{(plan === 'ecopro' || plan === 'pro') && userProfile?.enableCarbonTracking && meal.carbonFootprintEstimate !== undefined && <p className="text-teal-600 text-xs flex items-center gap-1"><Trees className="h-3 w-3"/>~{meal.carbonFootprintEstimate.toFixed(2)} kg CO₂e</p>}</CardContent><CardFooter className="p-3"><Button variant="ghost" size="sm" className="w-full text-xs" disabled>Recreate Meal</Button></CardFooter></Card>))}</div><ScrollBar orientation="horizontal" /></ScrollArea>) : (<p className="text-muted-foreground text-center py-4">No meals logged today.</p>)}
+          {todaysMealLogs.length > 0 ? (<ScrollArea className="w-full whitespace-nowrap"><div className="flex space-x-4 pb-4">{todaysMealLogs.map(meal => (<Card key={meal.id} className="min-w-[220px] max-w-[280px] shrink-0"><CardHeader className="p-3">{meal.photoDataUri && (<Image src={meal.photoDataUri} alt={meal.description || "Meal"} width={200} height={120} className="rounded-md object-cover w-full aspect-[16/9]" data-ai-hint="food meal"/>)}<CardTitle className="text-base mt-2 truncate">{meal.category ? `${meal.category}: ` : ''}{meal.description || "Meal Photo"}</CardTitle><CardDescription className="text-xs">{new Date(meal.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}{meal.mood && ` - Mood: ${meal.mood.charAt(0).toUpperCase() + meal.mood.slice(1)}`}</CardDescription></CardHeader><CardContent className="p-3 text-xs space-y-1"><p><span className="font-medium">{meal.calories.toFixed(0)} kcal</span></p><p className="text-muted-foreground">P: {meal.protein.toFixed(1)}g, C: {meal.carbs.toFixed(1)}g, F: {meal.fat.toFixed(1)}g</p>{(plan === 'ecopro' && userProfile?.enableCarbonTracking) && meal.carbonFootprintEstimate !== undefined && <p className="text-teal-600 text-xs flex items-center gap-1"><Trees className="h-3 w-3"/>~{meal.carbonFootprintEstimate.toFixed(2)} kg CO₂e</p>}</CardContent><CardFooter className="p-3"><Button variant="ghost" size="sm" className="w-full text-xs" disabled>Recreate Meal</Button></CardFooter></Card>))}</div><ScrollBar orientation="horizontal" /></ScrollArea>) : (<p className="text-muted-foreground text-center py-4">No meals logged today.</p>)}
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="shadow-md hover:shadow-lg transition-shadow"><CardHeader><CardTitle className="flex items-center gap-2"><Camera className="text-primary"/> Log Meal</CardTitle><CardDescription>Quickly log meals, manually or with AI.</CardDescription></CardHeader><CardFooter><Link href="/log-meal" passHref legacyBehavior><Button className="w-full">Go to Log Meal</Button></Link></CardFooter></Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow"><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="text-primary"/> View Stats</CardTitle><CardDescription>Track progress and nutritional trends.</CardDescription></CardHeader><CardFooter><Link href="/stats" passHref legacyBehavior><Button className="w-full">Go to Stats</Button></Link></CardFooter></Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow md:col-span-2"><CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="text-primary"/> Meal Planner</CardTitle><CardDescription>Plan your meals for the week (Coming Soon).</CardDescription></CardHeader><CardFooter><Link href="/app/meal-planner" passHref legacyBehavior><Button className="w-full" variant="outline">Open Meal Planner</Button></Link></CardFooter></Card>
       </div>
 
       {(plan === 'pro' || plan === 'ecopro') && (
@@ -386,7 +394,7 @@ export default function DashboardPage() {
         </Card>
       )}
       
-      <Card className="shadow-md"><CardHeader><CardTitle className="flex items-center gap-2"><Utensils className="text-primary"/> Recipes</CardTitle></CardHeader><CardContent><Button variant="link" onClick={() => router.push('/app/recipes')} className="p-0 h-auto">{plan === 'free' ? "Access 5 complimentary eco-friendly recipes." : "Access 50+ premium recipes." }</Button></CardContent></Card>
+      <Card className="shadow-md"><CardHeader><CardTitle className="flex items-center gap-2"><Search className="text-primary"/> Explore Recipes</CardTitle></CardHeader><CardContent><Button variant="link" onClick={() => router.push('/app/recipes')} className="p-0 h-auto">{plan === 'free' ? "Access 5 complimentary eco-friendly recipes." : "Access 50+ premium recipes." }</Button></CardContent></Card>
 
       {(plan === 'pro' || plan === 'ecopro') && (
         <section className="space-y-6">
@@ -403,16 +411,16 @@ export default function DashboardPage() {
                   <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-4">{coachRecommendations.mealTimingSuggestions.map((item, i) => <li key={`mt-${i}`}>{item}</li>) || <li>No specific timing suggestions now.</li>}</ul>
                    {coachRecommendations.generalTips && coachRecommendations.generalTips.length > 0 && (<><p className="text-muted-foreground font-semibold mt-2">General Tips:</p><ul className="list-disc list-inside space-y-1 text-muted-foreground ml-4">{coachRecommendations.generalTips.map((item, i) => <li key={`gt-${i}`}>{item}</li>)}</ul></>)}
                 </>
-              ) : (<p className="text-muted-foreground">AI Coach insights will appear here.</p>)}
-               <Button variant="outline" className="mt-4" disabled>More Coach Insights (Soon)</Button>
+              ) : (<p className="text-muted-foreground">AI Coach insights will appear here after logging some meals.</p>)}
+               <Button variant="outline" className="mt-4" onClick={() => router.push('/chat')} >Chat with AI Coach</Button>
             </CardContent>
           </Card>
 
           <Card className="shadow-md border-l-4 border-indigo-500"><CardHeader><CardTitle className="flex items-center gap-2 text-indigo-700"><TrendingUp className="h-6 w-6" /> Weekly Progress</CardTitle><CardDescription>Track trends and get AI forecasts.</CardDescription></CardHeader>
-            <CardContent><Tabs defaultValue="weight" className="w-full"><TabsList className="grid w-full grid-cols-3"><TabsTrigger value="weight">Weight Trend</TabsTrigger><TabsTrigger value="carbon">Carbon Savings</TabsTrigger><TabsTrigger value="forecast">AI Forecast</TabsTrigger></TabsList>
-                <TabsContent value="weight"><div className="mt-4 h-48 bg-muted/50 rounded-md flex items-center justify-center p-4"><p className="text-muted-foreground text-center">Weight trend chart (Placeholder).</p></div></TabsContent>
-                <TabsContent value="carbon"><div className="mt-4 h-48 bg-muted/50 rounded-md flex items-center justify-center p-4"><p className="text-muted-foreground text-center">Carbon savings chart (Placeholder).</p></div></TabsContent>
-                <TabsContent value="forecast"><div className="mt-4 p-4 border rounded-md bg-muted/30"><p className="text-sm font-semibold text-primary">AI Forecast (Example):</p><p className="text-muted-foreground text-sm mt-1">"Keep up current efforts! Projected to lose 0.5kg next week."</p><Button variant="link" size="sm" className="p-0 h-auto mt-2 text-primary" disabled>Learn more</Button></div></TabsContent>
+            <CardContent><Tabs defaultValue="weight" className="w-full"><TabsList className="grid w-full grid-cols-3"><TabsTrigger value="weight">Weight Trend</TabsTrigger><TabsTrigger value="carbon" disabled={!userProfile?.enableCarbonTracking}>Carbon Savings</TabsTrigger><TabsTrigger value="forecast">AI Forecast</TabsTrigger></TabsList>
+                <TabsContent value="weight"><div className="mt-4 h-48 bg-muted/50 rounded-md flex items-center justify-center p-4 text-center"><p className="text-muted-foreground">Weight trend chart (Placeholder). <Button variant="link" size="sm" disabled>Add Measurement</Button></p></div></TabsContent>
+                <TabsContent value="carbon"><div className="mt-4 h-48 bg-muted/50 rounded-md flex items-center justify-center p-4"><p className="text-muted-foreground text-center">{userProfile?.enableCarbonTracking ? "Carbon savings chart vs. last week (Placeholder)." : "Enable carbon tracking in your profile to see this chart."}</p></div></TabsContent>
+                <TabsContent value="forecast"><div className="mt-4 p-4 border rounded-md bg-muted/30"><p className="text-sm font-semibold text-primary">AI Forecast (Example):</p><p className="text-muted-foreground text-sm mt-1">"Keep up current efforts! Projected to lose 0.5kg next week if you maintain this calorie deficit." (Placeholder)</p><Button variant="link" size="sm" className="p-0 h-auto mt-2 text-primary" disabled>Learn more</Button></div></TabsContent>
               </Tabs></CardContent><CardFooter><Button className="w-full" variant="outline" disabled>Detailed Progress Report (Soon)</Button></CardFooter>
           </Card>
         </section>
@@ -433,7 +441,7 @@ export default function DashboardPage() {
               <Button variant="outline" className="mt-4" disabled>Full Analytics (Soon)</Button>
             </CardContent>
           </Card>
-          <Card className="shadow-md border-l-4 border-lime-500"><CardHeader><CardTitle className="flex items-center gap-2 text-lime-700"><Users className="h-6 w-6"/>Eco-Score Leaderboards</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Compete with friends on sustainability scores!</p><Button variant="outline" className="mt-4" disabled>View Leaderboards (Soon)</Button></CardContent></Card>
+          <Card className="shadow-md border-l-4 border-lime-500"><CardHeader><CardTitle className="flex items-center gap-2 text-lime-700"><Users className="h-6 w-6"/>Eco-Score Leaderboards</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Compete with friends on sustainability scores! (Placeholder)</p><Button variant="outline" className="mt-4" disabled>View Leaderboards (Soon)</Button></CardContent></Card>
           
           <Card className="shadow-md border-l-4 border-emerald-500"><CardHeader><CardTitle className="flex items-center gap-2 text-emerald-700"><Leaf className="h-6 w-6"/>AI-Generated Meal Plans</CardTitle></CardHeader>
             <CardContent>
@@ -488,7 +496,7 @@ export default function DashboardPage() {
           <Card className="shadow-md border-l-4 border-sky-500"><CardHeader><CardTitle className="flex items-center gap-2 text-sky-700"><Globe2 className="h-6 w-6" /> Sustainability Impact</CardTitle><CardDescription>See how your diet compares.</CardDescription></CardHeader>
             <CardContent className="space-y-4"><div className="space-y-2 text-sm"><div className="flex justify-between items-center p-2 border rounded-md"><span>Your Diet vs. Local Average:</span><Badge variant="secondary" className="text-green-700 bg-green-100">40% Less CO₂ (Example)</Badge></div><div className="flex justify-between items-center p-2 border rounded-md"><span>Your Diet vs. Global Goals:</span><Badge variant="outline" className="text-orange-700 border-orange-300">1.5x Limit (Example)</Badge></div></div><Alert variant="default" className="bg-primary/5 border-primary/20"><Leaf className="h-4 w-4 text-primary" /><AlertTitle className="text-primary">Suggested Offset Action (Example):</AlertTitle><AlertDescription className="text-muted-foreground">"Walk 2 miles to neutralize recent pasta carbon!"</AlertDescription></Alert><Button variant="outline" className="w-full" disabled>More Impact Data (Soon)</Button></CardContent>
           </Card>
-           <div className="mt-4 p-3 bg-primary/10 rounded-md text-primary flex items-center gap-2"><ShieldCheck className="h-5 w-5"/><p className="text-sm">As an EcoPro member, you get Priority Support!</p></div>
+           <div className="mt-4 p-3 bg-primary/10 rounded-md text-primary flex items-center gap-2"><ShieldCheck className="h-5 w-5"/><p className="text-sm">As an EcoPro member, you get Priority Support! (Placeholder)</p></div>
         </section>
       )}
       
@@ -496,4 +504,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

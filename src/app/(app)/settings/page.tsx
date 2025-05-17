@@ -10,14 +10,16 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { getUserProfile, saveUserProfile, type UserProfile, type AppSettings } from '@/lib/localStorage';
-import { Moon, Sun, Scale, Ruler, Bell, HelpCircle, FileText, Save } from 'lucide-react';
+import { Moon, Sun, Scale, Ruler, Bell, HelpCircle, FileText, Save, Palette, Weight, Droplet, ListFilter } from 'lucide-react';
 
 const defaultSettings: AppSettings = {
   darkModeEnabled: false,
   unitPreferences: {
     weight: 'kg',
     height: 'cm',
-  }
+    volume: 'ml',
+  },
+  hideNonCompliantRecipes: false,
 };
 
 export default function AppSettingsPage() {
@@ -33,7 +35,14 @@ export default function AppSettingsPage() {
     const profile = getUserProfile();
     if (profile) {
       setUserProfile(profile);
-      setSettings(profile.appSettings || defaultSettings);
+      setSettings({
+        ...defaultSettings, // Start with defaults
+        ...(profile.appSettings || {}), // Override with saved app settings
+        unitPreferences: { // Deep merge unitPreferences
+            ...defaultSettings.unitPreferences!,
+            ...(profile.appSettings?.unitPreferences || {}),
+        }
+      });
     }
     setIsLoading(false);
   }, []);
@@ -42,11 +51,11 @@ export default function AppSettingsPage() {
     setSettings((prev) => ({ ...prev, [name]: checked }));
   };
 
-  const handleSelectChange = (name: 'weight' | 'height') => (value: string) => {
+  const handleSelectChange = (name: 'weight' | 'height' | 'volume') => (value: string) => {
     setSettings(prev => ({
       ...prev,
       unitPreferences: {
-        ...prev.unitPreferences!,
+        ...(prev.unitPreferences || defaultSettings.unitPreferences!),
         [name]: value,
       }
     }));
@@ -86,7 +95,7 @@ export default function AppSettingsPage() {
     <div className="space-y-6">
       <Card className="shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold text-primary">App Settings</CardTitle>
+          <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2"><Palette/> App Settings</CardTitle>
           <CardDescription>Customize your EcoAI Calorie Tracker experience.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
@@ -103,14 +112,14 @@ export default function AppSettingsPage() {
                 onCheckedChange={handleSwitchChange('darkModeEnabled')}
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Actual theme switching requires further implementation.</p>
+            <p className="text-xs text-muted-foreground mt-1">Dark mode is a visual setting only for now. Full theme switching needs UI and CSS updates.</p>
           </section>
 
           <section>
             <h3 className="text-lg font-semibold flex items-center gap-2 mb-3 text-foreground">Unit Preferences</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <Label htmlFor="unitWeight"><Scale className="inline mr-1 h-4 w-4"/>Weight</Label>
+                <Label htmlFor="unitWeight"><Weight className="inline mr-1 h-4 w-4"/>Weight</Label>
                 <Select 
                   value={settings.unitPreferences?.weight || 'kg'} 
                   onValueChange={handleSelectChange('weight')}
@@ -135,9 +144,40 @@ export default function AppSettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
+               <div>
+                <Label htmlFor="unitVolume"><Droplet className="inline mr-1 h-4 w-4"/>Volume</Label>
+                <Select 
+                  value={settings.unitPreferences?.volume || 'ml'}
+                  onValueChange={handleSelectChange('volume')}
+                >
+                  <SelectTrigger id="unitVolume"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ml">Milliliters (ml)</SelectItem>
+                    <SelectItem value="fl oz">Fluid Ounces (fl oz)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-             <p className="text-xs text-muted-foreground mt-1">Unit conversions throughout the app require further implementation.</p>
+             <p className="text-xs text-muted-foreground mt-1">Unit conversions throughout the app (e.g., water intake display) will reflect these settings where implemented.</p>
           </section>
+          
+          <section>
+            <h3 className="text-lg font-semibold flex items-center gap-2 mb-3 text-foreground">Content Preferences</h3>
+            <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
+              <Label htmlFor="hideNonCompliantRecipes" className="flex items-center gap-2">
+                <ListFilter className="h-5 w-5" />
+                Hide Non-Compliant Recipes
+                 <span className="text-xs text-muted-foreground">(Based on allergies/restrictions in profile)</span>
+              </Label>
+              <Switch 
+                id="hideNonCompliantRecipes" 
+                checked={settings.hideNonCompliantRecipes} 
+                onCheckedChange={handleSwitchChange('hideNonCompliantRecipes')}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Recipe filtering logic is a placeholder. Actual filtering requires recipe data integration.</p>
+          </section>
+
 
           <section>
             <h3 className="text-lg font-semibold flex items-center gap-2 mb-3 text-foreground">Other Settings</h3>

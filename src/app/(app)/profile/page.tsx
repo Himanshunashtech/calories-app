@@ -13,8 +13,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { getUserProfile, saveUserProfile, type UserProfile, type ReminderSettings, type AppSettings } from '@/lib/localStorage';
-import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Repeat, Utensils, Vegan, Settings } from 'lucide-react';
+import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Repeat, Utensils, Vegan, Settings, Edit3, Cog, Palette, BarChartHorizontalBig, Droplet } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ALLERGY_OPTIONS } from '@/types';
 
 const defaultProfile: UserProfile = {
   name: '',
@@ -26,30 +28,36 @@ const defaultProfile: UserProfile = {
   weightUnit: 'kg',
   activityLevel: '',
   healthGoals: [],
+  alsoTrackSustainability: false,
   exerciseFrequency: '',
   dietType: '',
-  dietaryRestrictions: '',
+  dietaryRestrictions: [],
   favoriteCuisines: '',
   dislikedIngredients: '',
   enableCarbonTracking: false,
   sleepHours: '',
   stressLevel: '',
+  waterGoal: 8,
   email: '',
   phone: '',
   profileImageUri: null,
   reminderSettings: {
+    mealRemindersEnabled: true,
     breakfastTime: '08:00',
     lunchTime: '12:30',
     dinnerTime: '18:30',
     waterReminderEnabled: false,
     waterReminderInterval: 60,
+    snoozeDuration: 5,
   },
   appSettings: {
     darkModeEnabled: false,
     unitPreferences: {
       weight: 'kg',
       height: 'cm',
-    }
+      volume: 'ml',
+    },
+    hideNonCompliantRecipes: false,
   }
 };
 
@@ -65,10 +73,10 @@ export default function ProfilePage() {
     setIsClient(true);
     const loadedProfile = getUserProfile();
     if (loadedProfile) {
-      // Ensure nested objects like reminderSettings and appSettings are fully formed
       const completeProfile: UserProfile = {
-        ...defaultProfile, // Start with defaults
-        ...loadedProfile,  // Override with loaded data
+        ...defaultProfile, 
+        ...loadedProfile,  
+        dietaryRestrictions: Array.isArray(loadedProfile.dietaryRestrictions) ? loadedProfile.dietaryRestrictions : (loadedProfile.dietaryRestrictions ? [String(loadedProfile.dietaryRestrictions)] : []),
         reminderSettings: {
           ...defaultProfile.reminderSettings,
           ...(loadedProfile.reminderSettings || {}),
@@ -96,60 +104,80 @@ export default function ProfilePage() {
   
   const handleReminderChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+     setProfile((prev) => ({
+      ...prev,
+      reminderSettings: {
+        ...(prev.reminderSettings || defaultProfile.reminderSettings!), // Ensure reminderSettings is not undefined
+        [name]: value,
+      },
+    }));
+  };
+  
+   const handleReminderSelectChange = (name: keyof ReminderSettings) => (value: string | number) => {
     setProfile((prev) => ({
       ...prev,
       reminderSettings: {
-        ...prev.reminderSettings!,
+        ...(prev.reminderSettings || defaultProfile.reminderSettings!),
         [name]: value,
       },
     }));
   };
 
+
   const handleSwitchChange = (name: keyof UserProfile | `appSettings.${keyof AppSettings}` | `reminderSettings.${keyof ReminderSettings}`) => (checked: boolean) => {
-    if (name === 'enableCarbonTracking') {
+     if (name === 'enableCarbonTracking') {
       setProfile((prev) => ({ ...prev, enableCarbonTracking: checked }));
+    } else if (name === 'alsoTrackSustainability') {
+      setProfile((prev) => ({ ...prev, alsoTrackSustainability: checked }));
     } else if (name === 'appSettings.darkModeEnabled') {
         setProfile((prev) => ({
         ...prev,
-        appSettings: { ...prev.appSettings!, darkModeEnabled: checked },
+        appSettings: { ...(prev.appSettings || defaultProfile.appSettings!), darkModeEnabled: checked },
+      }));
+    } else if (name === 'appSettings.hideNonCompliantRecipes') {
+        setProfile((prev) => ({
+        ...prev,
+        appSettings: { ...(prev.appSettings || defaultProfile.appSettings!), hideNonCompliantRecipes: checked },
       }));
     } else if (name === 'reminderSettings.waterReminderEnabled') {
        setProfile((prev) => ({
         ...prev,
-        reminderSettings: { ...prev.reminderSettings!, waterReminderEnabled: checked },
+        reminderSettings: { ...(prev.reminderSettings || defaultProfile.reminderSettings!), waterReminderEnabled: checked },
+      }));
+    } else if (name === 'reminderSettings.mealRemindersEnabled') {
+       setProfile((prev) => ({
+        ...prev,
+        reminderSettings: { ...(prev.reminderSettings || defaultProfile.reminderSettings!), mealRemindersEnabled: checked },
       }));
     }
-    // Add more specific cases if other top-level boolean fields are added
   };
 
 
-  const handleSelectChange = (name: keyof UserProfile | `reminderSettings.${keyof ReminderSettings}` | `appSettings.unitPreferences.${'weight' | 'height'}`) => (value: string) => {
-    if (name.startsWith('reminderSettings.')) {
-      const key = name.split('.')[1] as keyof ReminderSettings;
-       setProfile((prev) => ({
-        ...prev,
-        reminderSettings: {
-          ...prev.reminderSettings!,
-          [key]: value,
-        },
-      }));
-    } else if (name.startsWith('appSettings.unitPreferences.')) {
-      const key = name.split('.')[2] as 'weight' | 'height';
+  const handleSelectChange = (name: keyof UserProfile | `appSettings.unitPreferences.${'weight' | 'height' | 'volume'}`) => (value: string) => {
+    if (name.startsWith('appSettings.unitPreferences.')) {
+      const key = name.split('.')[2] as 'weight' | 'height' | 'volume';
       setProfile(prev => ({
         ...prev,
         appSettings: {
-          ...prev.appSettings!,
+          ...(prev.appSettings || defaultProfile.appSettings!),
           unitPreferences: {
-            ...prev.appSettings!.unitPreferences!,
+            ...(prev.appSettings!.unitPreferences || defaultProfile.appSettings!.unitPreferences!),
             [key]: value,
           }
         }
       }))
-    }
-    
-    else {
+    } else {
       setProfile((prev) => ({ ...prev, [name as keyof UserProfile]: value as any }));
     }
+  };
+  
+  const handleDietaryRestrictionChange = (restriction: string) => (checked: boolean) => {
+    setProfile((prev) => ({
+      ...prev,
+      dietaryRestrictions: checked
+        ? [...prev.dietaryRestrictions, restriction]
+        : prev.dietaryRestrictions.filter((r) => r !== restriction),
+    }));
   };
 
 
@@ -266,15 +294,25 @@ export default function ProfilePage() {
                 <Label htmlFor="weight">Weight ({profile.appSettings?.unitPreferences?.weight || 'kg'})</Label> 
                 <Input id="weight" name="weight" type="number" value={profile.weight} onChange={handleChange} placeholder={`Weight in ${profile.appSettings?.unitPreferences?.weight || 'kg'}`} /> 
               </div>
+               <div>
+                <Label htmlFor="waterGoal">Daily Water Goal ({profile.appSettings?.unitPreferences?.volume === 'fl oz' ? 'fl oz' : 'glasses'})</Label>
+                <Input id="waterGoal" name="waterGoal" type="number" value={profile.waterGoal?.toString() || '8'} onChange={(e) => setProfile(prev => ({...prev, waterGoal: parseInt(e.target.value) || 8}))} placeholder="E.g., 8" />
+              </div>
             </div>
           </section>
 
           <section>
             <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><Activity /> Goals & Activity</h3>
              <div className="space-y-4">
-                <div> <Label>Primary Health Goals</Label> <p className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50 min-h-[40px]"> {profile.healthGoals && profile.healthGoals.length > 0 ? profile.healthGoals.join(', ') : 'Not set'} </p> <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => router.push('/onboarding')}>Edit Goals (Re-run Onboarding)</Button></div>
+                <div> <Label>Primary Health Goals</Label> <p className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50 min-h-[40px]"> {profile.healthGoals && profile.healthGoals.length > 0 ? profile.healthGoals.join(', ') : 'Not set'} </p> <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => router.push('/onboarding')}><Edit3 className="mr-1 h-3 w-3"/>Edit Goals (Re-run Onboarding)</Button></div>
                  <div> <Label htmlFor="activityLevel">Activity Level</Label> <Select name="activityLevel" value={profile.activityLevel} onValueChange={handleSelectChange('activityLevel')}> <SelectTrigger id="activityLevel"><SelectValue placeholder="Select activity level" /></SelectTrigger> <SelectContent> <SelectItem value="sedentary">Sedentary</SelectItem> <SelectItem value="light">Lightly Active</SelectItem> <SelectItem value="moderate">Moderately Active</SelectItem> <SelectItem value="very">Very Active</SelectItem> </SelectContent> </Select> </div>
                 <div> <Label htmlFor="exerciseFrequency">Exercise Frequency</Label> <Select name="exerciseFrequency" value={profile.exerciseFrequency} onValueChange={handleSelectChange('exerciseFrequency')}> <SelectTrigger id="exerciseFrequency"><SelectValue placeholder="Select frequency" /></SelectTrigger> <SelectContent> <SelectItem value="0">0 days/week</SelectItem> <SelectItem value="1-2">1-2 days/week</SelectItem> <SelectItem value="3-4">3-4 days/week</SelectItem> <SelectItem value="5+">5+ days/week</SelectItem> </SelectContent> </Select> </div>
+                 <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
+                    <Label htmlFor="alsoTrackSustainability" className="flex flex-col">
+                        <span>Track Sustainability Focus?</span>
+                    </Label>
+                    <Switch id="alsoTrackSustainability" checked={profile.alsoTrackSustainability} onCheckedChange={handleSwitchChange('alsoTrackSustainability')} />
+                </div>
             </div>
           </section>
 
@@ -282,7 +320,24 @@ export default function ProfilePage() {
             <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><Utensils /> Dietary Habits</h3>
             <div className="space-y-4">
               <div> <Label htmlFor="dietType">Diet Type</Label> <Select name="dietType" value={profile.dietType} onValueChange={handleSelectChange('dietType')}> <SelectTrigger id="dietType"><SelectValue placeholder="Select diet type" /></SelectTrigger> <SelectContent> <SelectItem value="none">None</SelectItem> <SelectItem value="vegetarian">Vegetarian</SelectItem> <SelectItem value="vegan">Vegan</SelectItem> <SelectItem value="keto">Keto</SelectItem> <SelectItem value="paleo">Paleo</SelectItem><SelectItem value="pescatarian">Pescatarian</SelectItem> <SelectItem value="mediterranean">Mediterranean</SelectItem> <SelectItem value="custom">Custom</SelectItem><SelectItem value="other">Other</SelectItem> </SelectContent> </Select> </div>
-              <div> <Label htmlFor="dietaryRestrictions">Dietary Restrictions/Allergies</Label> <Textarea id="dietaryRestrictions" name="dietaryRestrictions" value={profile.dietaryRestrictions} onChange={handleChange} placeholder="e.g., Gluten-free, nut allergy" /> </div>
+              
+              <div>
+                <Label>Allergies/Dietary Restrictions</Label>
+                <div className="space-y-2 mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 border rounded-md">
+                  {ALLERGY_OPTIONS.map((allergy) => (
+                    <div key={allergy.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`profile-allergy-${allergy.id}`}
+                        checked={profile.dietaryRestrictions.includes(allergy.label)}
+                        onCheckedChange={(checked) => handleDietaryRestrictionChange(allergy.label)(!!checked)}
+                      />
+                      <Label htmlFor={`profile-allergy-${allergy.id}`} className="font-normal cursor-pointer">{allergy.label}</Label>
+                    </div>
+                  ))}
+                </div>
+                 <Textarea id="dietaryRestrictionsOtherProfile" name="dietaryRestrictionsOther" placeholder="Other restrictions (comma-separated)..." className="mt-2" value={profile.dietaryRestrictions.filter(r => !ALLERGY_OPTIONS.find(ao => ao.label === r)).join(', ')} onChange={(e) => { const custom = e.target.value.split(',').map(s => s.trim()).filter(Boolean); setProfile(prev => ({...prev, dietaryRestrictions: [...prev.dietaryRestrictions.filter(r => ALLERGY_OPTIONS.find(ao => ao.label ===r)), ...custom]}))}}/>
+              </div>
+
               <div> <Label htmlFor="favoriteCuisines">Favorite Cuisines</Label> <Input id="favoriteCuisines" name="favoriteCuisines" value={profile.favoriteCuisines || ''} onChange={handleChange} placeholder="e.g., Italian, Mexican" /> </div>
               <div> <Label htmlFor="dislikedIngredients">Disliked Ingredients</Label> <Input id="dislikedIngredients" name="dislikedIngredients" value={profile.dislikedIngredients || ''} onChange={handleChange} placeholder="e.g., Cilantro, Olives" /> </div>
               <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
@@ -303,29 +358,46 @@ export default function ProfilePage() {
           <section>
             <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><BellRing /> Reminder Settings</h3>
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                <div> <Label htmlFor="breakfastTime"><Clock3 className="inline mr-1 h-4 w-4"/>Breakfast Time</Label> <Input id="breakfastTime" name="breakfastTime" type="time" value={profile.reminderSettings?.breakfastTime || '08:00'} onChange={handleReminderChange} /> </div>
-                <div> <Label htmlFor="lunchTime"><Clock3 className="inline mr-1 h-4 w-4"/>Lunch Time</Label> <Input id="lunchTime" name="lunchTime" type="time" value={profile.reminderSettings?.lunchTime || '12:30'} onChange={handleReminderChange} /> </div>
-                <div> <Label htmlFor="dinnerTime"><Clock3 className="inline mr-1 h-4 w-4"/>Dinner Time</Label> <Input id="dinnerTime" name="dinnerTime" type="time" value={profile.reminderSettings?.dinnerTime || '18:30'} onChange={handleReminderChange} /> </div>
-              </div>
               <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
-                <Label htmlFor="waterReminderEnabled" className="flex items-center gap-2"><Repeat className="h-5 w-5"/> Water Reminder</Label>
+                <Label htmlFor="mealRemindersEnabled" className="flex items-center gap-2"><Utensils className="h-5 w-5"/> Meal Reminders</Label>
+                <Switch id="mealRemindersEnabled" checked={profile.reminderSettings?.mealRemindersEnabled} onCheckedChange={handleSwitchChange('reminderSettings.mealRemindersEnabled')} />
+              </div>
+              {profile.reminderSettings?.mealRemindersEnabled && (
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end p-3 border rounded-md bg-muted/30">
+                    <div> <Label htmlFor="breakfastTime"><Clock3 className="inline mr-1 h-4 w-4"/>Breakfast</Label> <Input id="breakfastTime" name="breakfastTime" type="time" value={profile.reminderSettings?.breakfastTime || '08:00'} onChange={handleReminderChange} /> </div>
+                    <div> <Label htmlFor="lunchTime"><Clock3 className="inline mr-1 h-4 w-4"/>Lunch</Label> <Input id="lunchTime" name="lunchTime" type="time" value={profile.reminderSettings?.lunchTime || '12:30'} onChange={handleReminderChange} /> </div>
+                    <div> <Label htmlFor="dinnerTime"><Clock3 className="inline mr-1 h-4 w-4"/>Dinner</Label> <Input id="dinnerTime" name="dinnerTime" type="time" value={profile.reminderSettings?.dinnerTime || '18:30'} onChange={handleReminderChange} /> </div>
+                </div>
+              )}
+              <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
+                <Label htmlFor="waterReminderEnabled" className="flex items-center gap-2"><Droplet className="h-5 w-5 text-blue-500"/> Water Reminder</Label>
                 <Switch id="waterReminderEnabled" checked={profile.reminderSettings?.waterReminderEnabled} onCheckedChange={handleSwitchChange('reminderSettings.waterReminderEnabled')} />
               </div>
               {profile.reminderSettings?.waterReminderEnabled && (
-                <div>
-                  <Label htmlFor="waterReminderInterval">Water Reminder Interval (minutes)</Label>
-                  <Select name="reminderSettings.waterReminderInterval" value={profile.reminderSettings?.waterReminderInterval?.toString() || '60'} onValueChange={handleSelectChange('reminderSettings.waterReminderInterval')}>
+                <div className="p-3 border rounded-md bg-muted/30 space-y-2">
+                  <Label htmlFor="waterReminderInterval">Remind every:</Label>
+                  <Select name="reminderSettings.waterReminderInterval" value={profile.reminderSettings?.waterReminderInterval?.toString() || '60'} onValueChange={(val) => handleReminderSelectChange('waterReminderInterval')(parseInt(val))}>
                     <SelectTrigger id="waterReminderInterval"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="30">30 minutes</SelectItem>
-                      <SelectItem value="60">60 minutes (1 hour)</SelectItem>
+                      <SelectItem value="60">60 minutes</SelectItem>
                       <SelectItem value="90">90 minutes</SelectItem>
-                      <SelectItem value="120">120 minutes (2 hours)</SelectItem>
+                      <SelectItem value="120">120 minutes</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               )}
+               <div>
+                <Label htmlFor="snoozeDuration">Notification Snooze Duration (Placeholder)</Label>
+                 <Select name="reminderSettings.snoozeDuration" value={profile.reminderSettings?.snoozeDuration?.toString() || '5'} onValueChange={(val) => handleReminderSelectChange('snoozeDuration')(parseInt(val))}>
+                    <SelectTrigger id="snoozeDuration" disabled><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5 minutes</SelectItem>
+                      <SelectItem value="10">10 minutes</SelectItem>
+                      <SelectItem value="15">15 minutes</SelectItem>
+                    </SelectContent>
+                  </Select>
+               </div>
               <p className="text-xs text-muted-foreground">Note: Actual notification delivery depends on browser/device settings and app capabilities.</p>
             </div>
           </section>
@@ -336,7 +408,7 @@ export default function ProfilePage() {
             Save Profile &amp; Preferences
           </Button>
            <Button onClick={() => router.push('/app/settings')} className="w-full" variant="outline">
-            <Settings className="mr-2 h-5 w-5"/>
+            <Cog className="mr-2 h-5 w-5"/>
             Go to App Settings
           </Button>
         </CardFooter>

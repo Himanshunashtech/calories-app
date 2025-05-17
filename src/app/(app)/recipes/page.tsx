@@ -8,23 +8,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Utensils, Search, Filter, Leaf, Sparkles, ArrowRight } from 'lucide-react';
-import { getSelectedPlan, type UserPlan } from '@/lib/localStorage';
+import { Utensils, Search, Filter, Leaf, Sparkles, ArrowRight, ChefHat, BarChartHorizontalBig } from 'lucide-react';
+import { getSelectedPlan, type UserPlan, getUserProfile, type UserProfile } from '@/lib/localStorage';
+import { useToast } from '@/hooks/use-toast';
 
 // Placeholder recipe data
 const placeholderRecipes = [
-  { id: '1', name: 'Quinoa Salad with Roasted Vegetables', description: 'A light and healthy salad, perfect for lunch.', ecoScore: 'A', dietTags: ['vegan', 'gluten-free'], image: 'https://placehold.co/300x200.png?text=Quinoa+Salad', dataAiHint: 'salad healthy' },
-  { id: '2', name: 'Lentil Soup', description: 'Hearty and nutritious lentil soup.', ecoScore: 'A', dietTags: ['vegan', 'vegetarian'], image: 'https://placehold.co/300x200.png?text=Lentil+Soup', dataAiHint: 'soup lentil' },
-  { id: '3', name: 'Baked Salmon with Asparagus', description: 'Delicious and omega-3 rich baked salmon.', ecoScore: 'B', dietTags: ['pescatarian'], image: 'https://placehold.co/300x200.png?text=Baked+Salmon', dataAiHint: 'salmon fish' },
-  { id: '4', name: 'Mushroom Risotto', description: 'Creamy and comforting mushroom risotto.', ecoScore: 'B', dietTags: ['vegetarian'], image: 'https://placehold.co/300x200.png?text=Mushroom+Risotto', dataAiHint: 'risotto mushroom' },
-  { id: '5', name: 'Chickpea Curry', description: 'Flavorful and satisfying chickpea curry.', ecoScore: 'A', dietTags: ['vegan', 'vegetarian'], image: 'https://placehold.co/300x200.png?text=Chickpea+Curry', dataAiHint: 'curry chickpea' },
+  { id: '1', name: 'Quinoa Salad with Roasted Vegetables', description: 'A light and healthy salad, perfect for lunch.', ecoScore: 'A', dietTags: ['vegan', 'gluten-free'], image: 'https://placehold.co/300x200.png?text=Quinoa+Salad', dataAiHint: 'salad healthy', prepTime: '15 mins', cookTime: '25 mins', servings: 2, ingredients: ['1 cup quinoa', '1 bell pepper', '1 zucchini', '1 red onion', '2 tbsp olive oil', 'Salt & pepper', 'Lemon juice'], instructions: ['Cook quinoa.', 'Chop & roast veggies.', 'Combine and dress.'] },
+  { id: '2', name: 'Lentil Soup', description: 'Hearty and nutritious lentil soup.', ecoScore: 'A', dietTags: ['vegan', 'vegetarian'], image: 'https://placehold.co/300x200.png?text=Lentil+Soup', dataAiHint: 'soup lentil', prepTime: '10 mins', cookTime: '40 mins', servings: 4, ingredients: ['1 cup lentils', '1 onion', '2 carrots', '4 cups broth'], instructions: ['Sauté veggies.', 'Add lentils & broth.', 'Simmer.'] },
+  { id: '3', name: 'Baked Salmon with Asparagus', description: 'Delicious and omega-3 rich baked salmon.', ecoScore: 'B', dietTags: ['pescatarian'], image: 'https://placehold.co/300x200.png?text=Baked+Salmon', dataAiHint: 'salmon fish', prepTime: '10 mins', cookTime: '15 mins', servings: 2, ingredients: ['2 salmon fillets', 'Asparagus', 'Olive oil'], instructions: ['Season.', 'Bake.'] },
+  { id: '4', name: 'Mushroom Risotto', description: 'Creamy and comforting mushroom risotto.', ecoScore: 'B', dietTags: ['vegetarian', 'gluten-free'], image: 'https://placehold.co/300x200.png?text=Mushroom+Risotto', dataAiHint: 'risotto mushroom', prepTime: '15 mins', cookTime: '30 mins', servings: 3, ingredients:['Arborio rice', 'Mushrooms', 'Broth', 'Parmesan'], instructions:['Toast rice.', 'Add broth slowly.', 'Stir in mushrooms.'] },
+  { id: '5', name: 'Chickpea Curry', description: 'Flavorful and satisfying chickpea curry.', ecoScore: 'A', dietTags: ['vegan', 'vegetarian'], image: 'https://placehold.co/300x200.png?text=Chickpea+Curry', dataAiHint: 'curry chickpea', prepTime: '10 mins', cookTime: '25 mins', servings: 4, ingredients:['Chickpeas', 'Coconut milk', 'Spices', 'Onion'], instructions:['Sauté onion.', 'Add spices & chickpeas.', 'Simmer in coconut milk.'] },
 ];
 
 const premiumRecipes = [
     ...placeholderRecipes,
-    { id: '6', name: 'Avocado Toast Deluxe', description: 'Classic avocado toast with a twist.', ecoScore: 'A', dietTags: ['vegetarian', 'vegan'], image: 'https://placehold.co/300x200.png?text=Avocado+Toast', dataAiHint: 'avocado toast' },
-    { id: '7', name: 'Beyond Burger Bowl', description: 'A plant-based burger experience in a bowl.', ecoScore: 'B', dietTags: ['vegan'], image: 'https://placehold.co/300x200.png?text=Burger+Bowl', dataAiHint: 'burger plant-based' },
-    { id: '8', name: 'Keto Chicken Stir-fry', description: 'Low-carb and high-protein chicken stir-fry.', ecoScore: 'C', dietTags: ['keto'], image: 'https://placehold.co/300x200.png?text=Keto+Stirfry', dataAiHint: 'keto chicken' },
+    { id: '6', name: 'Avocado Toast Deluxe', description: 'Classic avocado toast with a twist.', ecoScore: 'A', dietTags: ['vegetarian', 'vegan'], image: 'https://placehold.co/300x200.png?text=Avocado+Toast', dataAiHint: 'avocado toast', prepTime: '5 mins', cookTime: '5 mins', servings: 1, ingredients:['Bread', 'Avocado', 'Everything bagel seasoning'], instructions:['Toast bread.', 'Mash avocado.', 'Season.'] },
+    { id: '7', name: 'Beyond Burger Bowl', description: 'A plant-based burger experience in a bowl.', ecoScore: 'B', dietTags: ['vegan'], image: 'https://placehold.co/300x200.png?text=Burger+Bowl', dataAiHint: 'burger plant-based', prepTime: '15 mins', cookTime: '10 mins', servings: 2, ingredients:['Beyond Meat patty', 'Quinoa', 'Greens', 'Favorite toppings'], instructions:['Cook patty.', 'Assemble bowl.'] },
+    { id: '8', name: 'Keto Chicken Stir-fry', description: 'Low-carb and high-protein chicken stir-fry.', ecoScore: 'C', dietTags: ['keto'], image: 'https://placehold.co/300x200.png?text=Keto+Stirfry', dataAiHint: 'keto chicken', prepTime: '15 mins', cookTime: '15 mins', servings: 2, ingredients:['Chicken breast', 'Broccoli', 'Soy sauce', 'Sesame oil'], instructions:['Stir-fry chicken.', 'Add broccoli.', 'Add sauce.'] },
+    { id: '9', name: 'Vegan Tofu Scramble', description: 'A hearty and protein-packed breakfast alternative.', ecoScore: 'A', dietTags: ['vegan', 'gluten-free'], image: 'https://placehold.co/300x200.png?text=Tofu+Scramble', dataAiHint: 'tofu breakfast', prepTime: '5 mins', cookTime: '10 mins', servings: 2, ingredients:['Firm tofu', 'Nutritional yeast', 'Turmeric', 'Veggies'], instructions:['Crumble tofu.', 'Sauté veggies.', 'Combine and season.'] },
+    { id: '10', name: 'Mediterranean Chickpea Salad', description: 'Refreshing and full of Mediterranean flavors.', ecoScore: 'A', dietTags: ['vegetarian', 'vegan', 'gluten-free'], image: 'https://placehold.co/300x200.png?text=Chickpea+Salad', dataAiHint: 'salad mediterranean', prepTime: '15 mins', cookTime: '0 mins', servings: 4, ingredients:['Chickpeas', 'Cucumber', 'Tomato', 'Olives', 'Lemon vinaigrette'], instructions:['Chop veggies.', 'Combine all.', 'Dress.'] },
 ];
 
 
@@ -33,22 +36,39 @@ export default function RecipesPage() {
   const [dietFilter, setDietFilter] = useState('');
   const [ecoFilter, setEcoFilter] = useState('');
   const [userPlan, setUserPlan] = useState<UserPlan>('free');
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const { toast } = useToast();
   
   useEffect(() => {
     setIsClient(true);
     setUserPlan(getSelectedPlan());
+    setUserProfile(getUserProfile());
   }, []);
 
   const availableRecipes = userPlan === 'free' ? placeholderRecipes.slice(0,5) : premiumRecipes;
 
   const filteredRecipes = availableRecipes.filter(recipe => {
-    return (
-      recipe.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      (dietFilter === '' || recipe.dietTags.includes(dietFilter)) &&
-      (ecoFilter === '' || recipe.ecoScore === ecoFilter)
-    );
+    const searchMatch = recipe.name.toLowerCase().includes(searchTerm.toLowerCase()) || recipe.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const dietMatch = dietFilter === '' || recipe.dietTags.includes(dietFilter);
+    const ecoMatch = ecoFilter === '' || recipe.ecoScore === ecoFilter;
+    
+    let restrictionMatch = true;
+    if (userProfile?.appSettings?.hideNonCompliantRecipes && userProfile.dietaryRestrictions.length > 0) {
+      // This is a simplified check. Real implementation would need more robust ingredient parsing for recipes.
+      const recipeIngredientsString = recipe.ingredients.join(' ').toLowerCase();
+      restrictionMatch = !userProfile.dietaryRestrictions.some(restriction => recipeIngredientsString.includes(restriction.toLowerCase()));
+    }
+
+    return searchMatch && dietMatch && ecoMatch && restrictionMatch;
   });
+  
+  const handleSurpriseMe = () => {
+    toast({
+        title: "AI Recipe Generator (Coming Soon!)",
+        description: "This feature will use AI to suggest a recipe based on your preferences and available ingredients."
+    })
+  }
 
   if (!isClient) {
     return (
@@ -66,7 +86,7 @@ export default function RecipesPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-2xl">
-            <Utensils className="h-7 w-7 text-primary" />
+            <ChefHat className="h-7 w-7 text-primary" />
             Eco-Friendly Recipes
           </CardTitle>
           <CardDescription>
@@ -111,8 +131,8 @@ export default function RecipesPage() {
               </SelectContent>
             </Select>
              {(userPlan === 'pro' || userPlan === 'ecopro') && (
-              <Button variant="outline" className="sm:w-auto" disabled>
-                <Sparkles className="mr-2 h-4 w-4" /> Surprise Me! (AI)
+              <Button variant="outline" className="sm:w-auto" onClick={handleSurpriseMe} >
+                <Sparkles className="mr-2 h-4 w-4" /> Surprise Me!
               </Button>
             )}
           </div>

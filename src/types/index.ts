@@ -50,6 +50,8 @@ export interface ReminderSettings {
   dinnerTime?: string;    // e.g., "18:30"
   waterReminderEnabled?: boolean;
   waterReminderInterval?: number; // in minutes, e.g., 60
+  mealRemindersEnabled?: boolean; // New general toggle
+  snoozeDuration?: number; // in minutes, e.g., 5
 }
 
 export interface AppSettings {
@@ -57,8 +59,9 @@ export interface AppSettings {
   unitPreferences?: {
     weight: 'kg' | 'lbs';
     height: 'cm' | 'in';
-    // volume: 'ml' | 'oz'; // Can be added later
+    volume?: 'ml' | 'fl oz'; // Added volume
   };
+  hideNonCompliantRecipes?: boolean; // For allergy/dietary restriction filtering
 }
 
 export interface OnboardingData {
@@ -71,18 +74,20 @@ export interface OnboardingData {
   weightUnit: 'kg' | 'lbs';
   activityLevel: string;
   healthGoals: string[];
+  alsoTrackSustainability?: boolean; // New for eco-focus
   exerciseFrequency: string;
   // Diet Preferences
   dietType: string;
-  dietaryRestrictions: string;
+  dietaryRestrictions: string[]; // Changed to array for multi-select
   favoriteCuisines?: string;
   dislikedIngredients?: string;
   enableCarbonTracking?: boolean;
   // Lifestyle
   sleepHours: string;
   stressLevel: string;
-  waterIntake?: string; // This was from original user spec, not fully integrated
-  enjoysCooking?: string; // This was from original user spec, not fully integrated
+  waterGoal?: number; // For custom water goal
+  // Placeholders from detailed list
+  macroSplit?: { carbs: number, protein: number, fat: number }; // Placeholder
 }
 
 export interface UserProfile extends OnboardingData {
@@ -107,12 +112,13 @@ export interface NutrientTrendAnalysis {
 export interface AICoachRecommendations {
   goalAdjustments: string[];
   mealTimingSuggestions: string[];
+  generalTips?: string[];
 }
 
 export interface CarbonComparisonAnalysis {
   comparisonText: string;
-  userAverageCF: number;
-  regionalAverageCF: number; // This will be an LLM-provided general estimate
+  userAverageDailyCF: number;
+  generalAverageDailyCF: number;
 }
 
 export interface EcoMealPlan {
@@ -121,10 +127,12 @@ export interface EcoMealPlan {
     meals: Array<{ name: string; description: string; lowCarbonScore: number }>;
   }>;
   groceryList: string[];
+  planTitle?: string;
 }
 
 export interface FoodMoodCorrelation {
   insights: string[];
+  sufficientData: boolean;
 }
 
 // Chatbot types
@@ -139,3 +147,14 @@ export interface FlowChatMessage { // For passing to/from AI flow
   role: 'user' | 'model';
   content: string;
 }
+
+export const ALLERGY_OPTIONS = [
+  { id: 'gluten', label: 'Gluten' },
+  { id: 'dairy', label: 'Dairy' },
+  { id: 'nuts', label: 'Nuts' },
+  { id: 'peanuts', label: 'Peanuts' },
+  { id: 'soy', label: 'Soy' },
+  { id: 'shellfish', label: 'Shellfish' },
+  { id: 'fish', label: 'Fish' },
+  { id: 'eggs', label: 'Eggs' },
+];

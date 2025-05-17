@@ -1,5 +1,6 @@
 
 import type { MealEntry, UserPlan, AIScanUsage, UserProfile, OnboardingData, WaterIntakeData, ReminderSettings, MealCategory, AppSettings } from '@/types';
+import { ALLERGY_OPTIONS } from '@/types'; // Import ALLERGY_OPTIONS
 
 const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
 const SELECTED_PLAN_KEY = 'selectedPlan';
@@ -129,11 +130,13 @@ export function canUseAIScan(plan: UserPlan): boolean {
 
 // User Profile Data
 const defaultReminderSettings: ReminderSettings = {
+  mealRemindersEnabled: true,
   breakfastTime: '08:00',
   lunchTime: '12:30',
   dinnerTime: '18:30',
   waterReminderEnabled: false,
   waterReminderInterval: 60,
+  snoozeDuration: 5,
 };
 
 const defaultAppSettings: AppSettings = {
@@ -141,14 +144,16 @@ const defaultAppSettings: AppSettings = {
   unitPreferences: {
     weight: 'kg',
     height: 'cm',
-  }
+    volume: 'ml',
+  },
+  hideNonCompliantRecipes: false,
 };
 
 export function getUserProfile(): UserProfile | null {
   if (typeof window === 'undefined') return null;
   try {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
-    let existingProfileData: Partial<OnboardingData & UserProfile> = {};
+    let existingProfileData: Partial<UserProfile> = {}; // Changed OnboardingData to UserProfile
 
     if (profileJson) {
       existingProfileData = JSON.parse(profileJson) as UserProfile;
@@ -157,7 +162,7 @@ export function getUserProfile(): UserProfile | null {
       const onboardingJson = localStorage.getItem(ONBOARDING_DATA_KEY);
       if (onboardingJson) {
         const onboardingData = JSON.parse(onboardingJson) as OnboardingData;
-        existingProfileData = { ...onboardingData };
+        existingProfileData = { ...onboardingData, dietaryRestrictions: Array.isArray(onboardingData.dietaryRestrictions) ? onboardingData.dietaryRestrictions : (onboardingData.dietaryRestrictions ? [onboardingData.dietaryRestrictions] : []) };
         // Consider removing the old key: localStorage.removeItem(ONBOARDING_DATA_KEY);
       }
     }
@@ -172,14 +177,17 @@ export function getUserProfile(): UserProfile | null {
       weightUnit: existingProfileData.weightUnit || 'kg',
       activityLevel: existingProfileData.activityLevel || '',
       healthGoals: existingProfileData.healthGoals || [],
+      alsoTrackSustainability: existingProfileData.alsoTrackSustainability || false,
       exerciseFrequency: existingProfileData.exerciseFrequency || '',
       dietType: existingProfileData.dietType || '',
-      dietaryRestrictions: existingProfileData.dietaryRestrictions || '',
+      dietaryRestrictions: Array.isArray(existingProfileData.dietaryRestrictions) ? existingProfileData.dietaryRestrictions : (existingProfileData.dietaryRestrictions ? [existingProfileData.dietaryRestrictions] : []),
       favoriteCuisines: existingProfileData.favoriteCuisines || '',
       dislikedIngredients: existingProfileData.dislikedIngredients || '',
       enableCarbonTracking: existingProfileData.enableCarbonTracking === undefined ? false : existingProfileData.enableCarbonTracking,
       sleepHours: existingProfileData.sleepHours || '',
       stressLevel: existingProfileData.stressLevel || '',
+      waterGoal: existingProfileData.waterGoal || 8,
+      macroSplit: existingProfileData.macroSplit || { carbs: 50, protein: 25, fat: 25}, // Placeholder
       email: existingProfileData.email || '',
       phone: existingProfileData.phone || '',
       profileImageUri: existingProfileData.profileImageUri || null,
@@ -191,7 +199,7 @@ export function getUserProfile(): UserProfile | null {
         ...defaultAppSettings,
         ...(existingProfileData.appSettings || {}),
         unitPreferences: {
-          ...defaultAppSettings.unitPreferences,
+          ...defaultAppSettings.unitPreferences!,
           ...(existingProfileData.appSettings?.unitPreferences || {}),
         }
       },
@@ -209,9 +217,10 @@ export function getUserProfile(): UserProfile | null {
     // Return a deeply defaulted profile on error
     const fallbackProfile: UserProfile = {
         name: '', age: '', gender: '', height: '', heightUnit: 'cm', weight: '', weightUnit: 'kg',
-        activityLevel: '', healthGoals: [], exerciseFrequency: '', dietaryRestrictions: '',
+        activityLevel: '', healthGoals: [], alsoTrackSustainability: false, exerciseFrequency: '', dietaryRestrictions: [],
         dietType: '', favoriteCuisines: '', dislikedIngredients: '', enableCarbonTracking: false,
-        sleepHours: '', stressLevel: '', email: '', phone: '', profileImageUri: null,
+        sleepHours: '', stressLevel: '', waterGoal: 8, macroSplit: { carbs: 50, protein: 25, fat: 25}, 
+        email: '', phone: '', profileImageUri: null,
         reminderSettings: { ...defaultReminderSettings },
         appSettings: { ...defaultAppSettings, unitPreferences: {...defaultAppSettings.unitPreferences!} }
     };
@@ -229,15 +238,19 @@ export function saveUserProfile(profile: UserProfile): void {
 }
 
 // Water Intake
-const DAILY_WATER_GOAL_GLASSES = 8; 
+const DEFAULT_DAILY_WATER_GOAL_GLASSES = 8; 
 
 export function getWaterIntake(): WaterIntakeData {
   if (typeof window === 'undefined') {
-    return { current: 0, goal: DAILY_WATER_GOAL_GLASSES, lastUpdatedDate: new Date().toISOString().split('T')[0] };
+    const profile = getUserProfile();
+    return { current: 0, goal: profile?.waterGoal || DEFAULT_DAILY_WATER_GOAL_GLASSES, lastUpdatedDate: new Date().toISOString().split('T')[0] };
   }
   const intakeJson = localStorage.getItem(WATER_INTAKE_KEY);
   const today = new Date().toISOString().split('T')[0];
   let intake: WaterIntakeData;
+  const profile = getUserProfile();
+  const goalFromProfile = profile?.waterGoal || DEFAULT_DAILY_WATER_GOAL_GLASSES;
+
 
   if (intakeJson) {
     intake = JSON.parse(intakeJson);
@@ -246,9 +259,9 @@ export function getWaterIntake(): WaterIntakeData {
       intake.lastUpdatedDate = today;
     }
   } else {
-    intake = { current: 0, goal: DAILY_WATER_GOAL_GLASSES, lastUpdatedDate: today };
+    intake = { current: 0, goal: goalFromProfile, lastUpdatedDate: today };
   }
-  intake.goal = DAILY_WATER_GOAL_GLASSES; 
+  intake.goal = goalFromProfile; 
   saveWaterIntake(intake); // Save to ensure lastUpdatedDate is current if reset
   return intake;
 }
@@ -282,4 +295,40 @@ export function getRecentMealLogs(days: number = 7): MealEntry[] {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
   return allLogs.filter(log => new Date(log.date) >= cutoffDate);
+}
+
+// Helper to check if onboarding is complete
+export function isOnboardingComplete(): boolean {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem('onboardingComplete') === 'true';
+}
+
+// For authentication stub
+export function fakeLogin(email: string): void {
+    if (typeof window === 'undefined') return;
+    // In a real app, you'd get a token from a server.
+    // For now, just store email to simulate logged-in state.
+    const profile = getUserProfile() || {} as Partial<UserProfile>;
+    saveUserProfile({ ...profile, email } as UserProfile);
+    localStorage.setItem('userLoggedIn', 'true');
+}
+
+export function fakeSignup(email: string, name: string): void {
+    if (typeof window === 'undefined') return;
+    const profile = getUserProfile() || {} as Partial<UserProfile>;
+    saveUserProfile({ ...profile, email, name } as UserProfile);
+    localStorage.setItem('userLoggedIn', 'true');
+    localStorage.setItem('onboardingComplete', 'false'); // New users need onboarding
+}
+
+
+export function fakeLogout(): void {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem('userLoggedIn');
+    // Optionally clear more user-specific data or redirect
+}
+
+export function isUserLoggedIn(): boolean {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('userLoggedIn') === 'true';
 }
