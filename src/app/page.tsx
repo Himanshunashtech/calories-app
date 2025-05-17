@@ -2,8 +2,8 @@
 import { Button } from '@/components/ui/button';
 import { AppLogo } from '@/components/AppLogo';
 import Link from 'next/link';
-import Image from 'next/image'; 
-import { Leaf, Zap, BarChart3, UserPlus, ArrowRight } from 'lucide-react';
+import Image from 'next/image';
+import { Leaf, Zap, BarChart3, UserPlus, ArrowRight, LogInIcon } from 'lucide-react';
 
 export default function LandingPage() {
   return (
@@ -21,7 +21,7 @@ export default function LandingPage() {
             height={400}
             className="object-cover"
             data-ai-hint="healthy food app"
-            priority 
+            priority
           />
         </div>
         <h1 className="text-4xl font-bold text-primary mb-4">
@@ -32,9 +32,14 @@ export default function LandingPage() {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-10">
-          <Link href="/onboarding" passHref>
+          <Link href="/signup" passHref>
             <Button size="lg" className="w-full sm:w-auto text-lg py-6 px-8">
-              Get Started <ArrowRight className="ml-2 h-5 w-5" />
+              Get Started <UserPlus className="ml-2 h-5 w-5" />
+            </Button>
+          </Link>
+          <Link href="/login" passHref>
+            <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg py-6 px-8">
+              Log In <LogInIcon className="ml-2 h-5 w-5" />
             </Button>
           </Link>
         </div>

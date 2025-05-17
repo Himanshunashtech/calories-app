@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, Mail, Lock, ExternalLink, UserPlus } from 'lucide-react';
-import { fakeLogin, getUserProfile, saveUserProfile, type UserProfile, isUserLoggedIn, isOnboardingComplete } from '@/lib/localStorage';
+import { fakeLogin, isUserLoggedIn, isOnboardingComplete } from '@/lib/localStorage';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -20,9 +20,11 @@ export default function LoginPage() {
   const { toast } = useToast();
 
   useEffect(() => {
+    // If user is already logged in and onboarded, go to dashboard
     if (isUserLoggedIn() && isOnboardingComplete()) {
       router.replace('/dashboard');
     }
+    // If logged in but not onboarded, this page is fine, or they might be redirected from /app layout
   }, [router]);
 
   const handleSubmit = (e: FormEvent) => {
@@ -30,15 +32,18 @@ export default function LoginPage() {
     setIsLoading(true);
 
     if (email && password) {
-      // fakeLogin now handles associating the email with the onboarding profile
-      // or creating a new one if none exists from onboarding.
-      fakeLogin(email); // This will also set onboardingComplete to true
+      fakeLogin(email); // This will set userLoggedIn = true and associate email with profile
 
       toast({
-        title: 'Account Ready & Logged In!',
-        description: 'Welcome to EcoAI Tracker!',
+        title: 'Login Successful!',
+        description: 'Welcome back!',
       });
-      router.push('/dashboard');
+
+      if (isOnboardingComplete()) {
+        router.push('/dashboard');
+      } else {
+        router.push('/onboarding');
+      }
     } else {
       toast({
         variant: 'destructive',
@@ -53,8 +58,8 @@ export default function LoginPage() {
     <Card className="shadow-2xl">
       <CardHeader className="text-center">
         <LogIn className="mx-auto h-10 w-10 text-primary mb-2" />
-        <CardTitle className="text-2xl font-bold text-primary">Set Up Your Account</CardTitle>
-        <CardDescription>Enter your email and a password to access your plan.</CardDescription>
+        <CardTitle className="text-2xl font-bold text-primary">Log In to Your Account</CardTitle>
+        <CardDescription>Access your EcoAI Calorie Tracker.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -94,7 +99,7 @@ export default function LoginPage() {
             </div>
           </div>
           <Button type="submit" className="w-full text-lg py-3" disabled={isLoading}>
-            {isLoading ? 'Setting Up...' : 'Continue to Dashboard'}
+            {isLoading ? 'Logging In...' : 'Log In'}
           </Button>
         </form>
         <div className="mt-4 relative">
@@ -103,7 +108,7 @@ export default function LoginPage() {
           </div>
           <div className="relative flex justify-center text-xs uppercase">
             <span className="bg-background px-2 text-muted-foreground">
-              Or (for existing users)
+              Or (for demo)
             </span>
           </div>
         </div>
@@ -113,9 +118,9 @@ export default function LoginPage() {
         </div>
       </CardContent>
       <CardFooter className="justify-center text-sm">
-        <p>Want to create a separate account?&nbsp;</p>
+        <p>Don't have an account?&nbsp;</p>
         <Link href="/signup" passHref>
-          <Button variant="link" className="p-0 h-auto"><UserPlus className="mr-1 h-4 w-4"/>Sign Up Separately</Button>
+          <Button variant="link" className="p-0 h-auto"><UserPlus className="mr-1 h-4 w-4"/>Sign Up</Button>
         </Link>
       </CardFooter>
     </Card>

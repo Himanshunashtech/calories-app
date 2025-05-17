@@ -51,7 +51,7 @@ export function addMealLog(entry: Omit<MealEntry, 'id' | 'date'>): MealEntry {
 export function updateMealLogWithMood(mealId: string, mood: 'happy' | 'neutral' | 'sad'): MealEntry | null {
   if (typeof window === 'undefined') return null;
   
-  const logs = getMealLogs(); // This already handles read errors
+  const logs = getMealLogs(); 
   const mealIndex = logs.findIndex(log => log.id === mealId);
   
   if (mealIndex !== -1) {
@@ -136,7 +136,7 @@ export function getAIScanUsage(): AIScanUsage {
 
 export function incrementAIScanCount(): void {
   if (typeof window === 'undefined') return;
-  const usage = getAIScanUsage(); // Handles read errors and reset logic
+  const usage = getAIScanUsage(); 
   usage.count += 1;
   try {
     localStorage.setItem(AI_SCAN_USAGE_KEY, JSON.stringify(usage));
@@ -149,7 +149,7 @@ export function canUseAIScan(plan: UserPlan): boolean {
   if (plan === 'pro' || plan === 'ecopro') {
     return true;
   }
-  // getAIScanUsage already handles localStorage errors and returns a default if needed.
+  
   const usage = getAIScanUsage();
   return usage.count < usage.limit;
 }
@@ -212,7 +212,7 @@ export function getUserProfile(): UserProfile | null {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
     if (profileJson) {
       const parsedProfile = JSON.parse(profileJson) as Partial<UserProfile>;
-      // Deep merge with defaults to ensure all properties exist
+      
       const completeProfile: UserProfile = {
         ...defaultUserProfile,
         ...parsedProfile,
@@ -232,10 +232,10 @@ export function getUserProfile(): UserProfile | null {
       };
       return completeProfile;
     }
-    return null; // No profile exists
+    return null; 
   } catch (error) {
     console.error(`Error reading '${USER_PROFILE_KEY}' from localStorage:`, error);
-    return null; // Return null on error
+    return null; 
   }
 }
 
@@ -253,7 +253,7 @@ const DEFAULT_DAILY_WATER_GOAL_GLASSES = 8;
 
 export function getWaterIntake(): WaterIntakeData {
   const today = new Date().toISOString().split('T')[0];
-  const profile = getUserProfile(); // Handles its own read errors
+  const profile = getUserProfile(); 
   const goalFromProfile = profile?.waterGoal || DEFAULT_DAILY_WATER_GOAL_GLASSES;
   const defaultIntake = { current: 0, goal: goalFromProfile, lastUpdatedDate: today };
 
@@ -279,7 +279,7 @@ export function getWaterIntake(): WaterIntakeData {
   }
   
   intake.goal = goalFromProfile; 
-  saveWaterIntake(intake); // Handles its own write errors
+  saveWaterIntake(intake); 
   return intake;
 }
 
@@ -293,23 +293,23 @@ export function saveWaterIntake(intake: WaterIntakeData): void {
 }
 
 export function addWater(amountInUnits: number = 1): WaterIntakeData {
-  const intake = getWaterIntake(); // Handles read errors
-  // Ensure goal is a positive number; if not, default to a reasonable value like 1
+  const intake = getWaterIntake(); 
+  
   const safeGoal = intake.goal > 0 ? intake.goal : DEFAULT_DAILY_WATER_GOAL_GLASSES;
   intake.current = Math.max(0, Math.min(intake.current + amountInUnits, safeGoal * 3)); 
-  saveWaterIntake(intake); // Handles write errors
+  saveWaterIntake(intake); 
   return intake;
 }
 
 export function getTodaysMealLogs(): MealEntry[] {
-  // getMealLogs handles its own read errors
+  
   const allLogs = getMealLogs();
   const todayISO = new Date().toISOString().split('T')[0];
   return allLogs.filter(log => log.date.startsWith(todayISO));
 }
 
 export function getRecentMealLogs(days: number = 7): MealEntry[] {
-  // getMealLogs handles its own read errors
+  
   const allLogs = getMealLogs();
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
@@ -326,47 +326,52 @@ export function isOnboardingComplete(): boolean {
   }
 }
 
+export function setOnboardingComplete(status: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(ONBOARDING_COMPLETE_KEY, status.toString());
+  } catch (error) {
+    console.error(`Error writing '${ONBOARDING_COMPLETE_KEY}' to localStorage:`, error);
+  }
+}
+
 export function fakeLogin(email: string): void {
     if (typeof window === 'undefined') return;
     
-    let profile = getUserProfile(); // Handles its own read errors
+    let profile = getUserProfile(); 
     
     if (profile) {
         profile = { ...profile, email: email };
     } else {
-        console.warn("fakeLogin: No existing profile found. Creating a new minimal profile.");
+        // If no profile exists at all, create a very basic one.
+        // This might happen if a user tries to log in without ever signing up or onboarding.
+        console.warn("fakeLogin: No existing profile found. Creating a new minimal profile for login.");
         profile = { 
             ...defaultUserProfile,
             email: email, 
-            name: 'New User', 
+            name: 'User', // Or derive from email if possible
         };
     }
-    saveUserProfile(profile); // Handles its own write errors
+    saveUserProfile(profile); 
 
     try {
         localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
     } catch (error) {
         console.error(`Error writing '${USER_LOGGED_IN_KEY}' to localStorage:`, error);
-    }
-    
-    if (!isOnboardingComplete()) { // Handles its own read errors
-        try {
-            localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
-        } catch (error) {
-            console.error(`Error writing '${ONBOARDING_COMPLETE_KEY}' to localStorage:`, error);
-        }
     }
 }
 
 export function fakeSignup(email: string, name: string): void {
     if (typeof window === 'undefined') return;
 
+    // Check if a profile with this email already exists. For a fake system, we might overwrite or just log.
+    // For simplicity, we'll create/overwrite.
     const newProfile: UserProfile = { 
-      ...defaultUserProfile,
+      ...defaultUserProfile, // Start with defaults
       email: email, 
       name: name,
     };
-    saveUserProfile(newProfile); // Handles its own write errors
+    saveUserProfile(newProfile); 
 
     try {
         localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
@@ -374,7 +379,8 @@ export function fakeSignup(email: string, name: string): void {
         console.error(`Error writing '${USER_LOGGED_IN_KEY}' to localStorage:`, error);
     }
     try {
-        localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'false'); // User signed up directly, needs onboarding
+        // Crucially, set onboarding to false after signup, so they are directed to onboarding.
+        localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'false'); 
     } catch (error) {
         console.error(`Error writing '${ONBOARDING_COMPLETE_KEY}' to localStorage:`, error);
     }
@@ -385,6 +391,8 @@ export function fakeLogout(): void {
     if (typeof window === 'undefined') return;
     try {
         localStorage.removeItem(USER_LOGGED_IN_KEY);
+        // Optionally, you might want to clear other session-specific data here,
+        // but not the entire user profile or meal logs unless that's the desired behavior.
     } catch (error) {
         console.error(`Error removing '${USER_LOGGED_IN_KEY}' from localStorage:`, error);
     }

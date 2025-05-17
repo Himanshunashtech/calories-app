@@ -25,8 +25,6 @@ export default function SignupPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // If user is already logged in and onboarded, redirect to dashboard
-    // This prevents re-accessing signup if already set up.
     if (isUserLoggedIn() && isOnboardingComplete()) {
       router.replace('/dashboard');
     }
@@ -49,6 +47,10 @@ export default function SignupPage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (!name.trim()) {
+      toast({ variant: 'destructive', title: 'Name Required', description: 'Please enter your name.' });
+      return;
+    }
     if (password !== confirmPassword) {
       toast({ variant: 'destructive', title: 'Passwords do not match' });
       return;
@@ -59,12 +61,11 @@ export default function SignupPage() {
     }
     setIsLoading(true);
     
-    fakeSignup(email, name); // Use fakeSignup
+    fakeSignup(email, name); 
     toast({
       title: 'Signup Successful!',
-      description: 'Welcome to EcoAI Tracker! Let\'s personalize your experience.',
+      description: "Welcome! Let's personalize your experience.",
     });
-    // After signup, user needs to go through onboarding if they used this direct signup page
     router.push('/onboarding'); 
   };
 

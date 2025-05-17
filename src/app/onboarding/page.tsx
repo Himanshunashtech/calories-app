@@ -13,12 +13,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, Coffee, CheckCircle, Leaf, Sparkles, Utensils, ShieldQuestion, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, CloudLightning, Users, Search } from 'lucide-react';
+import { User, Target, Salad, Coffee, CheckCircle, Leaf, Utensils, ShieldQuestion, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, CloudLightning, Users, Search, Sparkles as LucideSparklesIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
-import type { OnboardingData } from '@/types';
+import type { OnboardingData, UserProfile } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
-import { isUserLoggedIn, isOnboardingComplete } from '@/lib/localStorage';
+import { isUserLoggedIn, isOnboardingComplete, getUserProfile, saveUserProfile, setOnboardingComplete } from '@/lib/localStorage';
 
 const TOTAL_STEPS = 8; 
 
@@ -63,9 +63,25 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     setIsClient(true);
-    // If user is logged in AND onboarding is already complete, redirect them away.
-    if (isUserLoggedIn() && isOnboardingComplete()) {
-      router.replace('/dashboard');
+    if (!isUserLoggedIn()) {
+      router.replace('/login'); // If not logged in, cannot start onboarding
+      return;
+    }
+    if (isOnboardingComplete()) {
+      router.replace('/dashboard'); // If already onboarded, go to dashboard
+      return;
+    }
+    // Pre-fill from existing profile if available (e.g., if user logged in and then came here)
+    const existingProfile = getUserProfile();
+    if (existingProfile) {
+        setFormData(prev => ({
+            ...prev, // keep defaults for fields not in profile
+            ...existingProfile, // override with profile data
+            reminderSettings: { // deep merge reminders
+                ...prev.reminderSettings,
+                ...(existingProfile.reminderSettings || {})
+            }
+        }));
     }
   }, [router]);
 
@@ -125,7 +141,6 @@ export default function OnboardingPage() {
 
   const handleNext = () => {
     if (currentStep < TOTAL_STEPS) {
-      // Basic validation for current step before proceeding
       if (currentStep === 1 && (!formData.name || !formData.age || !formData.gender)) {
         toast({ variant: "destructive", title: "Missing fields", description: "Please fill in all basic details." });
         return;
@@ -158,19 +173,36 @@ export default function OnboardingPage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    console.log('Onboarding Data:', formData);
-    // Save onboarding data to a temporary key or directly to userProfile if structure allows
-    const existingProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
-    const userProfileData = { ...existingProfile, ...formData }; 
-    localStorage.setItem('userProfile', JSON.stringify(userProfileData));
-    // Do NOT set onboardingComplete here yet. It's set after login.
+    const existingProfile = getUserProfile();
+    if (existingProfile) {
+        const updatedProfile: UserProfile = {
+            ...existingProfile, // Keep existing email, etc.
+            ...formData, // Merge onboarding data
+            // Ensure reminderSettings and appSettings are merged properly if they exist
+            reminderSettings: {
+                ...(existingProfile.reminderSettings || {}),
+                ...formData.reminderSettings,
+            },
+            appSettings: {
+                ...(existingProfile.appSettings || {}),
+                // formData might not contain appSettings, so this is fine
+            }
+        };
+        saveUserProfile(updatedProfile);
+    } else {
+        // This case should ideally not happen if signup/login precedes onboarding
+        console.error("Onboarding: No existing profile found to update. This shouldn't happen in the new flow.");
+        saveUserProfile(formData as UserProfile); // Save as a new profile if somehow no profile exists
+    }
+    
+    setOnboardingComplete(true);
 
     toast({
-      title: 'Profile Setup Complete!',
+      title: 'Onboarding Complete!',
       description: "Let's choose a plan that's right for you.",
       action: <CheckCircle className="text-green-500" />,
     });
-    router.push('/subscription'); // Go to subscription page after onboarding
+    router.push('/subscription');
   };
 
   const progressValue = (currentStep / TOTAL_STEPS) * 100;
@@ -194,7 +226,7 @@ export default function OnboardingPage() {
             currentStep === 2 ? <BarChart3 className="h-10 w-10 text-primary"/> :
             currentStep === 3 ? <Target className="h-10 w-10 text-primary"/> :
             currentStep === 4 ? <Utensils className="h-10 w-10 text-primary"/> :
-            currentStep === 5 ? <Sparkles className="h-10 w-10 text-primary"/> :
+            currentStep === 5 ? <LucideSparklesIcon className="h-10 w-10 text-primary"/> :
             currentStep === 6 ? <HeartHandshake className="h-10 w-10 text-primary"/> :
             currentStep === 7 ? <BellRing className="h-10 w-10 text-primary"/> :
             <Leaf className="h-10 w-10 text-primary" />
@@ -209,10 +241,10 @@ export default function OnboardingPage() {
           { currentStep === 6 && "Lifestyle Habits"}
           { currentStep === 7 && "Notification Preferences"}
           { currentStep === TOTAL_STEPS && "Review & Get Started!"}
-          { currentStep > 1 && currentStep < TOTAL_STEPS && ` (Step ${currentStep-1}/${TOTAL_STEPS-2})`}
+          { currentStep > 1 && currentStep < TOTAL_STEPS && ` (Step ${currentStep}/${TOTAL_STEPS-1})`}
         </CardTitle>
         <CardDescription className="text-center">
-          { currentStep === 1 && "Track. Improve. Sustain. Let's personalize your journey."}
+          { currentStep === 1 && "Let's personalize your journey. Your name and age help us tailor recommendations."}
           { currentStep === 2 && "Tell us a bit about yourself for accurate tracking."}
           { currentStep === 3 && "What are you aiming to achieve? You can select multiple goals."}
           { currentStep === 4 && "Customize your diet and food preferences."}
@@ -434,7 +466,7 @@ export default function OnboardingPage() {
              {currentStep === 5 && (
               <section className="space-y-4 animate-in fade-in duration-500 text-center">
                  <div className="p-4 border rounded-lg bg-muted/30">
-                    <Sparkles className="h-12 w-12 text-primary mx-auto mb-3"/>
+                    <LucideSparklesIcon className="h-12 w-12 text-primary mx-auto mb-3"/>
                     <p className="font-semibold text-lg mb-2">Snap a Photo, Get Instant Insights!</p>
                     <img src="https://placehold.co/300x180.png?text=AI+Scan+Demo" alt="AI Feature Demo" data-ai-hint="app scanner food" className="rounded-md shadow-md mx-auto mb-3"/>
                     <p className="text-sm text-muted-foreground">Our AI (powered by Gemini) analyzes your meal photo to estimate calories, macros, and even micronutrients in seconds. Logging food has never been easier!</p>
@@ -573,7 +605,7 @@ export default function OnboardingPage() {
                 </Button>
               ) : (
                 <Button type="submit" className="ml-auto bg-green-600 hover:bg-green-700">
-                  Complete Profile & Select Plan <Smile className="ml-2 h-4 w-4"/>
+                  Complete Onboarding <Smile className="ml-2 h-4 w-4"/>
                 </Button>
               )}
             </CardFooter>
