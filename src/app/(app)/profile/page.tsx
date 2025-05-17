@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { getUserProfile, saveUserProfile, fakeLogout, type UserProfile, type ReminderSettings, type AppSettings } from '@/lib/localStorage';
-import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Repeat, Utensils, Vegan, Settings, Edit3, Cog, Palette, BarChartHorizontalBig, Droplet, LogOut, PieChart } from 'lucide-react';
+import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, Settings, Edit3, Cog, Palette, Droplet, LogOut, PieChart, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ALLERGY_OPTIONS } from '@/types';
@@ -137,7 +137,7 @@ export default function ProfilePage() {
   };
 
 
-  const handleSwitchChange = (name: keyof UserProfile | `appSettings.${keyof AppSettings}` | `reminderSettings.${keyof ReminderSettings}`) => (checked: boolean) => {
+  const handleSwitchChange = (name: keyof UserProfile | `reminderSettings.${keyof ReminderSettings}`) => (checked: boolean) => {
      if (name === 'enableCarbonTracking') {
       setProfile((prev) => ({ ...prev, enableCarbonTracking: checked }));
     } else if (name === 'alsoTrackSustainability') {
@@ -153,20 +153,13 @@ export default function ProfilePage() {
         reminderSettings: { ...(prev.reminderSettings || defaultProfile.reminderSettings!), mealRemindersEnabled: checked },
       }));
     } else {
-        // For appSettings, this should be handled in the settings page
         console.warn("Unhandled switch change on profile page:", name);
     }
   };
 
 
-  const handleSelectChange = (name: keyof UserProfile | `appSettings.unitPreferences.${'weight' | 'height' | 'volume'}`) => (value: string) => {
-    // App unit preferences are managed on the App Settings page
-    // This function on the profile page should only handle profile-specific selects
-    if (!name.startsWith('appSettings.unitPreferences.')) {
-         setProfile((prev) => ({ ...prev, [name as keyof UserProfile]: value as any }));
-    } else {
-        console.warn("Unit preferences should be changed on the App Settings page.");
-    }
+  const handleSelectChange = (name: keyof UserProfile) => (value: string) => {
+    setProfile((prev) => ({ ...prev, [name]: value as any }));
   };
   
   const handleDietaryRestrictionChange = (restriction: string) => (checked: boolean) => {
@@ -429,6 +422,10 @@ export default function ProfilePage() {
             <Cog className="mr-2 h-5 w-5"/>
             Go to App Settings
           </Button>
+          <Button onClick={() => router.push('/app/meal-planner')} className="w-full" variant="outline">
+            <CalendarDays className="mr-2 h-5 w-5"/>
+            Go to Meal Planner
+          </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" className="w-full">
@@ -455,5 +452,6 @@ export default function ProfilePage() {
     </div>
   );
 }
-
     
+
+      
