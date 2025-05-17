@@ -1,14 +1,15 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { AppLogo } from '@/components/AppLogo';
-import { getIsAdmin, fakeLogout, setIsAdmin } from '@/lib/localStorage';
-import { Shield, LayoutDashboard, Users, LogOut } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import { LayoutDashboard, Users, LogOut, ShieldAlert } from 'lucide-react';
+import { fakeLogout, getIsAdmin } from '@/lib/localStorage';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AdminLayout({
   children,
@@ -16,71 +17,62 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    const adminStatus = getIsAdmin();
-    if (!adminStatus) {
+    if (!getIsAdmin()) {
+      toast({
+        title: 'Access Denied',
+        description: 'You do not have permission to access the admin panel.',
+        variant: 'destructive',
+      });
       router.replace('/login');
-    } else {
-      setIsAuthorized(true);
     }
-    setIsLoading(false);
-  }, [router]);
+  }, [router, toast]);
 
   const handleAdminLogout = () => {
-    setIsAdmin(false); // Clear admin flag first
-    fakeLogout();     // Then perform general logout
+    fakeLogout();
+    toast({ title: 'Admin Logged Out' });
     router.push('/login');
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col min-h-screen items-center justify-center bg-muted/50">
-        <LayoutDashboard className="h-12 w-12 animate-pulse text-primary mb-4" />
-        <p className="text-muted-foreground">Loading Admin Panel...</p>
-      </div>
-    );
-  }
-
-  if (!isAuthorized) {
-    // This state should ideally not be reached if redirect works, but as a fallback.
-    return (
-         <div className="flex flex-col min-h-screen items-center justify-center bg-muted/50">
-            <Shield className="h-12 w-12 text-destructive mb-4" />
-            <p className="text-destructive font-semibold">Access Denied</p>
-            <Link href="/login" passHref>
-                <Button variant="link" className="mt-2">Go to Login</Button>
-            </Link>
-        </div>
-    );
+  
+  if (!getIsAdmin()) {
+    // Render nothing or a loader while redirecting
+    return null; 
   }
 
   return (
     <div className="flex min-h-screen bg-muted/40">
-      <aside className="w-64 bg-background border-r p-4 space-y-6 flex flex-col">
-        <div className="flex items-center justify-center border-b pb-4">
-            <AppLogo /> <span className="ml-2 font-semibold text-sm">Admin</span>
+      <aside className="hidden md:flex flex-col w-64 border-r bg-background p-4 space-y-4">
+        <div className="mb-4">
+          <AppLogo />
         </div>
-        <nav className="flex-grow space-y-2">
+        <nav className="flex-grow space-y-1">
           <Link href="/admin/dashboard" passHref>
             <Button variant="ghost" className="w-full justify-start">
-              <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
+              <LayoutDashboard className="mr-2 h-4 w-4" />
+              Dashboard
             </Button>
           </Link>
           <Link href="/admin/users" passHref>
             <Button variant="ghost" className="w-full justify-start">
-              <Users className="mr-2 h-4 w-4" /> User Management
+              <Users className="mr-2 h-4 w-4" />
+              User Management
             </Button>
           </Link>
-          {/* Add more admin navigation links here */}
         </nav>
-        <Button variant="outline" className="w-full mt-auto" onClick={handleAdminLogout}>
-          <LogOut className="mr-2 h-4 w-4" /> Log Out
-        </Button>
+        <div className="mt-auto">
+          <div className="p-3 mb-2 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 rounded-md text-xs">
+            <ShieldAlert className="inline h-4 w-4 mr-1" />
+            This is a demo admin panel with limited security.
+          </div>
+          <Button variant="outline" className="w-full" onClick={handleAdminLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Admin Logout
+          </Button>
+        </div>
       </aside>
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-6">
         {children}
       </main>
     </div>
