@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -12,7 +12,7 @@ import { Utensils, Search, Filter, Leaf, Sparkles, ArrowRight, ChefHat, BarChart
 import { getSelectedPlan, type UserPlan, getUserProfile, type UserProfile } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge'; // Added import for Badge
+import { Badge } from '@/components/ui/badge';
 
 // Placeholder recipe data
 const placeholderRecipes = [
@@ -35,8 +35,8 @@ const premiumRecipes = [
 
 export default function RecipesPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [dietFilter, setDietFilter] = useState('');
-  const [ecoFilter, setEcoFilter] = useState('');
+  const [dietFilter, setDietFilter] = useState(''); // Empty string means no filter / show placeholder
+  const [ecoFilter, setEcoFilter] = useState('');   // Empty string means no filter / show placeholder
   const [userPlan, setUserPlan] = useState<UserPlan>('free');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isClient, setIsClient] = useState(false);
@@ -50,13 +50,13 @@ export default function RecipesPage() {
 
   const availableRecipes = userPlan === 'free' ? placeholderRecipes.slice(0,5) : premiumRecipes;
 
-  const filteredRecipes = availableRecipes.filter(recipe => {
+  const filteredRecipes = useMemo(() => availableRecipes.filter(recipe => {
     const searchMatch = recipe.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                         recipe.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         recipe.ingredients.join(' ').toLowerCase().includes(searchTerm.toLowerCase());
     
-    const dietMatch = dietFilter === '' || recipe.dietTags.includes(dietFilter);
-    const ecoMatch = ecoFilter === '' || recipe.ecoScore === ecoFilter;
+    const dietMatch = dietFilter === '' || dietFilter === 'all' || recipe.dietTags.includes(dietFilter);
+    const ecoMatch = ecoFilter === '' || ecoFilter === 'all' || recipe.ecoScore === ecoFilter;
     
     let restrictionMatch = true;
     if (userProfile?.appSettings?.hideNonCompliantRecipes && userProfile.dietaryRestrictions && userProfile.dietaryRestrictions.length > 0) {
@@ -65,17 +65,17 @@ export default function RecipesPage() {
       
       restrictionMatch = !userProfile.dietaryRestrictions.some(restriction => {
         const lowerRestriction = restriction.toLowerCase();
-        // A simple check: if the restriction keyword is part of the recipe's ingredients or tags
-        // This is a basic implementation and might need refinement for accuracy (e.g., "gluten" vs "gluten-free")
         if (lowerRestriction === 'gluten' && recipeDietTagsString.includes('gluten-free')) {
-          return false; // Don't hide if it's explicitly gluten-free
+          return false; 
         }
+        // A more robust check would involve parsing ingredients and checking against a known list of allergens
+        // For now, a simple includes check. Also, check if the diet tag IS the restriction.
         return recipeIngredientsString.includes(lowerRestriction) || recipeDietTagsString.includes(lowerRestriction);
       });
     }
 
     return searchMatch && dietMatch && ecoMatch && restrictionMatch;
-  });
+  }), [availableRecipes, searchTerm, dietFilter, ecoFilter, userProfile]);
   
   const handleSurpriseMe = () => {
     if (filteredRecipes.length > 0) {
@@ -117,7 +117,7 @@ export default function RecipesPage() {
           <CardDescription>
             Discover delicious and sustainable meals. 
             {userPlan === 'free' && ` You're viewing 5 complimentary recipes. Upgrade to Pro or EcoPro for 50+ premium recipes!`}
-            {userProfile?.appSettings?.hideNonCompliantRecipes && " Recipes that don't match your dietary restrictions are hidden."}
+            {userProfile?.appSettings?.hideNonCompliantRecipes && " Recipes that may not match your dietary restrictions are hidden."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -137,7 +137,7 @@ export default function RecipesPage() {
                 <SelectValue placeholder="Filter by Diet" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Diets</SelectItem>
+                <SelectItem value="all">All Diets</SelectItem>
                 <SelectItem value="vegan">Vegan</SelectItem>
                 <SelectItem value="vegetarian">Vegetarian</SelectItem>
                 <SelectItem value="pescatarian">Pescatarian</SelectItem>
@@ -150,7 +150,7 @@ export default function RecipesPage() {
                 <SelectValue placeholder="Filter by Eco-Score" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Eco-Scores</SelectItem>
+                <SelectItem value="all">All Eco-Scores</SelectItem>
                 <SelectItem value="A">A (Very Low Impact)</SelectItem>
                 <SelectItem value="B">B (Low Impact)</SelectItem>
                 <SelectItem value="C">C (Moderate Impact)</SelectItem>
@@ -212,5 +212,4 @@ export default function RecipesPage() {
     </div>
   );
 }
-
     
