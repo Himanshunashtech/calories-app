@@ -76,7 +76,7 @@ export default function DashboardPage() {
 
     if (currentPlan === 'pro' || currentPlan === 'ecopro') {
       setIsLoadingAI(prev => ({ ...prev, trends: true, coach: true }));
-      analyzeNutrientTrends({ recentMeals: recentMealsForTrends.map(m => ({...m, date: m.date})), userHealthGoals: profile.healthGoals })
+      analyzeNutrientTrends({ recentMeals: recentMealsForTrends.map(m => ({...m, date: m.date, detailedNutrients: m.detailedNutrients || {}})), userHealthGoals: profile.healthGoals })
         .then(setNutrientTrend).catch(err => console.error("Error fetching nutrient trends:", err))
         .finally(() => setIsLoadingAI(prev => ({ ...prev, trends: false })));
       
@@ -89,7 +89,7 @@ export default function DashboardPage() {
       setIsLoadingAI(prev => ({ ...prev, carbon: true, mood: true }));
       
       if (profile.enableCarbonTracking) { // Check if user enabled carbon tracking
-        getCarbonComparison({ userMeals: allMealsForCarbon.filter(m => m.carbonFootprintEstimate !== undefined) })
+        getCarbonComparison({ userMeals: allMealsForCarbon.filter(m => m.carbonFootprintEstimate !== undefined).map(m => ({...m, date: m.date, carbonFootprintEstimate: m.carbonFootprintEstimate})) })
           .then(setCarbonComparison).catch(err => console.error("Error fetching carbon comparison:", err))
           .finally(() => setIsLoadingAI(prev => ({ ...prev, carbon: false })));
       } else {
@@ -98,7 +98,7 @@ export default function DashboardPage() {
       }
 
       if(mealsWithMood.length >= 3) { 
-        analyzeFoodMoodCorrelation({ mealsWithMood: mealsWithMood.map(m => ({...m, date:m.date})) })
+        analyzeFoodMoodCorrelation({ mealsWithMood: mealsWithMood.map(m => ({...m, date:m.date, mood: m.mood!})) })
           .then(setFoodMoodInsights).catch(err => console.error("Error fetching food-mood insights:", err))
           .finally(() => setIsLoadingAI(prev => ({ ...prev, mood: false })));
       } else {
@@ -147,6 +147,77 @@ export default function DashboardPage() {
     if (calorieProgressPercentage < 100) return 'bg-yellow-500';
     return 'bg-destructive';
   };
+
+  const handleAddWater = (amount: number) => {
+    const newIntake = addWater(amount);
+    setWaterIntake(newIntake);
+    toast({
+      title: amount === 1 ? "+1 Glass Water Logged" : `+${amount*2}/2 Glass Water Logged`,
+      description: `Current: ${newIntake.current}/${newIntake.goal} glasses. Keep it up!`,
+    });
+  };
+
+  const handleGenerateMealPlan = useCallback(async () => {
+    if (!userProfile) {
+      toast({ variant: "destructive", title: "Profile needed", description: "Please complete your profile first."});
+      return;
+    }
+    setIsLoadingAI(prev => ({ ...prev, mealPlan: true }));
+    try {
+      const planOutput = await generateEcoMealPlan({
+        userProfile: {
+          dietType: userProfile.dietType,
+          healthGoals: userProfile.healthGoals,
+          dietaryRestrictions: userProfile.dietaryRestrictions,
+        },
+        durationDays: 3,
+      });
+      setEcoMealPlan(planOutput);
+      toast({ title: "Eco Meal Plan Generated!", description: "Check out your new 3-day plan." });
+    } catch (error) {
+      console.error("Error generating meal plan:", error);
+      toast({ variant: "destructive", title: "Meal Plan Error", description: "Could not generate meal plan." });
+    } finally {
+      setIsLoadingAI(prev => ({ ...prev, mealPlan: false }));
+    }
+  }, [userProfile, toast]);
+
+  const handleLogMood = useCallback(async (mood: 'happy' | 'neutral' | 'sad') => {
+    if (todaysMealLogs.length === 0) {
+        toast({title: "Log a Meal First", description: "Log your latest meal before recording mood for best insights.", variant: "default"});
+    }
+    
+    const lastMeal = todaysMealLogs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    if (lastMeal) {
+      updateMealLogWithMood(lastMeal.id, mood);
+      toast({ title: `Mood logged: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`, description: "AI will analyze correlations soon." });
+    } else {
+       // If no meal today, perhaps we log a general mood or just inform the user
+       toast({ title: `Mood logged: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`, description: "Consider logging meals to correlate with mood." });
+    }
+
+    refreshMealLogs(); // This will also re-trigger fetchDashboardData if mood is part of its dependency.
+
+    // Immediately try to fetch new insights if enough mood data exists
+    const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood);
+    if (mealsWithMood.length >= 3 && userProfile) {
+      setIsLoadingAI(prev => ({ ...prev, mood: true }));
+      analyzeFoodMoodCorrelation({ mealsWithMood: mealsWithMood.map(m => ({...m, date:m.date, mood: m.mood!})) })
+          .then(setFoodMoodInsights)
+          .catch(err => console.error("Error fetching food-mood insights after mood log:", err))
+          .finally(() => setIsLoadingAI(prev => ({ ...prev, mood: false })));
+    } else if (userProfile) { // Still update with potentially insufficient data message
+        setFoodMoodInsights({ insights: ["Log mood after a few more meals to discover potential patterns with your diet!"], sufficientData: false });
+    }
+  }, [todaysMealLogs, userProfile, toast, refreshMealLogs]);
+
+
+  const scansUsedPercentage = useMemo(() => {
+    if (aiScanUsage && aiScanUsage.limit > 0) {
+      return Math.min((aiScanUsage.count / aiScanUsage.limit) * 100, 100);
+    }
+    return 0;
+  }, [aiScanUsage]);
   
   const nutrientDataPlaceholders = [
     { name: 'Iron', value: 0, actualValue: 0, low: true, icon: Shell, tip: "Analyze meals to see Iron levels.", unit: "mg" },
@@ -425,3 +496,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
