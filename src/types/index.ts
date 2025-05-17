@@ -43,7 +43,7 @@ export interface OnboardingData {
   sleepHours: string;
   stressLevel: string;
   // Fields that might exist in old onboarding but not explicitly in new form:
-  waterIntake?: string;
+  waterIntake?: string; // This was for onboarding, distinct from daily tracking
   enjoysCooking?: string;
 }
 
@@ -51,4 +51,10 @@ export interface UserProfile extends OnboardingData {
   email?: string;
   phone?: string;
   profileImageUri?: string | null;
+}
+
+export interface WaterIntakeData {
+  current: number; // in glasses or oz
+  goal: number; // in glasses or oz
+  lastUpdatedDate: string; // ISO date string YYYY-MM-DD
 }
