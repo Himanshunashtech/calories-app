@@ -2,7 +2,7 @@
 import { Button } from '@/components/ui/button';
 import { AppLogo } from '@/components/AppLogo';
 import Link from 'next/link';
-// Image import removed as it's replaced by model-viewer
+import Image from 'next/image'; // Import next/image
 import { Leaf, Zap, BarChart3, LogIn } from 'lucide-react';
 
 export default function LandingPage() {
@@ -13,17 +13,16 @@ export default function LandingPage() {
       </header>
 
       <main className="flex flex-col items-center">
-        <div className="w-full max-w-sm h-80 md:h-96 mb-8">
-          {/* @ts-ignore next-line  Necessary because model-viewer is a custom element and TS might not recognize it without global declaration */}
-          <model-viewer
-            src="https://modelviewer.dev/shared-assets/models/Astronaut.glb"
-            alt="A 3D model of an astronaut"
-            camera-controls
-            auto-rotate
-            shadow-intensity="1"
-            style={{ width: '100%', height: '100%', backgroundColor: 'transparent' }}
-            data-ai-hint="astronaut space"
-          ></model-viewer>
+        <div className="w-full max-w-md h-auto mb-8 rounded-lg overflow-hidden shadow-xl">
+          <Image
+            src="https://placehold.co/600x400.png"
+            alt="EcoAI Calorie Tracker App Hero Image"
+            width={600}
+            height={400}
+            className="object-cover"
+            data-ai-hint="healthy food app"
+            priority // Add priority for LCP
+          />
         </div>
         <h1 className="text-4xl font-bold text-primary mb-4">
           Welcome to EcoAI Calorie Tracker

@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
-import Script from 'next/script'; // Import Script component
+// Script import removed
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -30,12 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head> {/* Added head tag to include scripts */}
-        <Script
-          type="module"
-          src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
-          strategy="beforeInteractive" // Load before page becomes interactive
-        />
+      <head> {/* Removed model-viewer script */}
       </head>
       <body
         className={cn(
