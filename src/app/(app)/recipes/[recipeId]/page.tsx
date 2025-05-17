@@ -39,7 +39,8 @@ export default function RecipeDetailPage() {
     setUserProfile(getUserProfile());
     if (params.recipeId) {
       // In a real app, check if user has access to premium recipes
-      const allRecipes = placeholderRecipes.concat(premiumRecipes.filter(pr => !placeholderRecipes.find(r => r.id === pr.id)));
+      // For this placeholder, placeholderRecipes contains all detailed recipes.
+      const allRecipes = placeholderRecipes;
       const foundRecipe = allRecipes.find(r => r.id === params.recipeId);
       setRecipe(foundRecipe || null);
     }
