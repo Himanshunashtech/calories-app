@@ -13,46 +13,36 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, Coffee, CheckCircle, Leaf, Sparkles } from 'lucide-react';
+import { User, Target, Salad, Coffee, CheckCircle, Leaf, Sparkles, Utensils, ShieldQuestion, HeartHandshake } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
+import type { OnboardingData } from '@/types';
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6; // Increased total steps
 
-interface FormData {
-  name: string;
-  age: string;
-  gender: string;
-  height: string;
-  heightUnit: string;
-  weight: string;
-  weightUnit: string;
-  activityLevel: string;
-  healthGoals: string[];
-  exerciseFrequency: string;
-  dietaryRestrictions: string;
-  dietType: string;
-  sleepHours: string;
-  stressLevel: string;
-}
+const defaultFormData: OnboardingData = {
+  name: '',
+  age: '',
+  gender: '',
+  height: '',
+  heightUnit: 'cm',
+  weight: '',
+  weightUnit: 'kg',
+  activityLevel: '',
+  healthGoals: [],
+  exerciseFrequency: '',
+  dietType: '',
+  dietaryRestrictions: '',
+  favoriteCuisines: '',
+  dislikedIngredients: '',
+  enableCarbonTracking: false,
+  sleepHours: '',
+  stressLevel: '',
+};
 
 export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<FormData>({
-    name: '',
-    age: '',
-    gender: '',
-    height: '',
-    heightUnit: 'cm',
-    weight: '',
-    weightUnit: 'kg',
-    activityLevel: '',
-    healthGoals: [],
-    exerciseFrequency: '',
-    dietaryRestrictions: '',
-    dietType: '',
-    sleepHours: '',
-    stressLevel: '',
-  });
+  const [formData, setFormData] = useState<OnboardingData>(defaultFormData);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
@@ -76,11 +66,15 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleSelectChange = (name: keyof FormData) => (value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const handleSwitchChange = (name: keyof OnboardingData) => (checked: boolean) => {
+    setFormData((prev) => ({ ...prev, [name]: checked }));
+  };
+
+  const handleSelectChange = (name: keyof OnboardingData) => (value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value as any }));
   };
   
-  const handleRadioChange = (name: keyof FormData) => (value: string) => {
+  const handleRadioChange = (name: keyof OnboardingData) => (value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -92,18 +86,19 @@ export default function OnboardingPage() {
         toast({ variant: "destructive", title: "Missing fields", description: "Please fill in all personal details." });
         return;
       }
-       if (currentStep === 2 && (!formData.activityLevel || formData.healthGoals.length === 0 || !formData.exerciseFrequency)) {
+      if (currentStep === 2 && (!formData.activityLevel || formData.healthGoals.length === 0 || !formData.exerciseFrequency)) {
         toast({ variant: "destructive", title: "Missing fields", description: "Please complete all fields for goals and activity." });
         return;
       }
-      if (currentStep === 3 && (!formData.dietType)) { // dietaryRestrictions can be empty
+      if (currentStep === 3 && !formData.dietType) {
         toast({ variant: "destructive", title: "Missing fields", description: "Please select your diet type." });
         return;
       }
-       if (currentStep === 4 && (!formData.sleepHours || !formData.stressLevel)) {
+      if (currentStep === 4 && (!formData.sleepHours || !formData.stressLevel)) {
         toast({ variant: "destructive", title: "Missing fields", description: "Please complete all lifestyle fields." });
         return;
       }
+      // No specific validation for step 5 (Eco Mission placeholder) yet
       setCurrentStep((prev) => prev + 1);
     }
   };
@@ -117,15 +112,19 @@ export default function OnboardingPage() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     console.log('Onboarding Data:', formData);
-    localStorage.setItem('onboardingData', JSON.stringify(formData));
+    // Save to new UserProfile structure
+    const existingProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
+    const userProfileData = { ...existingProfile, ...formData }; // Merge, onboarding data takes precedence for its fields
+    localStorage.setItem('userProfile', JSON.stringify(userProfileData));
     localStorage.setItem('onboardingComplete', 'true');
+
 
     toast({
       title: 'Onboarding Complete!',
       description: "Let's choose a plan that's right for you.",
       action: <CheckCircle className="text-green-500" />,
     });
-    router.push('/subscription'); // Redirect to the subscription page
+    router.push('/subscription');
   };
 
   const progressValue = (currentStep / TOTAL_STEPS) * 100;
@@ -136,6 +135,7 @@ export default function OnboardingPage() {
     { id: 'maintain-weight', label: 'Maintain Weight' },
     { id: 'eat-healthier', label: 'Eat Healthier' },
     { id: 'improve-energy', label: 'Improve Energy Levels' },
+    { id: 'track-sustainability', label: 'Track Sustainability Impact'},
   ];
 
 
@@ -155,7 +155,17 @@ export default function OnboardingPage() {
       </CardHeader>
 
       <CardContent>
-        {isClient ? (
+        {!isClient ? (
+           <div className="space-y-6">
+            <div className="h-10 bg-muted rounded-md animate-pulse"></div>
+            <div className="h-10 bg-muted rounded-md animate-pulse"></div>
+            <div className="h-10 bg-muted rounded-md animate-pulse"></div>
+             <div className="flex justify-between mt-8">
+                <div className="h-10 w-20 bg-muted rounded-md animate-pulse"></div>
+                <div className="h-10 w-20 bg-muted rounded-md animate-pulse ml-auto"></div>
+            </div>
+          </div>
+        ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {currentStep === 1 && (
               <section className="space-y-4 animate-in fade-in duration-500">
@@ -263,12 +273,8 @@ export default function OnboardingPage() {
 
             {currentStep === 3 && (
               <section className="space-y-4 animate-in fade-in duration-500">
-                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Salad className="h-6 w-6" /> Dietary Habits</h3>
-                <div>
-                  <Label htmlFor="dietaryRestrictions">Any dietary restrictions or allergies? (e.g., gluten-free, lactose intolerant, nut allergy)</Label>
-                  <Textarea id="dietaryRestrictions" name="dietaryRestrictions" value={formData.dietaryRestrictions} onChange={handleChange} placeholder="List any relevant restrictions" />
-                </div>
-                <div>
+                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Utensils className="h-6 w-6" /> Diet Preferences</h3>
+                 <div>
                   <Label htmlFor="dietType">Are you following any specific diet?</Label>
                   <Select name="dietType" value={formData.dietType} onValueChange={handleSelectChange('dietType')}>
                     <SelectTrigger id="dietType"><SelectValue placeholder="Select diet type" /></SelectTrigger>
@@ -279,24 +285,37 @@ export default function OnboardingPage() {
                       <SelectItem value="keto">Keto</SelectItem>
                       <SelectItem value="paleo">Paleo</SelectItem>
                       <SelectItem value="pescatarian">Pescatarian</SelectItem>
+                      <SelectItem value="mediterranean">Mediterranean</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>How much water do you aim to drink daily?</Label>
-                  <RadioGroup name="waterIntake" defaultValue="moderate" className="mt-2 space-y-1"> {/* Note: This field is not in FormData state for brevity, add if needed */}
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="low" id="water_low" /><Label htmlFor="water_low">Less than 1 liter</Label></div>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="moderate" id="water_moderate" /><Label htmlFor="water_moderate">1-2 liters</Label></div>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="high" id="water_high" /><Label htmlFor="water_high">More than 2 liters</Label></div>
-                    </RadioGroup>
+                  <Label htmlFor="dietaryRestrictions">Any dietary restrictions or allergies? (e.g., gluten-free, lactose intolerant, nut allergy)</Label>
+                  <Textarea id="dietaryRestrictions" name="dietaryRestrictions" value={formData.dietaryRestrictions} onChange={handleChange} placeholder="List any relevant restrictions" />
+                </div>
+                <div>
+                  <Label htmlFor="favoriteCuisines">Favorite Cuisines (Optional)</Label>
+                  <Input id="favoriteCuisines" name="favoriteCuisines" value={formData.favoriteCuisines} onChange={handleChange} placeholder="E.g., Italian, Mexican, Indian" />
+                </div>
+                <div>
+                  <Label htmlFor="dislikedIngredients">Disliked Ingredients (Optional)</Label>
+                  <Input id="dislikedIngredients" name="dislikedIngredients" value={formData.dislikedIngredients} onChange={handleChange} placeholder="E.g., Cilantro, Olives, Mushrooms" />
+                </div>
+                 <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
+                  <Label htmlFor="enableCarbonTracking" className="flex flex-col">
+                    <span>Enable Carbon Tracking?</span>
+                    <span className="text-xs text-muted-foreground">Track the environmental impact of your meals (EcoPro feature).</span>
+                  </Label>
+                  <Switch id="enableCarbonTracking" checked={formData.enableCarbonTracking} onCheckedChange={handleSwitchChange('enableCarbonTracking')} />
                 </div>
               </section>
             )}
             
             {currentStep === 4 && (
               <section className="space-y-4 animate-in fade-in duration-500">
-                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Coffee className="h-6 w-6" /> Lifestyle</h3>
+                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><ShieldQuestion className="h-6 w-6" /> Lifestyle</h3>
                 <div>
                   <Label htmlFor="sleepHours">On average, how many hours of sleep do you get per night?</Label>
                   <Select name="sleepHours" value={formData.sleepHours} onValueChange={handleSelectChange('sleepHours')}>
@@ -317,14 +336,23 @@ export default function OnboardingPage() {
                       <div className="flex items-center space-x-2"><RadioGroupItem value="high" id="stress_high" /><Label htmlFor="stress_high">High</Label></div>
                     </RadioGroup>
                 </div>
-                  <div>
-                  <Label>Do you enjoy cooking?</Label>
-                  <RadioGroup name="enjoysCooking" defaultValue="sometimes" className="mt-2 space-y-1">  {/* Note: This field is not in FormData state for brevity, add if needed */}
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="cook_yes" /><Label htmlFor="cook_yes">Yes, I love it!</Label></div>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="sometimes" id="cook_sometimes" /><Label htmlFor="cook_sometimes">Sometimes</Label></div>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="cook_no" /><Label htmlFor="cook_no">Not really</Label></div>
-                    </RadioGroup>
+              </section>
+            )}
+
+            {currentStep === 5 && (
+               <section className="space-y-4 animate-in fade-in duration-500 text-center">
+                <h3 className="text-xl font-semibold flex items-center justify-center gap-2 text-primary"><HeartHandshake className="h-8 w-8" /> Our Eco Mission</h3>
+                <p className="text-muted-foreground">
+                  At EcoAI, we believe that healthy living and a healthy planet go hand-in-hand. 
+                  By making conscious food choices, you're not just nurturing your body, but also contributing to a more sustainable future.
+                </p>
+                <div className="p-4 bg-primary/10 rounded-lg">
+                    <Leaf className="h-10 w-10 text-primary mx-auto mb-2"/>
+                    <p className="font-semibold text-primary">Join thousands of users reducing their carbon footprint, one meal at a time!</p>
                 </div>
+                <p className="text-sm text-muted-foreground">
+                    Features like carbon tracking and eco-friendly recipe suggestions are designed to empower you on this journey.
+                </p>
               </section>
             )}
 
@@ -332,7 +360,7 @@ export default function OnboardingPage() {
               <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><CheckCircle className="h-6 w-6" /> Review & Confirm</h3>
                 <p className="text-muted-foreground">Please review your information before we create your personalized plan.</p>
-                <div className="space-y-2 border p-4 rounded-md bg-muted/30 max-h-96 overflow-y-auto">
+                <div className="space-y-2 border p-4 rounded-md bg-muted/30 max-h-96 overflow-y-auto text-sm">
                   <p><strong>Name:</strong> {formData.name}</p>
                   <p><strong>Age:</strong> {formData.age}</p>
                   <p><strong>Gender:</strong> {formData.gender}</p>
@@ -341,8 +369,11 @@ export default function OnboardingPage() {
                   <p><strong>Activity Level:</strong> {formData.activityLevel}</p>
                   <p><strong>Health Goals:</strong> {formData.healthGoals.join(', ')}</p>
                   <p><strong>Exercise Frequency:</strong> {formData.exerciseFrequency}</p>
-                  <p><strong>Dietary Restrictions:</strong> {formData.dietaryRestrictions || 'None'}</p>
                   <p><strong>Diet Type:</strong> {formData.dietType}</p>
+                  <p><strong>Dietary Restrictions:</strong> {formData.dietaryRestrictions || 'None'}</p>
+                  <p><strong>Favorite Cuisines:</strong> {formData.favoriteCuisines || 'None specified'}</p>
+                  <p><strong>Disliked Ingredients:</strong> {formData.dislikedIngredients || 'None specified'}</p>
+                  <p><strong>Enable Carbon Tracking:</strong> {formData.enableCarbonTracking ? 'Yes' : 'No'}</p>
                   <p><strong>Sleep per night:</strong> {formData.sleepHours}</p>
                   <p><strong>Stress Level:</strong> {formData.stressLevel}</p>
                 </div>
@@ -354,11 +385,9 @@ export default function OnboardingPage() {
             )}
 
             <CardFooter className="flex justify-between mt-8 p-0">
-              {currentStep > 1 && (
-                <Button type="button" variant="outline" onClick={handlePrevious}>
-                  Previous
-                </Button>
-              )}
+              <Button type="button" variant="outline" onClick={handlePrevious} disabled={currentStep === 1}>
+                Previous
+              </Button>
               {currentStep < TOTAL_STEPS ? (
                 <Button type="button" onClick={handleNext} className="ml-auto">
                   Next
@@ -370,16 +399,6 @@ export default function OnboardingPage() {
               )}
             </CardFooter>
           </form>
-        ) : (
-          <div className="space-y-6">
-            <div className="h-10 bg-muted rounded-md animate-pulse"></div>
-            <div className="h-10 bg-muted rounded-md animate-pulse"></div>
-            <div className="h-10 bg-muted rounded-md animate-pulse"></div>
-             <div className="flex justify-between mt-8">
-                <div className="h-10 w-20 bg-muted rounded-md animate-pulse"></div>
-                <div className="h-10 w-20 bg-muted rounded-md animate-pulse ml-auto"></div>
-            </div>
-          </div>
         )}
       </CardContent>
     </Card>

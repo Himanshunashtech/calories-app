@@ -1,10 +1,10 @@
 
-import type { MealEntry, UserPlan, AIScanUsage, UserProfile, OnboardingData, WaterIntakeData, ReminderSettings, MealCategory } from '@/types';
+import type { MealEntry, UserPlan, AIScanUsage, UserProfile, OnboardingData, WaterIntakeData, ReminderSettings, MealCategory, AppSettings } from '@/types';
 
 const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
 const SELECTED_PLAN_KEY = 'selectedPlan';
 const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage';
-const ONBOARDING_DATA_KEY = 'onboardingData'; // Old key
+const ONBOARDING_DATA_KEY = 'onboardingData'; // Old key, for migration
 const USER_PROFILE_KEY = 'userProfile'; // New consolidated key
 const WATER_INTAKE_KEY = 'ecoAi_waterIntake';
 
@@ -36,7 +36,7 @@ export function addMealLog(entry: Omit<MealEntry, 'id' | 'date'>): MealEntry {
     ...entry,
     id: Math.random().toString(36).substring(2, 15),
     date: new Date().toISOString(),
-    category: entry.category || undefined,
+    category: entry.category, // category should be passed
   };
   logs.push(newEntry);
   try {
@@ -136,67 +136,84 @@ const defaultReminderSettings: ReminderSettings = {
   waterReminderInterval: 60,
 };
 
+const defaultAppSettings: AppSettings = {
+  darkModeEnabled: false,
+  unitPreferences: {
+    weight: 'kg',
+    height: 'cm',
+  }
+};
+
 export function getUserProfile(): UserProfile | null {
   if (typeof window === 'undefined') return null;
   try {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
-    let existingProfile: Partial<UserProfile> = {};
+    let existingProfileData: Partial<OnboardingData & UserProfile> = {};
 
     if (profileJson) {
-      existingProfile = JSON.parse(profileJson) as UserProfile;
+      existingProfileData = JSON.parse(profileJson) as UserProfile;
     } else {
+      // Try to migrate from old onboardingData
       const onboardingJson = localStorage.getItem(ONBOARDING_DATA_KEY);
       if (onboardingJson) {
         const onboardingData = JSON.parse(onboardingJson) as OnboardingData;
-        existingProfile = {
-          ...onboardingData,
-          email: '',
-          phone: '',
-          profileImageUri: null,
-        };
-        // localStorage.removeItem(ONBOARDING_DATA_KEY); // Optional: remove old key after migration
+        existingProfileData = { ...onboardingData };
+        // Consider removing the old key: localStorage.removeItem(ONBOARDING_DATA_KEY);
       }
     }
     
     const completeProfile: UserProfile = {
-      name: existingProfile.name || '',
-      age: existingProfile.age || '',
-      gender: existingProfile.gender || '',
-      height: existingProfile.height || '',
-      heightUnit: existingProfile.heightUnit || 'cm',
-      weight: existingProfile.weight || '',
-      weightUnit: existingProfile.weightUnit || 'kg',
-      activityLevel: existingProfile.activityLevel || '',
-      healthGoals: existingProfile.healthGoals || [],
-      exerciseFrequency: existingProfile.exerciseFrequency || '',
-      dietaryRestrictions: existingProfile.dietaryRestrictions || '',
-      dietType: existingProfile.dietType || '',
-      sleepHours: existingProfile.sleepHours || '',
-      stressLevel: existingProfile.stressLevel || '',
-      email: existingProfile.email || '',
-      phone: existingProfile.phone || '',
-      profileImageUri: existingProfile.profileImageUri || null,
+      name: existingProfileData.name || '',
+      age: existingProfileData.age || '',
+      gender: existingProfileData.gender || '',
+      height: existingProfileData.height || '',
+      heightUnit: existingProfileData.heightUnit || 'cm',
+      weight: existingProfileData.weight || '',
+      weightUnit: existingProfileData.weightUnit || 'kg',
+      activityLevel: existingProfileData.activityLevel || '',
+      healthGoals: existingProfileData.healthGoals || [],
+      exerciseFrequency: existingProfileData.exerciseFrequency || '',
+      dietType: existingProfileData.dietType || '',
+      dietaryRestrictions: existingProfileData.dietaryRestrictions || '',
+      favoriteCuisines: existingProfileData.favoriteCuisines || '',
+      dislikedIngredients: existingProfileData.dislikedIngredients || '',
+      enableCarbonTracking: existingProfileData.enableCarbonTracking === undefined ? false : existingProfileData.enableCarbonTracking,
+      sleepHours: existingProfileData.sleepHours || '',
+      stressLevel: existingProfileData.stressLevel || '',
+      email: existingProfileData.email || '',
+      phone: existingProfileData.phone || '',
+      profileImageUri: existingProfileData.profileImageUri || null,
       reminderSettings: {
         ...defaultReminderSettings,
-        ...(existingProfile.reminderSettings || {}),
+        ...(existingProfileData.reminderSettings || {}),
+      },
+      appSettings: {
+        ...defaultAppSettings,
+        ...(existingProfileData.appSettings || {}),
+        unitPreferences: {
+          ...defaultAppSettings.unitPreferences,
+          ...(existingProfileData.appSettings?.unitPreferences || {}),
+        }
       },
     };
     
-    // Save the potentially migrated/defaulted profile back to ensure it's always complete
-    if (!profileJson && existingProfile.name) { // Only save if we migrated from onboarding
+    // Save the potentially migrated/defaulted profile back if it wasn't loaded from USER_PROFILE_KEY
+    if (!profileJson && (existingProfileData.name || localStorage.getItem(ONBOARDING_DATA_KEY))) { 
          saveUserProfile(completeProfile);
     }
-
 
     return completeProfile;
 
   } catch (error) {
     console.error("Error reading user profile from localStorage:", error);
+    // Return a deeply defaulted profile on error
     const fallbackProfile: UserProfile = {
         name: '', age: '', gender: '', height: '', heightUnit: 'cm', weight: '', weightUnit: 'kg',
         activityLevel: '', healthGoals: [], exerciseFrequency: '', dietaryRestrictions: '',
-        dietType: '', sleepHours: '', stressLevel: '', email: '', phone: '', profileImageUri: null,
-        reminderSettings: defaultReminderSettings
+        dietType: '', favoriteCuisines: '', dislikedIngredients: '', enableCarbonTracking: false,
+        sleepHours: '', stressLevel: '', email: '', phone: '', profileImageUri: null,
+        reminderSettings: { ...defaultReminderSettings },
+        appSettings: { ...defaultAppSettings, unitPreferences: {...defaultAppSettings.unitPreferences!} }
     };
     return fallbackProfile;
   }

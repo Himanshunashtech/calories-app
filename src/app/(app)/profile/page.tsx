@@ -12,8 +12,9 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { getUserProfile, saveUserProfile, type UserProfile, type ReminderSettings } from '@/lib/localStorage';
-import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Repeat } from 'lucide-react';
+import { getUserProfile, saveUserProfile, type UserProfile, type ReminderSettings, type AppSettings } from '@/lib/localStorage';
+import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Repeat, Utensils, Vegan, Settings } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const defaultProfile: UserProfile = {
   name: '',
@@ -26,8 +27,11 @@ const defaultProfile: UserProfile = {
   activityLevel: '',
   healthGoals: [],
   exerciseFrequency: '',
-  dietaryRestrictions: '',
   dietType: '',
+  dietaryRestrictions: '',
+  favoriteCuisines: '',
+  dislikedIngredients: '',
+  enableCarbonTracking: false,
   sleepHours: '',
   stressLevel: '',
   email: '',
@@ -39,6 +43,13 @@ const defaultProfile: UserProfile = {
     dinnerTime: '18:30',
     waterReminderEnabled: false,
     waterReminderInterval: 60,
+  },
+  appSettings: {
+    darkModeEnabled: false,
+    unitPreferences: {
+      weight: 'kg',
+      height: 'cm',
+    }
   }
 };
 
@@ -54,7 +65,24 @@ export default function ProfilePage() {
     setIsClient(true);
     const loadedProfile = getUserProfile();
     if (loadedProfile) {
-      setProfile(loadedProfile);
+      // Ensure nested objects like reminderSettings and appSettings are fully formed
+      const completeProfile: UserProfile = {
+        ...defaultProfile, // Start with defaults
+        ...loadedProfile,  // Override with loaded data
+        reminderSettings: {
+          ...defaultProfile.reminderSettings,
+          ...(loadedProfile.reminderSettings || {}),
+        },
+        appSettings: {
+          ...defaultProfile.appSettings,
+          ...(loadedProfile.appSettings || {}),
+          unitPreferences: {
+            ...(defaultProfile.appSettings?.unitPreferences),
+            ...(loadedProfile.appSettings?.unitPreferences || {}),
+          },
+        },
+      };
+      setProfile(completeProfile);
     } else {
       setProfile(defaultProfile);
     }
@@ -77,28 +105,25 @@ export default function ProfilePage() {
     }));
   };
 
-  const handleReminderToggle = (name: keyof ReminderSettings) => (checked: boolean) => {
-     setProfile((prev) => ({
-      ...prev,
-      reminderSettings: {
-        ...prev.reminderSettings!,
-        [name]: checked,
-      },
-    }));
-  };
-  
-  const handleReminderSelectChange = (name: keyof ReminderSettings) => (value: string) => {
-     setProfile((prev) => ({
-      ...prev,
-      reminderSettings: {
-        ...prev.reminderSettings!,
-        [name]: Number(value),
-      },
-    }));
+  const handleSwitchChange = (name: keyof UserProfile | `appSettings.${keyof AppSettings}` | `reminderSettings.${keyof ReminderSettings}`) => (checked: boolean) => {
+    if (name === 'enableCarbonTracking') {
+      setProfile((prev) => ({ ...prev, enableCarbonTracking: checked }));
+    } else if (name === 'appSettings.darkModeEnabled') {
+        setProfile((prev) => ({
+        ...prev,
+        appSettings: { ...prev.appSettings!, darkModeEnabled: checked },
+      }));
+    } else if (name === 'reminderSettings.waterReminderEnabled') {
+       setProfile((prev) => ({
+        ...prev,
+        reminderSettings: { ...prev.reminderSettings!, waterReminderEnabled: checked },
+      }));
+    }
+    // Add more specific cases if other top-level boolean fields are added
   };
 
 
-  const handleSelectChange = (name: keyof UserProfile | `reminderSettings.${keyof ReminderSettings}`) => (value: string) => {
+  const handleSelectChange = (name: keyof UserProfile | `reminderSettings.${keyof ReminderSettings}` | `appSettings.unitPreferences.${'weight' | 'height'}`) => (value: string) => {
     if (name.startsWith('reminderSettings.')) {
       const key = name.split('.')[1] as keyof ReminderSettings;
        setProfile((prev) => ({
@@ -108,7 +133,21 @@ export default function ProfilePage() {
           [key]: value,
         },
       }));
-    } else {
+    } else if (name.startsWith('appSettings.unitPreferences.')) {
+      const key = name.split('.')[2] as 'weight' | 'height';
+      setProfile(prev => ({
+        ...prev,
+        appSettings: {
+          ...prev.appSettings!,
+          unitPreferences: {
+            ...prev.appSettings!.unitPreferences!,
+            [key]: value,
+          }
+        }
+      }))
+    }
+    
+    else {
       setProfile((prev) => ({ ...prev, [name as keyof UserProfile]: value as any }));
     }
   };
@@ -141,7 +180,7 @@ export default function ProfilePage() {
   if (!isClient || isLoading) {
     return (
       <div className="space-y-6 p-4">
-        {[...Array(4)].map((_, i) => (
+        {[...Array(5)].map((_, i) => (
           <Card key={i} className="shadow-lg">
             <CardHeader>
               <div className="h-8 w-1/3 bg-muted rounded animate-pulse mb-2 self-center"></div>
@@ -152,7 +191,7 @@ export default function ProfilePage() {
             <CardContent className="space-y-4">
               <div className="h-10 bg-muted rounded animate-pulse"></div>
               <div className="h-10 bg-muted rounded animate-pulse"></div>
-              <div className="h-10 bg-muted rounded animate-pulse"></div>
+              { i % 2 === 0 && <div className="h-10 bg-muted rounded animate-pulse"></div> }
             </CardContent>
             <CardFooter>
               <div className="h-10 w-full bg-muted rounded animate-pulse"></div>
@@ -219,25 +258,45 @@ export default function ProfilePage() {
           <section>
             <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><Ruler /> Physical Attributes</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div> <Label htmlFor="height">Height ({profile.heightUnit})</Label> <Input id="height" name="height" type="number" value={profile.height} onChange={handleChange} placeholder={`Height in ${profile.heightUnit}`} /> </div>
-              <div> <Label htmlFor="weight">Weight ({profile.weightUnit})</Label> <Input id="weight" name="weight" type="number" value={profile.weight} onChange={handleChange} placeholder={`Weight in ${profile.weightUnit}`} /> </div>
+              <div> 
+                <Label htmlFor="height">Height ({profile.appSettings?.unitPreferences?.height || 'cm'})</Label> 
+                <Input id="height" name="height" type="number" value={profile.height} onChange={handleChange} placeholder={`Height in ${profile.appSettings?.unitPreferences?.height || 'cm'}`} /> 
+              </div>
+              <div> 
+                <Label htmlFor="weight">Weight ({profile.appSettings?.unitPreferences?.weight || 'kg'})</Label> 
+                <Input id="weight" name="weight" type="number" value={profile.weight} onChange={handleChange} placeholder={`Weight in ${profile.appSettings?.unitPreferences?.weight || 'kg'}`} /> 
+              </div>
             </div>
           </section>
 
           <section>
             <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><Activity /> Goals & Activity</h3>
              <div className="space-y-4">
-                <div> <Label>Primary Health Goals</Label> <p className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50 min-h-[40px]"> {profile.healthGoals && profile.healthGoals.length > 0 ? profile.healthGoals.join(', ') : 'Not set'} </p> </div>
+                <div> <Label>Primary Health Goals</Label> <p className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50 min-h-[40px]"> {profile.healthGoals && profile.healthGoals.length > 0 ? profile.healthGoals.join(', ') : 'Not set'} </p> <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => router.push('/onboarding')}>Edit Goals (Re-run Onboarding)</Button></div>
                  <div> <Label htmlFor="activityLevel">Activity Level</Label> <Select name="activityLevel" value={profile.activityLevel} onValueChange={handleSelectChange('activityLevel')}> <SelectTrigger id="activityLevel"><SelectValue placeholder="Select activity level" /></SelectTrigger> <SelectContent> <SelectItem value="sedentary">Sedentary</SelectItem> <SelectItem value="light">Lightly Active</SelectItem> <SelectItem value="moderate">Moderately Active</SelectItem> <SelectItem value="very">Very Active</SelectItem> </SelectContent> </Select> </div>
                 <div> <Label htmlFor="exerciseFrequency">Exercise Frequency</Label> <Select name="exerciseFrequency" value={profile.exerciseFrequency} onValueChange={handleSelectChange('exerciseFrequency')}> <SelectTrigger id="exerciseFrequency"><SelectValue placeholder="Select frequency" /></SelectTrigger> <SelectContent> <SelectItem value="0">0 days/week</SelectItem> <SelectItem value="1-2">1-2 days/week</SelectItem> <SelectItem value="3-4">3-4 days/week</SelectItem> <SelectItem value="5+">5+ days/week</SelectItem> </SelectContent> </Select> </div>
             </div>
           </section>
 
           <section>
-            <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><Leaf /> Dietary Habits</h3>
+            <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><Utensils /> Dietary Habits</h3>
             <div className="space-y-4">
+              <div> <Label htmlFor="dietType">Diet Type</Label> <Select name="dietType" value={profile.dietType} onValueChange={handleSelectChange('dietType')}> <SelectTrigger id="dietType"><SelectValue placeholder="Select diet type" /></SelectTrigger> <SelectContent> <SelectItem value="none">None</SelectItem> <SelectItem value="vegetarian">Vegetarian</SelectItem> <SelectItem value="vegan">Vegan</SelectItem> <SelectItem value="keto">Keto</SelectItem> <SelectItem value="paleo">Paleo</SelectItem><SelectItem value="pescatarian">Pescatarian</SelectItem> <SelectItem value="mediterranean">Mediterranean</SelectItem> <SelectItem value="custom">Custom</SelectItem><SelectItem value="other">Other</SelectItem> </SelectContent> </Select> </div>
               <div> <Label htmlFor="dietaryRestrictions">Dietary Restrictions/Allergies</Label> <Textarea id="dietaryRestrictions" name="dietaryRestrictions" value={profile.dietaryRestrictions} onChange={handleChange} placeholder="e.g., Gluten-free, nut allergy" /> </div>
-              <div> <Label htmlFor="dietType">Diet Type</Label> <Select name="dietType" value={profile.dietType} onValueChange={handleSelectChange('dietType')}> <SelectTrigger id="dietType"><SelectValue placeholder="Select diet type" /></SelectTrigger> <SelectContent> <SelectItem value="none">None</SelectItem> <SelectItem value="vegetarian">Vegetarian</SelectItem> <SelectItem value="vegan">Vegan</SelectItem> <SelectItem value="keto">Keto</SelectItem> <SelectItem value="paleo">Paleo</SelectItem> <SelectItem value="pescatarian">Pescatarian</SelectItem> <SelectItem value="other">Other</SelectItem> </SelectContent> </Select> </div>
+              <div> <Label htmlFor="favoriteCuisines">Favorite Cuisines</Label> <Input id="favoriteCuisines" name="favoriteCuisines" value={profile.favoriteCuisines || ''} onChange={handleChange} placeholder="e.g., Italian, Mexican" /> </div>
+              <div> <Label htmlFor="dislikedIngredients">Disliked Ingredients</Label> <Input id="dislikedIngredients" name="dislikedIngredients" value={profile.dislikedIngredients || ''} onChange={handleChange} placeholder="e.g., Cilantro, Olives" /> </div>
+              <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
+                <Label htmlFor="enableCarbonTracking" className="flex items-center gap-2"><Leaf className="h-5 w-5"/> Enable Carbon Tracking</Label>
+                <Switch id="enableCarbonTracking" checked={profile.enableCarbonTracking} onCheckedChange={handleSwitchChange('enableCarbonTracking')} />
+              </div>
+            </div>
+          </section>
+          
+          <section>
+            <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><ShieldQuestion /> Lifestyle</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div> <Label htmlFor="sleepHours">Sleep per night</Label> <Select name="sleepHours" value={profile.sleepHours} onValueChange={handleSelectChange('sleepHours')}> <SelectTrigger id="sleepHours"><SelectValue placeholder="Select sleep hours" /></SelectTrigger> <SelectContent> <SelectItem value="<5">&lt;5 hours</SelectItem> <SelectItem value="5-6">5-6 hours</SelectItem> <SelectItem value="7-8">7-8 hours</SelectItem> <SelectItem value="8+">8+ hours</SelectItem> </SelectContent> </Select> </div>
+                <div> <Label htmlFor="stressLevel">Stress Level</Label> <Select name="stressLevel" value={profile.stressLevel} onValueChange={handleSelectChange('stressLevel')}> <SelectTrigger id="stressLevel"><SelectValue placeholder="Select stress level" /></SelectTrigger> <SelectContent> <SelectItem value="low">Low</SelectItem> <SelectItem value="moderate">Moderate</SelectItem> <SelectItem value="high">High</SelectItem> </SelectContent> </Select> </div>
             </div>
           </section>
 
@@ -251,12 +310,12 @@ export default function ProfilePage() {
               </div>
               <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
                 <Label htmlFor="waterReminderEnabled" className="flex items-center gap-2"><Repeat className="h-5 w-5"/> Water Reminder</Label>
-                <Switch id="waterReminderEnabled" checked={profile.reminderSettings?.waterReminderEnabled} onCheckedChange={handleReminderToggle('waterReminderEnabled')} />
+                <Switch id="waterReminderEnabled" checked={profile.reminderSettings?.waterReminderEnabled} onCheckedChange={handleSwitchChange('reminderSettings.waterReminderEnabled')} />
               </div>
               {profile.reminderSettings?.waterReminderEnabled && (
                 <div>
                   <Label htmlFor="waterReminderInterval">Water Reminder Interval (minutes)</Label>
-                  <Select value={profile.reminderSettings?.waterReminderInterval?.toString() || '60'} onValueChange={handleReminderSelectChange('waterReminderInterval')}>
+                  <Select name="reminderSettings.waterReminderInterval" value={profile.reminderSettings?.waterReminderInterval?.toString() || '60'} onValueChange={handleSelectChange('reminderSettings.waterReminderInterval')}>
                     <SelectTrigger id="waterReminderInterval"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="30">30 minutes</SelectItem>
@@ -270,21 +329,15 @@ export default function ProfilePage() {
               <p className="text-xs text-muted-foreground">Note: Actual notification delivery depends on browser/device settings and app capabilities.</p>
             </div>
           </section>
-
-
-           <section>
-            <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><ShieldQuestion /> Lifestyle</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div> <Label htmlFor="sleepHours">Sleep per night</Label> <Select name="sleepHours" value={profile.sleepHours} onValueChange={handleSelectChange('sleepHours')}> <SelectTrigger id="sleepHours"><SelectValue placeholder="Select sleep hours" /></SelectTrigger> <SelectContent> <SelectItem value="<5">&lt;5 hours</SelectItem> <SelectItem value="5-6">5-6 hours</SelectItem> <SelectItem value="7-8">7-8 hours</SelectItem> <SelectItem value="8+">8+ hours</SelectItem> </SelectContent> </Select> </div>
-                <div> <Label htmlFor="stressLevel">Stress Level</Label> <Select name="stressLevel" value={profile.stressLevel} onValueChange={handleSelectChange('stressLevel')}> <SelectTrigger id="stressLevel"><SelectValue placeholder="Select stress level" /></SelectTrigger> <SelectContent> <SelectItem value="low">Low</SelectItem> <SelectItem value="moderate">Moderate</SelectItem> <SelectItem value="high">High</SelectItem> </SelectContent> </Select> </div>
-            </div>
-          </section>
-
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex-col space-y-2">
           <Button onClick={handleSubmit} className="w-full text-lg py-6">
             <Save className="mr-2 h-5 w-5" />
-            Save Profile & Preferences
+            Save Profile &amp; Preferences
+          </Button>
+           <Button onClick={() => router.push('/app/settings')} className="w-full" variant="outline">
+            <Settings className="mr-2 h-5 w-5"/>
+            Go to App Settings
           </Button>
         </CardFooter>
       </Card>

@@ -52,23 +52,37 @@ export interface ReminderSettings {
   waterReminderInterval?: number; // in minutes, e.g., 60
 }
 
+export interface AppSettings {
+  darkModeEnabled?: boolean;
+  unitPreferences?: {
+    weight: 'kg' | 'lbs';
+    height: 'cm' | 'in';
+    // volume: 'ml' | 'oz'; // Can be added later
+  };
+}
+
 export interface OnboardingData {
   name: string;
   age: string;
   gender: string;
   height: string;
-  heightUnit: string;
+  heightUnit: 'cm' | 'in';
   weight: string;
-  weightUnit: string;
+  weightUnit: 'kg' | 'lbs';
   activityLevel: string;
   healthGoals: string[];
   exerciseFrequency: string;
-  dietaryRestrictions: string;
+  // Diet Preferences
   dietType: string;
+  dietaryRestrictions: string;
+  favoriteCuisines?: string;
+  dislikedIngredients?: string;
+  enableCarbonTracking?: boolean;
+  // Lifestyle
   sleepHours: string;
   stressLevel: string;
-  waterIntake?: string;
-  enjoysCooking?: string;
+  waterIntake?: string; // This was from original user spec, not fully integrated
+  enjoysCooking?: string; // This was from original user spec, not fully integrated
 }
 
 export interface UserProfile extends OnboardingData {
@@ -76,6 +90,7 @@ export interface UserProfile extends OnboardingData {
   phone?: string;
   profileImageUri?: string | null;
   reminderSettings?: ReminderSettings;
+  appSettings?: AppSettings;
 }
 
 export interface WaterIntakeData {
