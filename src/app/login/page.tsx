@@ -11,15 +11,18 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, Mail, Lock, UserPlus, UserCheck } from 'lucide-react';
 import { fakeLogin, isUserLoggedIn, isOnboardingComplete, getUserProfile, saveUserProfile, getSelectedPlan, setSelectedPlan, setOnboardingComplete } from '@/lib/localStorage';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
   useEffect(() => {
+    setIsClient(true);
     // This page is now part of the primary onboarding flow
     // If user lands here directly and is fully set up, redirect.
     if (isUserLoggedIn() && isOnboardingComplete()) {
@@ -50,6 +53,32 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  if (!isClient) {
+    return (
+      <Card className="shadow-2xl w-full max-w-md">
+        <CardHeader className="text-center">
+          <Skeleton className="h-10 w-10 mx-auto mb-2 rounded-full" />
+          <Skeleton className="h-7 w-3/4 mx-auto mb-1" />
+          <Skeleton className="h-5 w-1/2 mx-auto" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <Skeleton className="h-12 w-full" />
+        </CardContent>
+        <CardFooter className="justify-center">
+          <Skeleton className="h-5 w-3/4" />
+        </CardFooter>
+      </Card>
+    );
+  }
 
   return (
     <Card className="shadow-2xl">
