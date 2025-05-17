@@ -48,13 +48,17 @@ export default function MealPlannerPage() {
     const profile = getUserProfile();
     setUserProfile(profile);
     
-    const savedPlan = localStorage.getItem('mealPlan');
-    if (savedPlan) {
-      setWeeklyPlan(JSON.parse(savedPlan));
+    const savedPlanJson = localStorage.getItem('mealPlan');
+    if (savedPlanJson) {
+      try {
+        setWeeklyPlan(JSON.parse(savedPlanJson));
+      } catch (e) { console.error("Error parsing saved meal plan", e); localStorage.removeItem('mealPlan');}
     }
-    const savedGeneratedOutput = localStorage.getItem('generatedMealPlanOutput');
-    if (savedGeneratedOutput) {
-        setGeneratedPlanOutput(JSON.parse(savedGeneratedOutput));
+    const savedGeneratedOutputJson = localStorage.getItem('generatedMealPlanOutput');
+    if (savedGeneratedOutputJson) {
+       try {
+        setGeneratedPlanOutput(JSON.parse(savedGeneratedOutputJson));
+       } catch (e) { console.error("Error parsing saved generated output", e); localStorage.removeItem('generatedMealPlanOutput');}
     }
   }, []);
   
@@ -71,30 +75,27 @@ export default function MealPlannerPage() {
           healthGoals: userProfile.healthGoals,
           dietaryRestrictions: Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietaryRestrictions,
         },
-        durationDays: 7,
+        durationDays: 7, // Ensure it generates for 7 days to fill the week
       });
       setGeneratedPlanOutput(planOutput);
       localStorage.setItem('generatedMealPlanOutput', JSON.stringify(planOutput));
 
       const newWeeklyPlan: WeeklyPlan = {};
-      daysOfWeek.forEach(day => newWeeklyPlan[day] = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] }); // Initialize all days
+      daysOfWeek.forEach(day => newWeeklyPlan[day] = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] }); 
 
       planOutput.mealPlan.forEach((dayPlan, dayIndex) => {
-        const dayName = daysOfWeek[dayIndex % 7];
-        if (!newWeeklyPlan[dayName]) newWeeklyPlan[dayName] = {};
+        const dayName = daysOfWeek[dayIndex % 7]; // Cycle through daysOfWeek
+        if (!newWeeklyPlan[dayName]) newWeeklyPlan[dayName] = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] };
         
-        const breakfastMeal = dayPlan.meals.find(m => m.name.toLowerCase().includes('breakfast')) || dayPlan.meals[0];
-        const lunchMeal = dayPlan.meals.find(m => m.name.toLowerCase().includes('lunch')) || dayPlan.meals[1];
-        const dinnerMeal = dayPlan.meals.find(m => m.name.toLowerCase().includes('dinner')) || dayPlan.meals[2];
-
-        if (breakfastMeal) {
-          newWeeklyPlan[dayName].Breakfast = [{ id: `ai-bf-${dayName}-${dayIndex}`, name: breakfastMeal.name, category: 'Breakfast', ecoScore: breakfastMeal.lowCarbonScore.toString(), description: breakfastMeal.description }];
+        // Simple distribution: first meal breakfast, second lunch, third dinner
+        if (dayPlan.meals[0]) {
+          newWeeklyPlan[dayName].Breakfast = [{ id: `ai-bf-${dayName}-${dayIndex}`, name: dayPlan.meals[0].name, category: 'Breakfast', ecoScore: dayPlan.meals[0].lowCarbonScore.toString(), description: dayPlan.meals[0].description }];
         }
-        if (lunchMeal) {
-          newWeeklyPlan[dayName].Lunch = [{ id: `ai-ln-${dayName}-${dayIndex}`, name: lunchMeal.name, category: 'Lunch', ecoScore: lunchMeal.lowCarbonScore.toString(), description: lunchMeal.description }];
+        if (dayPlan.meals[1]) {
+          newWeeklyPlan[dayName].Lunch = [{ id: `ai-ln-${dayName}-${dayIndex}`, name: dayPlan.meals[1].name, category: 'Lunch', ecoScore: dayPlan.meals[1].lowCarbonScore.toString(), description: dayPlan.meals[1].description }];
         }
-        if (dinnerMeal) {
-          newWeeklyPlan[dayName].Dinner = [{ id: `ai-dn-${dayName}-${dayIndex}`, name: dinnerMeal.name, category: 'Dinner', ecoScore: dinnerMeal.lowCarbonScore.toString(), description: dinnerMeal.description }];
+        if (dayPlan.meals[2]) {
+          newWeeklyPlan[dayName].Dinner = [{ id: `ai-dn-${dayName}-${dayIndex}`, name: dayPlan.meals[2].name, category: 'Dinner', ecoScore: dayPlan.meals[2].lowCarbonScore.toString(), description: dayPlan.meals[2].description }];
         }
       });
       setWeeklyPlan(newWeeklyPlan);
@@ -111,12 +112,20 @@ export default function MealPlannerPage() {
   const getWeekDisplay = () => {
     const today = new Date();
     today.setDate(today.getDate() + currentWeekOffset * 7);
-    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)));
+    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1))); // Monday as start
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
     return `${startOfWeek.toLocaleDateString(undefined, options)} - ${endOfWeek.toLocaleDateString(undefined, options)}`;
   };
+  
+  const handlePlaceholderFeatureClick = (featureName: string) => {
+    toast({
+      title: `${featureName} Coming Soon!`,
+      description: `This feature will be available in a future update.`,
+    });
+  };
+
 
   if (!isClient) {
     return (
@@ -145,14 +154,14 @@ export default function MealPlannerPage() {
             )}
           </div>
           <CardDescription>
-            {canUseAIPlanner ? "Use AI to generate a weekly meal plan or add meals manually (manual add coming soon)." : "Upgrade to Pro or EcoPro for AI-powered meal plan generation. Manual planning coming soon!"}
+            {canUseAIPlanner ? "Use AI to generate a weekly meal plan or add meals manually." : "Upgrade to Pro or EcoPro for AI-powered meal plan generation. Manual planning coming soon!"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between mb-4">
-            <Button variant="outline" size="icon" onClick={() => setCurrentWeekOffset(prev => prev - 1)} disabled><ArrowLeft/></Button>
+            <Button variant="outline" size="icon" onClick={() => handlePlaceholderFeatureClick('Previous Week')} disabled><ArrowLeft/></Button>
             <h3 className="text-lg font-semibold">{getWeekDisplay()}</h3>
-            <Button variant="outline" size="icon" onClick={() => setCurrentWeekOffset(prev => prev + 1)} disabled><ArrowRight/></Button>
+            <Button variant="outline" size="icon" onClick={() => handlePlaceholderFeatureClick('Next Week')} disabled><ArrowRight/></Button>
           </div>
 
           {Object.keys(weeklyPlan).length === 0 && !isLoadingAI && (
@@ -162,6 +171,13 @@ export default function MealPlannerPage() {
               <p className="text-xs mt-2">Manual meal adding coming soon.</p>
             </div>
           )}
+           {isLoadingAI && Object.keys(weeklyPlan).length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-2"/>
+              <p>Generating your AI meal plan...</p>
+            </div>
+          )}
+
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
             {daysOfWeek.map(day => (
@@ -185,7 +201,7 @@ export default function MealPlannerPage() {
                   ))}
                 </CardContent>
                 <CardFooter className="p-1 mt-auto">
-                    <Button variant="ghost" size="sm" className="w-full text-xs" disabled><PlusCircle className="mr-1 h-3 w-3"/>Add Meal</Button>
+                    <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => handlePlaceholderFeatureClick('Add Meal to Planner')}><PlusCircle className="mr-1 h-3 w-3"/>Add Meal</Button>
                 </CardFooter>
               </Card>
             ))}
@@ -204,20 +220,20 @@ export default function MealPlannerPage() {
         </CardHeader>
         <CardContent>
           {generatedPlanOutput && generatedPlanOutput.groceryList.length > 0 ? (
-            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground columns-1 sm:columns-2 md:columns-3">
+            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground columns-1 sm:columns-2 md:columns-3 max-h-60 overflow-y-auto">
               {generatedPlanOutput.groceryList.map((item, index) => <li key={index}>{item}</li>)}
             </ul>
           ) : (
             <p className="text-muted-foreground">
               {canUseAIPlanner ? 
-              "Generate an AI meal plan to see your grocery list here." : 
+              (isLoadingAI ? "Generating list..." : "Generate an AI meal plan to see your grocery list here.") : 
               "Your grocery list will appear here once meals are planned."}
             </p>
           )}
         </CardContent>
         <CardFooter className="gap-2">
-            <Button variant="outline" disabled><Printer className="mr-2 h-4 w-4"/> Print List</Button>
-            <Button variant="outline" disabled><Download className="mr-2 h-4 w-4"/> Export List</Button>
+            <Button variant="outline" onClick={() => handlePlaceholderFeatureClick('Print Grocery List')}><Printer className="mr-2 h-4 w-4"/> Print List</Button>
+            <Button variant="outline" onClick={() => handlePlaceholderFeatureClick('Export Grocery List')}><Download className="mr-2 h-4 w-4"/> Export List</Button>
         </CardFooter>
       </Card>
     </div>

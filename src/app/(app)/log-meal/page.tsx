@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { addMealLog, getSelectedPlan, canUseAIScan, incrementAIScanCount, getAIScanUsage, type UserPlan } from '@/lib/localStorage';
 import type { FoodAnalysisResult, DetailedNutrients, MealCategory } from '@/types'; 
-import { UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle, Info, Camera as CameraIcon, RefreshCcw, ListPlus } from 'lucide-react';
+import { UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle, Info, Camera as CameraIcon, RefreshCcw, ListPlus, ScanBarcode } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
 
@@ -49,6 +49,7 @@ export default function LogMealPage() {
       const usage = getAIScanUsage();
       setAiScansRemaining(usage.limit - usage.count);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   useEffect(() => {
@@ -154,6 +155,7 @@ export default function LogMealPage() {
             setAnalysisResult(null);
             setError(null);
             setShowWatermark(false);
+            setIsCameraMode(false); // Exit camera mode after capture
         }
     } else {
         toast({ variant: "destructive", title: "Camera Not Ready", description: "Wait for camera to initialize."});
@@ -259,6 +261,7 @@ export default function LogMealPage() {
     setError(null);
     setIsLoading(false);
     setShowWatermark(false);
+    setIsCameraMode(false); // Reset camera mode
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -270,7 +273,7 @@ export default function LogMealPage() {
       if (newMode) { 
         setPhotoFile(null); 
         setPhotoPreview(null); 
-        setHasCameraPermission(null); 
+        setHasCameraPermission(null); // Reset permission check to trigger useEffect
       } else { 
          if (videoRef.current && videoRef.current.srcObject) {
             const stream = videoRef.current.srcObject as MediaStream;
@@ -290,9 +293,15 @@ export default function LogMealPage() {
     setAnalysisResult(null);
     setError(null);
     setShowWatermark(false);
-    if(hasCameraPermission === false) {
-      toast({ title: "Camera Access Denied", description: "Enable camera permissions to retake.", variant: "destructive" });
-    }
+    setIsCameraMode(true); // Re-enter camera mode
+    setHasCameraPermission(null); // Re-trigger camera permission check
+  };
+  
+  const handlePlaceholderFeatureClick = (featureName: string) => {
+    toast({
+      title: `${featureName} Coming Soon!`,
+      description: `This feature will be available in a future update.`,
+    });
   };
 
   const canAnalyze = isClient && (userPlan !== 'free' || (userPlan === 'free' && aiScansRemaining > 0));
@@ -313,7 +322,7 @@ export default function LogMealPage() {
             </Button>
           </div>
           <CardDescription>
-            {isCameraMode ? "Use your camera to take a photo." : "Upload a photo for EcoAI to analyze."}
+            {isCameraMode ? "Use your camera to take a photo." : "Upload a photo for EcoAI to analyze or enter details manually."}
             {isClient && userPlan === 'free' && (
               <span className="block text-xs mt-1">
                 {aiScansRemaining > 0 ? `${aiScansRemaining} AI scans remaining.` : "No AI scans remaining."} Results watermarked for free tier.
@@ -326,18 +335,8 @@ export default function LogMealPage() {
             <div className="space-y-4">
               <div className="relative w-full aspect-[4/3] bg-muted rounded-md overflow-hidden border">
                 <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-                {photoPreview && (
-                   <div className="relative w-full h-full">
-                     <Image src={photoPreview} alt="Captured meal" layout="fill" objectFit="cover" className="absolute inset-0 z-10"/>
-                     {showWatermark && (
-                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/30">
-                            <p className="text-white text-2xl font-bold transform -rotate-12 opacity-75">Watermarked (Free Tier)</p>
-                        </div>
-                     )}
-                   </div>
-                )}
                  {!photoPreview && hasCameraPermission === null && !videoRef.current?.srcObject && (
-                    <div className="absolute inset-0 flex items-center justify-center z-20"> <Loader2 className="h-8 w-8 animate-spin text-primary"/> </div>
+                    <div className="absolute inset-0 flex items-center justify-center z-20 bg-background/50"> <Loader2 className="h-8 w-8 animate-spin text-primary"/> </div>
                 )}
                 {!photoPreview && hasCameraPermission === false && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 p-4 z-20">
@@ -348,50 +347,44 @@ export default function LogMealPage() {
                     </div>
                 )}
               </div>
-              {hasCameraPermission && !photoPreview && (
+              {hasCameraPermission && (
                 <Button onClick={handleCapturePhoto} className="w-full" disabled={isLoading || hasCameraPermission === false}>
                     <CameraIcon className="mr-2 h-5 w-5"/> Capture Photo
                 </Button>
               )}
-              {photoPreview && (
-                 <Button onClick={handleRetakePhoto} variant="outline" className="w-full">
-                    <RefreshCcw className="mr-2 h-4 w-4"/> Retake Photo
-                </Button>
-              )}
             </div>
-          ) : (
+          ) : photoPreview ? ( // Show preview if available (from upload or capture)
+             <div className="relative group w-full aspect-[4/3] sm:w-64 sm:h-48 mx-auto">
+                <Image
+                    src={photoPreview}
+                    alt="Meal preview"
+                    layout="fill"
+                    objectFit="cover"
+                    className="rounded-md shadow-md"
+                />
+                {showWatermark && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30">
+                        <p className="text-white text-lg font-bold transform -rotate-12 opacity-75">Watermarked</p>
+                    </div>
+                )}
+                <Button variant="ghost" size="icon" className="absolute top-1 right-1 bg-background/50 hover:bg-background/80 z-20 h-8 w-8" onClick={() => {setPhotoFile(null); setPhotoPreview(null); setAnalysisResult(null); if(fileInputRef.current) fileInputRef.current.value = ""; setShowWatermark(false);}}>
+                    <X className="h-4 w-4"/>
+                </Button>
+            </div>
+          ) : ( // Default to file upload input
             <div>
               <Label htmlFor="meal-photo-input" className="text-base sr-only">Meal Photo Upload</Label>
               <div className="mt-2 flex justify-center rounded-lg border border-dashed border-input px-6 py-10 hover:border-primary transition-colors">
                 <div className="text-center">
-                  {photoPreview && ( 
-                    <div className="relative group w-48 h-48 mx-auto">
-                      <Image
-                        src={photoPreview}
-                        alt="Meal preview"
-                        layout="fill"
-                        objectFit="cover"
-                        className="rounded-md shadow-md"
-                      />
-                       {showWatermark && (
-                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30">
-                                <p className="text-white text-lg font-bold transform -rotate-12 opacity-75">Watermarked</p>
-                            </div>
-                        )}
-                       <Button variant="ghost" size="sm" className="absolute top-1 right-1 bg-background/50 hover:bg-background/80 z-20" onClick={() => {setPhotoFile(null); setPhotoPreview(null); setAnalysisResult(null); if(fileInputRef.current) fileInputRef.current.value = ""; setShowWatermark(false);}}>Clear</Button>
-                    </div>
-                  )}
-                  {(!photoPreview) && ( 
                      <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" aria-hidden="true" />
-                  )}
                   <div className="mt-4 flex text-sm leading-6 text-muted-foreground justify-center">
                     <Label htmlFor="meal-photo-input" className="relative cursor-pointer rounded-md font-semibold text-primary focus-within:outline-none hover:text-primary/80">
-                      <span>{photoFile || photoPreview ? 'Change photo' : 'Upload a file'}</span>
+                      <span>Upload a file</span>
                       <Input id="meal-photo-input" ref={fileInputRef} name="meal-photo" type="file" accept="image/*" className="sr-only" onChange={handleFileChange} />
                     </Label>
-                    {!(photoFile || photoPreview) && <p className="pl-1">or drag and drop</p>}
+                    <p className="pl-1">or drag and drop</p>
                   </div>
-                  {!(photoFile || photoPreview) && <p className="text-xs leading-5 text-muted-foreground">PNG, JPG, GIF up to 10MB</p>}
+                  <p className="text-xs leading-5 text-muted-foreground">PNG, JPG, GIF up to 10MB</p>
                 </div>
               </div>
             </div>
@@ -401,6 +394,14 @@ export default function LogMealPage() {
             <Label htmlFor="description" className="text-base">Description (Optional)</Label>
             <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g., Chicken salad with avocado" className="mt-2 min-h-[80px]" />
           </div>
+          
+          <div className="flex items-center gap-2">
+            <Input placeholder="Search food item for manual entry..." className="flex-1" disabled />
+            <Button variant="outline" size="icon" onClick={() => handlePlaceholderFeatureClick('Barcode Scanning')} aria-label="Scan Barcode">
+                <ScanBarcode />
+            </Button>
+          </div>
+
 
           <div>
             <Label htmlFor="mealCategory" className="text-base">Category</Label>
@@ -456,7 +457,7 @@ export default function LogMealPage() {
               <div>
                 <h4 className="font-semibold text-base mt-3">Detailed Micronutrients:</h4>
                 <ul className="text-sm text-muted-foreground list-disc list-inside pl-2 space-y-1 mt-1">
-                  {Object.entries(analysisResult.detailedNutrients).map(([key, nutrient]) => nutrient && (
+                  {Object.entries(analysisResult.detailedNutrients).map(([key, nutrient]) => nutrient && nutrient.value !== undefined && (
                     <li key={key} className="capitalize">{key}: {nutrient.value.toFixed(1)}{nutrient.unit}
                       {nutrient.rdaPercentage && ` (${nutrient.rdaPercentage.toFixed(0)}% RDA)`}
                     </li>

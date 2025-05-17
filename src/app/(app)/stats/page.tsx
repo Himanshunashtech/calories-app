@@ -3,12 +3,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line } from 'recharts'; // Renamed to avoid conflict
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { getMealLogs, clearMealLogs, getSelectedPlan, type UserPlan } from '@/lib/localStorage';
 import type { MealEntry } from '@/types';
-import { CalendarDays, Utensils, Leaf, Trash2, Info, ShieldCheck, TrendingUp, Activity, PieChartIcon, NotebookText, ListFilter } from 'lucide-react';
+import { CalendarDays, Utensils, Leaf, Trash2, Info, ShieldCheck, TrendingUp, Activity, PieChartIcon, NotebookText, ListFilter, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -55,7 +55,7 @@ export default function StatsPage() {
   }
 
   const todayISO = useMemo(() => {
-    if (!isClient) return new Date().toISOString().split('T')[0]; // Fallback for SSR, though might not be perfectly accurate
+    if (!isClient) return new Date().toISOString().split('T')[0];
     return new Date().toISOString().split('T')[0];
   }, [isClient]);
 
@@ -184,6 +184,14 @@ export default function StatsPage() {
       action: <Trash2 className="h-5 w-5 text-destructive"/>
     });
   };
+
+  const handlePlaceholderFeatureClick = (featureName: string) => {
+    toast({
+      title: `${featureName} Coming Soon!`,
+      description: `This feature will be available in a future update.`,
+    });
+  };
+
 
   if (!isClient) {
     return (
@@ -315,6 +323,14 @@ export default function StatsPage() {
           ) : (
             <p className="text-muted-foreground text-center py-4">Log meals for a few days to see your trend.</p>
           )}
+          {(userPlan === 'pro' || userPlan === 'ecopro') && (
+            <div className="mt-4 text-center">
+                <Button variant="outline" onClick={() => handlePlaceholderFeatureClick('Weight Measurement')}>
+                    <Maximize2 className="mr-2 h-4 w-4"/> Add Weight Measurement
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1">Track weight trends alongside calorie intake.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -348,6 +364,13 @@ export default function StatsPage() {
             </div>
           ) : (
              <p className="text-muted-foreground text-center py-4">Log meals to see your overall macro distribution.</p>
+          )}
+          {(userPlan === 'pro' || userPlan === 'ecopro') && (
+            <div className="mt-4">
+                <p className="text-sm font-semibold text-center">Nutrient Insights (Example)</p>
+                <p className="text-xs text-muted-foreground text-center mt-1">Top iron sources: Spinach, Lentils.</p>
+                <p className="text-xs text-muted-foreground text-center">Consider adding more Vitamin D rich foods like salmon.</p>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -420,7 +443,7 @@ export default function StatsPage() {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleClearHistory}>
+                <AlertDialogAction onClick={handleClearHistory} className={cn(buttonVariants({variant: "destructive"}))}>
                   Yes, delete all
                 </AlertDialogAction>
               </AlertDialogFooter>

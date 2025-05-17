@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import type { OnboardingData, UserProfile } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
-import { isUserLoggedIn, getUserProfile, saveUserProfile } from '@/lib/localStorage';
+import { isUserLoggedIn, getUserProfile, saveUserProfile, setOnboardingComplete } from '@/lib/localStorage';
 
 const TOTAL_STEPS = 8; 
 
@@ -63,8 +63,15 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     setIsClient(true);
-    // In this new flow, user might not be "logged in" yet when starting onboarding.
-    // We pre-fill if there's any existing data, but don't strictly require login here.
+    if (!isUserLoggedIn()) {
+        toast({title: "Please Log In", description: "You need to be logged in to start onboarding.", variant: "destructive"});
+        router.replace('/login');
+        return;
+    }
+    if (isUserLoggedIn() && isOnboardingComplete()) {
+        router.replace('/dashboard');
+        return;
+    }
     const existingProfile = getUserProfile();
     if (existingProfile) {
         setFormData(prev => ({
@@ -76,6 +83,7 @@ export default function OnboardingPage() {
             }
         }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -110,7 +118,12 @@ export default function OnboardingPage() {
         setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, mealRemindersEnabled: checked }}));
     } else if (name === 'reminderSettings.waterReminderEnabled') {
         setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, waterReminderEnabled: checked }}));
-    } else {
+    } else if (name === 'enableCarbonTracking') {
+        setFormData(prev => ({ ...prev, enableCarbonTracking: checked }));
+    } else if (name === 'alsoTrackSustainability') {
+        setFormData(prev => ({ ...prev, alsoTrackSustainability: checked }));
+    }
+    else {
         setFormData((prev) => ({ ...prev, [name as keyof OnboardingData]: checked }));
     }
   };
@@ -146,11 +159,11 @@ export default function OnboardingPage() {
         toast({ variant: "destructive", title: "Missing fields", description: "Please select at least one health goal." });
         return;
       }
-      if (currentStep === 4 && !formData.dietType) {
+      if (currentStep === 4 && !formData.dietType) { // Step 4 is now Diet & Food Prefs
         toast({ variant: "destructive", title: "Missing fields", description: "Please select your diet type." });
         return;
       }
-       if (currentStep === 6 && (!formData.sleepHours || !formData.stressLevel || !formData.waterGoal)) {
+       if (currentStep === 6 && (!formData.sleepHours || !formData.stressLevel || !formData.waterGoal)) { // Step 6 is Lifestyle
         toast({ variant: "destructive", title: "Missing fields", description: "Please complete all lifestyle fields." });
         return;
       }
@@ -167,27 +180,38 @@ export default function OnboardingPage() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const existingProfile = getUserProfile();
+    if (!existingProfile) {
+        toast({title: "Error", description: "User profile not found. Please log in again.", variant: "destructive"});
+        router.push('/login');
+        return;
+    }
     const profileToSave: UserProfile = {
-        ...(existingProfile || {}), // Keep existing fields like email if user re-onboards
-        ...formData,
+        ...existingProfile, 
+        ...formData, // Onboarding data overwrites existing profile fields where they overlap
         reminderSettings: {
-            ...(existingProfile?.reminderSettings || defaultFormData.reminderSettings),
+            ...(existingProfile.reminderSettings || defaultFormData.reminderSettings),
             ...formData.reminderSettings,
         },
         appSettings: {
-            ...(existingProfile?.appSettings || {}),
-            // appSettings are not collected during onboarding in this version
+            ...(existingProfile.appSettings || {}),
         }
     };
     saveUserProfile(profileToSave);
+    setOnboardingComplete(true);
     
-    // DO NOT setOnboardingComplete(true) here. This will be done after login.
     toast({
-      title: 'Preferences Saved!',
+      title: 'Onboarding Complete!',
       description: "Next, let's choose a plan that's right for you.",
       action: <CheckCircle className="text-green-500" />,
     });
     router.push('/subscription');
+  };
+  
+  const handlePlaceholderFeatureClick = (featureName: string) => {
+    toast({
+      title: `${featureName} Coming Soon!`,
+      description: `This feature will be available in a future update.`,
+    });
   };
 
   const progressValue = (currentStep / TOTAL_STEPS) * 100;
@@ -201,6 +225,17 @@ export default function OnboardingPage() {
   ];
 
   const currentYear = new Date().getFullYear();
+  const calculatedBMI = useMemo(() => {
+    if (formData.height && formData.weight && formData.heightUnit && formData.weightUnit) {
+      const heightInMeters = formData.heightUnit === 'cm' ? parseFloat(formData.height) / 100 : parseFloat(formData.height) * 0.0254;
+      const weightInKg = formData.weightUnit === 'kg' ? parseFloat(formData.weight) : parseFloat(formData.weight) * 0.453592;
+      if (heightInMeters > 0 && weightInKg > 0) {
+        const bmi = weightInKg / (heightInMeters * heightInMeters);
+        return bmi.toFixed(1);
+      }
+    }
+    return null;
+  }, [formData.height, formData.weight, formData.heightUnit, formData.weightUnit]);
 
 
   return (
@@ -263,7 +298,7 @@ export default function OnboardingPage() {
                 </div>
                 <div>
                   <Label htmlFor="age">Year of Birth</Label>
-                  <Input id="age" name="age" type="number" value={formData.age} onChange={handleChange} placeholder={`E.g., ${currentYear - 30}`} min="1900" max={currentYear -5} required />
+                  <Input id="age" name="age" type="number" value={formData.age} onChange={handleChange} placeholder={`E.g., ${currentYear - 30}`} min="1900" max={(currentYear -5).toString()} required />
                 </div>
                 <div>
                   <Label htmlFor="gender">Gender</Label>
@@ -311,26 +346,26 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground text-center">BMI will be calculated (placeholder).</p>
+                {calculatedBMI && <p className="text-sm text-muted-foreground text-center">Calculated BMI: {calculatedBMI}</p>}
                  <div>
                   <Label>Typical Activity Level</Label>
                   <RadioGroup name="activityLevel" value={formData.activityLevel} onValueChange={handleRadioChange('activityLevel')} className="mt-2 space-y-1">
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="sedentary" id="sedentary" /><Label htmlFor="sedentary">Sedentary (little to no exercise)</Label></div>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="light" id="light" /><Label htmlFor="light">Lightly Active (light exercise/sports 1-3 days/week)</Label></div>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="moderate" id="moderate" /><Label htmlFor="moderate">Moderately Active (moderate exercise/sports 3-5 days/week)</Label></div>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="very" id="very" /><Label htmlFor="very">Very Active (hard exercise/sports 6-7 days a week)</Label></div>
+                      <div className="flex items-center space-x-2"><RadioGroupItem value="sedentary" id="sedentary" /><Label htmlFor="sedentary" className="font-normal">Sedentary (little to no exercise)</Label></div>
+                      <div className="flex items-center space-x-2"><RadioGroupItem value="light" id="light" /><Label htmlFor="light" className="font-normal">Lightly Active (light exercise/sports 1-3 days/week)</Label></div>
+                      <div className="flex items-center space-x-2"><RadioGroupItem value="moderate" id="moderate" /><Label htmlFor="moderate" className="font-normal">Moderately Active (moderate exercise/sports 3-5 days/week)</Label></div>
+                      <div className="flex items-center space-x-2"><RadioGroupItem value="very" id="very" /><Label htmlFor="very" className="font-normal">Very Active (hard exercise/sports 6-7 days a week)</Label></div>
                     </RadioGroup>
                 </div>
                  <div className="p-3 border rounded-md flex items-center justify-between">
-                    <Label htmlFor="fitnessSync" className="text-sm">Sync fitness tracker?</Label>
-                    <Button size="sm" variant="outline" disabled>Connect Health App (Placeholder)</Button>
+                    <Label htmlFor="fitnessSyncOnboarding" className="text-sm">Sync fitness tracker?</Label>
+                    <Button size="sm" variant="outline" onClick={() => handlePlaceholderFeatureClick('Fitness Tracker Sync')}>Connect Health App</Button>
                  </div>
               </section>
             )}
 
-            {currentStep === 3 && (
+            {currentStep === 3 && ( // Health Goals
               <section className="space-y-4 animate-in fade-in duration-500">
-                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Target className="h-6 w-6" /> Health Goals & Exercise</h3>
+                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Target className="h-6 w-6" /> Health Goals & Focus</h3>
                 <div>
                   <Label>Primary Health Goals (select all that apply)</Label>
                   <div className="space-y-2 mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -356,11 +391,11 @@ export default function OnboardingPage() {
                   </div>
                 </div>
                  <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
-                    <Label htmlFor="alsoTrackSustainability" className="flex flex-col">
+                    <Label htmlFor="alsoTrackSustainabilityOnboarding" className="flex flex-col">
                         <span>Also track sustainability?</span>
                         <span className="text-xs text-muted-foreground">Focus on eco-friendly choices.</span>
                     </Label>
-                    <Switch id="alsoTrackSustainability" name="alsoTrackSustainability" checked={formData.alsoTrackSustainability} onCheckedChange={handleSwitchChange('alsoTrackSustainability')} />
+                    <Switch id="alsoTrackSustainabilityOnboarding" name="alsoTrackSustainability" checked={formData.alsoTrackSustainability} onCheckedChange={handleSwitchChange('alsoTrackSustainability')} />
                 </div>
                 <div>
                   <Label htmlFor="exerciseFrequency">How many days a week do you typically exercise?</Label>
@@ -375,17 +410,17 @@ export default function OnboardingPage() {
                   </Select>
                 </div>
                  <div>
-                  <Label>Customize Macro Split (Placeholder)</Label>
+                  <Label>Customize Macro Split</Label>
                   <div className="p-4 border rounded-md text-center bg-muted/50">
                     <PieChart className="h-8 w-8 mx-auto text-muted-foreground mb-2"/>
                     <p className="text-sm text-muted-foreground">Carbs: {formData.macroSplit?.carbs}% | Protein: {formData.macroSplit?.protein}% | Fat: {formData.macroSplit?.fat}%</p>
-                    <Button variant="link" size="sm" className="p-0 h-auto" disabled>Edit Split</Button> or <Button variant="link" size="sm" className="p-0 h-auto" disabled>Use AI Recommendation</Button>
+                    <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('Edit Macro Split')}>Edit Split</Button> or <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('AI Macro Recommendation')}>Use AI Recommendation</Button>
                   </div>
                 </div>
               </section>
             )}
 
-            {currentStep === 4 && (
+            {currentStep === 4 && ( // Diet & Food Preferences
               <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Salad className="h-6 w-6" /> Diet & Food Preferences</h3>
                  <div>
@@ -411,7 +446,7 @@ export default function OnboardingPage() {
                         {ALLERGY_OPTIONS.map((allergy) => (
                         <div key={allergy.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-muted/50">
                             <Checkbox
-                            id={`allergy-${allergy.id}`}
+                            id={`allergy-onboarding-${allergy.id}`}
                             name="dietaryRestrictions"
                             value={allergy.label}
                             checked={formData.dietaryRestrictions.includes(allergy.label)}
@@ -424,38 +459,38 @@ export default function OnboardingPage() {
                                 }));
                             }}
                             />
-                            <Label htmlFor={`allergy-${allergy.id}`} className="font-normal cursor-pointer">{allergy.label}</Label>
+                            <Label htmlFor={`allergy-onboarding-${allergy.id}`} className="font-normal cursor-pointer">{allergy.label}</Label>
                         </div>
                         ))}
                     </div>
                 </div>
-                <Textarea id="dietaryRestrictionsOther" name="dietaryRestrictionsOther" placeholder="Other restrictions or allergies not listed..." className="mt-2" value={(formData.dietaryRestrictions || []).filter(r => !ALLERGY_OPTIONS.find(ao => ao.label === r)).join(', ')} onChange={(e) => { const custom = e.target.value.split(',').map(s => s.trim()).filter(Boolean); setFormData(prev => ({...prev, dietaryRestrictions: [...(prev.dietaryRestrictions || []).filter(r => ALLERGY_OPTIONS.find(ao => ao.label ===r)), ...custom]}))}}/>
+                <Textarea id="dietaryRestrictionsOtherOnboarding" name="dietaryRestrictionsOther" placeholder="Other restrictions or allergies not listed..." className="mt-2" value={(formData.dietaryRestrictions || []).filter(r => !ALLERGY_OPTIONS.find(ao => ao.label === r)).join(', ')} onChange={(e) => { const custom = e.target.value.split(',').map(s => s.trim()).filter(Boolean); setFormData(prev => ({...prev, dietaryRestrictions: [...(prev.dietaryRestrictions || []).filter(r => ALLERGY_OPTIONS.find(ao => ao.label ===r)), ...custom]}))}}/>
 
                 <div>
                   <Label htmlFor="favoriteCuisines">Favorite Cuisines (Optional)</Label>
-                  <Input id="favoriteCuisines" name="favoriteCuisines" value={formData.favoriteCuisines} onChange={handleChange} placeholder="E.g., Italian, Mexican, Indian" />
+                  <Input id="favoriteCuisines" name="favoriteCuisines" value={formData.favoriteCuisines || ''} onChange={handleChange} placeholder="E.g., Italian, Mexican, Indian" />
                 </div>
                 <div>
                   <Label htmlFor="dislikedIngredients">Disliked Ingredients (Optional)</Label>
-                  <Input id="dislikedIngredients" name="dislikedIngredients" value={formData.dislikedIngredients} onChange={handleChange} placeholder="E.g., Cilantro, Olives, Mushrooms" />
+                  <Input id="dislikedIngredients" name="dislikedIngredients" value={formData.dislikedIngredients || ''} onChange={handleChange} placeholder="E.g., Cilantro, Olives, Mushrooms" />
                 </div>
                  <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
-                  <Label htmlFor="enableCarbonTracking" className="flex flex-col">
+                  <Label htmlFor="enableCarbonTrackingOnboarding" className="flex flex-col">
                     <span>Enable Carbon Tracking?</span>
                     <span className="text-xs text-muted-foreground">Understand your food's eco-impact.</span>
                   </Label>
-                  <Switch id="enableCarbonTracking" name="enableCarbonTracking" checked={formData.enableCarbonTracking} onCheckedChange={handleSwitchChange('enableCarbonTracking')} />
+                  <Switch id="enableCarbonTrackingOnboarding" name="enableCarbonTracking" checked={formData.enableCarbonTracking} onCheckedChange={handleSwitchChange('enableCarbonTracking')} />
                 </div>
               </section>
             )}
 
-            {currentStep === 5 && (
+            {currentStep === 5 && ( // AI Demo & Eco Mission
               <section className="space-y-6 animate-in fade-in duration-500 text-center">
                  <h3 className="text-xl font-semibold flex items-center justify-center gap-2 text-primary"><LucideSparklesIcon className="h-6 w-6" /> Our Eco Mission & AI</h3>
                  <div className="p-4 border rounded-lg bg-muted/30">
                     <LucideSparklesIcon className="h-10 w-10 text-primary mx-auto mb-3"/>
                     <p className="font-semibold text-lg mb-2">Snap a Photo, Get Instant Insights!</p>
-                    <img src="https://placehold.co/300x180.png?text=AI+Scan+Demo" alt="AI Feature Demo" data-ai-hint="app scanner food" className="rounded-md shadow-md mx-auto mb-3"/>
+                    <Image src="https://placehold.co/300x180.png?text=AI+Scan+Demo" alt="AI Feature Demo" data-ai-hint="app scanner food" width={300} height={180} className="rounded-md shadow-md mx-auto mb-3"/>
                     <p className="text-sm text-muted-foreground">Our AI analyzes your meal photo to estimate calories, macros, and micronutrients in seconds. Logging food has never been easier!</p>
                  </div>
                  <div className="p-4 border rounded-lg bg-primary/10">
@@ -467,7 +502,7 @@ export default function OnboardingPage() {
               </section>
             )}
             
-            {currentStep === 6 && (
+            {currentStep === 6 && ( // Lifestyle Habits
               <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><HeartHandshake className="h-6 w-6" /> Lifestyle Habits</h3>
                 <div>
@@ -485,50 +520,50 @@ export default function OnboardingPage() {
                 <div>
                   <Label>How would you rate your typical stress levels?</Label>
                   <RadioGroup name="stressLevel" value={formData.stressLevel} onValueChange={handleRadioChange('stressLevel')} className="mt-2 space-y-1">
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="low" id="stress_low" /><Label htmlFor="stress_low">Low</Label></div>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="moderate" id="stress_moderate" /><Label htmlFor="stress_moderate">Moderate</Label></div>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="high" id="stress_high" /><Label htmlFor="stress_high">High</Label></div>
+                      <div className="flex items-center space-x-2"><RadioGroupItem value="low" id="stress_low_onboarding" /><Label htmlFor="stress_low_onboarding" className="font-normal">Low</Label></div>
+                      <div className="flex items-center space-x-2"><RadioGroupItem value="moderate" id="stress_moderate_onboarding" /><Label htmlFor="stress_moderate_onboarding" className="font-normal">Moderate</Label></div>
+                      <div className="flex items-center space-x-2"><RadioGroupItem value="high" id="stress_high_onboarding" /><Label htmlFor="stress_high_onboarding" className="font-normal">High</Label></div>
                     </RadioGroup>
                 </div>
                 <div>
-                  <Label htmlFor="waterGoal">Daily Water Goal (number of glasses, ~250ml or 8oz each)</Label>
+                  <Label htmlFor="waterGoalOnboarding">Daily Water Goal (number of glasses, ~250ml or 8oz each)</Label>
                   <div className="flex items-center gap-2">
                     <Droplet className="h-5 w-5 text-blue-500"/>
-                    <Input id="waterGoal" name="waterGoal" type="number" value={formData.waterGoal?.toString() || '8'} onChange={handleChange} placeholder="E.g., 8" min="1" max="20"/>
+                    <Input id="waterGoalOnboarding" name="waterGoal" type="number" value={formData.waterGoal?.toString() || '8'} onChange={handleChange} placeholder="E.g., 8" min="1" max="20"/>
                   </div>
                 </div>
               </section>
             )}
 
-            {currentStep === 7 && (
+            {currentStep === 7 && ( // Notification Preferences
                 <section className="space-y-4 animate-in fade-in duration-500">
                     <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><BellRing className="h-6 w-6" /> Notification Preferences</h3>
                      <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
-                        <Label htmlFor="mealRemindersEnabled" className="flex flex-col">
+                        <Label htmlFor="mealRemindersEnabledOnboarding" className="flex flex-col">
                             <span>Enable Meal Reminders?</span>
                             <span className="text-xs text-muted-foreground">Get notified for breakfast, lunch, and dinner.</span>
                         </Label>
-                        <Switch id="mealRemindersEnabled" name="reminderSettings.mealRemindersEnabled" checked={!!formData.reminderSettings?.mealRemindersEnabled} onCheckedChange={handleSwitchChange('reminderSettings.mealRemindersEnabled')} />
+                        <Switch id="mealRemindersEnabledOnboarding" name="reminderSettings.mealRemindersEnabled" checked={!!formData.reminderSettings?.mealRemindersEnabled} onCheckedChange={handleSwitchChange('reminderSettings.mealRemindersEnabled')} />
                     </div>
                     {formData.reminderSettings?.mealRemindersEnabled && (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-3 border rounded-md bg-muted/30">
-                             <div> <Label htmlFor="breakfastTime">Breakfast</Label> <Input id="breakfastTime" name="reminderSettings.breakfastTime" type="time" value={formData.reminderSettings?.breakfastTime || '08:00'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, breakfastTime: e.target.value}}))} /> </div>
-                            <div> <Label htmlFor="lunchTime">Lunch</Label> <Input id="lunchTime" name="reminderSettings.lunchTime" type="time" value={formData.reminderSettings?.lunchTime || '12:30'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, lunchTime: e.target.value}}))} /> </div>
-                            <div> <Label htmlFor="dinnerTime">Dinner</Label> <Input id="dinnerTime" name="reminderSettings.dinnerTime" type="time" value={formData.reminderSettings?.dinnerTime || '18:30'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, dinnerTime: e.target.value}}))} /> </div>
+                             <div> <Label htmlFor="breakfastTimeOnboarding">Breakfast</Label> <Input id="breakfastTimeOnboarding" name="reminderSettings.breakfastTime" type="time" value={formData.reminderSettings?.breakfastTime || '08:00'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, breakfastTime: e.target.value}}))} /> </div>
+                            <div> <Label htmlFor="lunchTimeOnboarding">Lunch</Label> <Input id="lunchTimeOnboarding" name="reminderSettings.lunchTime" type="time" value={formData.reminderSettings?.lunchTime || '12:30'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, lunchTime: e.target.value}}))} /> </div>
+                            <div> <Label htmlFor="dinnerTimeOnboarding">Dinner</Label> <Input id="dinnerTimeOnboarding" name="reminderSettings.dinnerTime" type="time" value={formData.reminderSettings?.dinnerTime || '18:30'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, dinnerTime: e.target.value}}))} /> </div>
                         </div>
                     )}
                      <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
-                        <Label htmlFor="waterReminderEnabled" className="flex flex-col">
+                        <Label htmlFor="waterReminderEnabledOnboarding" className="flex flex-col">
                             <span>Water Intake Reminders?</span>
                              <span className="text-xs text-muted-foreground">Stay hydrated throughout the day.</span>
                         </Label>
-                        <Switch id="waterReminderEnabled" name="reminderSettings.waterReminderEnabled" checked={!!formData.reminderSettings?.waterReminderEnabled} onCheckedChange={handleSwitchChange('reminderSettings.waterReminderEnabled')} />
+                        <Switch id="waterReminderEnabledOnboarding" name="reminderSettings.waterReminderEnabled" checked={!!formData.reminderSettings?.waterReminderEnabled} onCheckedChange={handleSwitchChange('reminderSettings.waterReminderEnabled')} />
                     </div>
                     {formData.reminderSettings?.waterReminderEnabled && (
                          <div className="p-3 border rounded-md bg-muted/30 space-y-2">
-                            <Label htmlFor="waterReminderInterval">Remind every:</Label>
+                            <Label htmlFor="waterReminderIntervalOnboarding">Remind every:</Label>
                             <Select name="reminderSettings.waterReminderInterval" value={formData.reminderSettings?.waterReminderInterval?.toString() || '60'} onValueChange={(val) => handleSelectChange('reminderSettings.waterReminderInterval')(Number(val))}>
-                                <SelectTrigger id="waterReminderInterval"><SelectValue /></SelectTrigger>
+                                <SelectTrigger id="waterReminderIntervalOnboarding"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                 <SelectItem value="30">30 minutes</SelectItem>
                                 <SelectItem value="60">60 minutes</SelectItem>
@@ -544,14 +579,14 @@ export default function OnboardingPage() {
                         <ShieldAlert className="h-8 w-8 text-primary mx-auto mb-2"/>
                         <p className="text-xs text-muted-foreground">Your data is yours. We use AI to provide insights, but your personal information is handled with care. Read our (placeholder) Privacy Policy for details.</p>
                         <div className="mt-2 flex items-center justify-center space-x-2">
-                            <Checkbox id="privacyConsent" required/>
-                            <Label htmlFor="privacyConsent" className="text-xs">I agree to the terms and conditions.</Label>
+                            <Checkbox id="privacyConsentOnboarding" required defaultChecked/>
+                            <Label htmlFor="privacyConsentOnboarding" className="text-xs font-normal">I agree to the terms and conditions.</Label>
                         </div>
                     </div>
                 </section>
             )}
 
-            {currentStep === TOTAL_STEPS && (
+            {currentStep === TOTAL_STEPS && ( // Review Step
               <section className="space-y-4 animate-in fade-in duration-500">
                 <div className="space-y-2 border p-4 rounded-md bg-muted/30 max-h-96 overflow-y-auto text-sm">
                   <p><strong>Name:</strong> {formData.name}</p>
@@ -601,3 +636,4 @@ export default function OnboardingPage() {
     </Card>
   );
 }
+

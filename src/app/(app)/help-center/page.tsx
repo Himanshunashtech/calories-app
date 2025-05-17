@@ -48,6 +48,14 @@ export default function HelpCenterPage() {
         description: "Our support team will be available via live chat in a future update. For now, please check the FAQs."
     });
   }
+
+  const handlePlaceholderLink = (featureName: string) => {
+    toast({
+      title: "Coming Soon!",
+      description: `${featureName} will be available in a future update.`
+    });
+  }
+
   return (
     <div className="space-y-6">
       <Card className="shadow-xl">
@@ -86,7 +94,7 @@ export default function HelpCenterPage() {
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-muted-foreground mb-2">Understand how we handle your data.</p>
-                    <Button variant="link" className="p-0 h-auto" disabled>Read Policy (Placeholder)</Button>
+                    <Button variant="link" className="p-0 h-auto" onClick={() => handlePlaceholderLink('Privacy Policy')}>Read Policy</Button>
                 </CardContent>
             </Card>
             <Card className="bg-muted/30">
@@ -95,7 +103,7 @@ export default function HelpCenterPage() {
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-muted-foreground mb-2">Learn more about EcoTrack's features.</p>
-                    <Button variant="link" className="p-0 h-auto" disabled>Explore Features (Placeholder)</Button>
+                    <Button variant="link" className="p-0 h-auto" onClick={() => handlePlaceholderLink('Feature Guide')}>Explore Features</Button>
                 </CardContent>
             </Card>
           </div>
@@ -106,7 +114,7 @@ export default function HelpCenterPage() {
               Our support team is here to assist you. EcoPro members get priority support.
             </p>
             <Button size="lg" onClick={handleContactSupport}>
-              <MessageSquare className="mr-2 h-5 w-5" /> Contact Support (Live Chat Placeholder)
+              <MessageSquare className="mr-2 h-5 w-5" /> Contact Support
             </Button>
           </section>
         </CardContent>

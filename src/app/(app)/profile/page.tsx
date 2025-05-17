@@ -239,6 +239,13 @@ export default function ProfilePage() {
     });
     router.push('/signup');
   };
+  
+  const handlePlaceholderFeatureClick = (featureName: string) => {
+    toast({
+      title: `${featureName} Coming Soon!`,
+      description: `This feature will be available in a future update.`,
+    });
+  };
 
   if (!isClient || isLoading) {
     return (
@@ -305,7 +312,7 @@ export default function ProfilePage() {
             <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><UserCircle2 /> Personal Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div> <Label htmlFor="name">Full Name</Label> <Input id="name" name="name" value={profile.name} onChange={handleChange} placeholder="Your Name" /> </div>
-              <div> <Label htmlFor="age">Age</Label> <Input id="age" name="age" type="number" value={profile.age} onChange={handleChange} placeholder="Your Age" /> </div>
+              <div> <Label htmlFor="age">Year of Birth</Label> <Input id="age" name="age" type="number" value={profile.age} onChange={handleChange} placeholder={`E.g., ${new Date().getFullYear() - 30}`} /> </div>
               <div> <Label htmlFor="gender">Gender</Label> <Select name="gender" value={profile.gender} onValueChange={handleSelectChange('gender')}> <SelectTrigger id="gender"><SelectValue placeholder="Select gender" /></SelectTrigger> <SelectContent> <SelectItem value="male">Male</SelectItem> <SelectItem value="female">Female</SelectItem> <SelectItem value="non-binary">Non-binary</SelectItem> <SelectItem value="prefer-not-to-say">Prefer not to say</SelectItem> <SelectItem value="other">Other</SelectItem> </SelectContent> </Select> </div>
             </div>
           </section>
@@ -339,7 +346,7 @@ export default function ProfilePage() {
           <section>
             <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><Activity /> Goals & Activity</h3>
              <div className="space-y-4">
-                <div> <Label>Primary Health Goals</Label> <p className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50 min-h-[40px]"> {profile.healthGoals && profile.healthGoals.length > 0 ? profile.healthGoals.join(', ') : 'Not set'} </p> <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => router.push('/onboarding')}><Edit3 className="mr-1 h-3 w-3"/>Edit Goals (Re-run Onboarding)</Button></div>
+                <div> <Label>Primary Health Goals</Label> <div className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50 min-h-[40px]"> {profile.healthGoals && profile.healthGoals.length > 0 ? profile.healthGoals.join(', ') : 'Not set'} </div> <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => router.push('/onboarding')}><Edit3 className="mr-1 h-3 w-3"/>Edit Goals (Re-run Onboarding)</Button></div>
                  <div> <Label htmlFor="activityLevel">Activity Level</Label> <Select name="activityLevel" value={profile.activityLevel} onValueChange={handleSelectChange('activityLevel')}> <SelectTrigger id="activityLevel"><SelectValue placeholder="Select activity level" /></SelectTrigger> <SelectContent> <SelectItem value="sedentary">Sedentary</SelectItem> <SelectItem value="light">Lightly Active</SelectItem> <SelectItem value="moderate">Moderately Active</SelectItem> <SelectItem value="very">Very Active</SelectItem> </SelectContent> </Select> </div>
                 <div> <Label htmlFor="exerciseFrequency">Exercise Frequency</Label> <Select name="exerciseFrequency" value={profile.exerciseFrequency} onValueChange={handleSelectChange('exerciseFrequency')}> <SelectTrigger id="exerciseFrequency"><SelectValue placeholder="Select frequency" /></SelectTrigger> <SelectContent> <SelectItem value="0">0 days/week</SelectItem> <SelectItem value="1-2">1-2 days/week</SelectItem> <SelectItem value="3-4">3-4 days/week</SelectItem> <SelectItem value="5+">5+ days/week</SelectItem> </SelectContent> </Select> </div>
                  <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
@@ -349,13 +356,17 @@ export default function ProfilePage() {
                     <Switch id="alsoTrackSustainability" checked={!!profile.alsoTrackSustainability} onCheckedChange={handleSwitchChange('alsoTrackSustainability')} />
                 </div>
                  <div>
-                  <Label>Current Macro Split (Placeholder)</Label>
+                  <Label>Current Macro Split</Label>
                   <div className="p-4 border rounded-md text-center bg-muted/50">
                     <PieChart className="h-8 w-8 mx-auto text-muted-foreground mb-2"/>
                     <p className="text-sm text-muted-foreground">C: {profile.macroSplit?.carbs}% | P: {profile.macroSplit?.protein}% | F: {profile.macroSplit?.fat}%</p>
-                    <Button variant="link" size="sm" className="p-0 h-auto" disabled>Edit Split</Button>
+                    <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('Edit Macro Split')}>Edit Split</Button> or <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('AI Macro Recommendation')}>Use AI Recommendation</Button>
                   </div>
                 </div>
+                 <div className="p-3 border rounded-md flex items-center justify-between">
+                    <Label htmlFor="fitnessSyncProfile" className="text-sm">Sync fitness tracker?</Label>
+                    <Button size="sm" variant="outline" onClick={() => handlePlaceholderFeatureClick('Fitness Tracker Sync')}>Connect Health App</Button>
+                 </div>
             </div>
           </section>
 
@@ -431,8 +442,8 @@ export default function ProfilePage() {
                 </div>
               )}
                <div>
-                <Label htmlFor="snoozeDurationProfile">Notification Snooze Duration (Placeholder)</Label>
-                 <Select name="snoozeDuration" value={profile.reminderSettings?.snoozeDuration?.toString() || '5'} onValueChange={(val) => handleReminderSelectChange('snoozeDuration')(parseInt(val))}>
+                <Label htmlFor="snoozeDurationProfile">Notification Snooze Duration</Label>
+                 <Select name="snoozeDuration" value={profile.reminderSettings?.snoozeDuration?.toString() || '5'} onValueChange={(val) => handleReminderSelectChange('snoozeDuration')(parseInt(val))} disabled>
                     <SelectTrigger id="snoozeDurationProfile" disabled><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="5">5 minutes</SelectItem>
@@ -440,6 +451,7 @@ export default function ProfilePage() {
                       <SelectItem value="15">15 minutes</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground mt-1">Snooze feature coming soon.</p>
                </div>
               <p className="text-xs text-muted-foreground">Note: Actual notification delivery depends on browser/device settings and app capabilities.</p>
             </div>
@@ -498,3 +510,4 @@ export default function ProfilePage() {
   );
 }
     
+
