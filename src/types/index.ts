@@ -99,3 +99,16 @@ export interface EcoMealPlan {
 export interface FoodMoodCorrelation {
   insights: string[];
 }
+
+// Chatbot types
+export interface ChatMessage {
+  id: string; // For React keys in the UI
+  role: 'user' | 'assistant';
+  text: string;
+  timestamp: string; // ISO string
+}
+
+export interface FlowChatMessage { // For passing to/from AI flow
+  role: 'user' | 'model';
+  content: string;
+}
