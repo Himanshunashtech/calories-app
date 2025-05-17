@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import { UserPlus, Mail, Lock, ExternalLink, LogIn } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { fakeSignup } from '@/lib/localStorage';
+import { fakeSignup, isUserLoggedIn, isOnboardingComplete } from '@/lib/localStorage';
 
 
 export default function SignupPage() {
@@ -23,6 +23,14 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+
+  useEffect(() => {
+    // If user is already logged in and onboarded, redirect to dashboard
+    // This prevents re-accessing signup if already set up.
+    if (isUserLoggedIn() && isOnboardingComplete()) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
 
   const checkPasswordStrength = (pass: string) => {
     let strength = 0;
@@ -51,13 +59,13 @@ export default function SignupPage() {
     }
     setIsLoading(true);
     
-    // Placeholder for actual signup
     fakeSignup(email, name); // Use fakeSignup
     toast({
-      title: 'Signup Successful (Demo)',
-      description: 'Welcome to EcoAI Tracker! Please complete your profile.',
+      title: 'Signup Successful!',
+      description: 'Welcome to EcoAI Tracker! Let\'s personalize your experience.',
     });
-    router.push('/onboarding'); // Redirect to onboarding after signup
+    // After signup, user needs to go through onboarding if they used this direct signup page
+    router.push('/onboarding'); 
   };
 
   return (

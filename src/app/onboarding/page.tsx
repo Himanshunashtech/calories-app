@@ -13,13 +13,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, Coffee, CheckCircle, Leaf, Sparkles, Utensils, ShieldQuestion, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, CloudLightning, Users } from 'lucide-react';
+import { User, Target, Salad, Coffee, CheckCircle, Leaf, Sparkles, Utensils, ShieldQuestion, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, CloudLightning, Users, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import type { OnboardingData } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
+import { isUserLoggedIn, isOnboardingComplete } from '@/lib/localStorage';
 
-const TOTAL_STEPS = 8; // Increased total steps
+const TOTAL_STEPS = 8; 
 
 const defaultFormData: OnboardingData = {
   name: '',
@@ -42,6 +43,15 @@ const defaultFormData: OnboardingData = {
   stressLevel: '',
   waterGoal: 8,
   macroSplit: { carbs: 50, protein: 25, fat: 25 },
+  reminderSettings: {
+    mealRemindersEnabled: true,
+    breakfastTime: '08:00',
+    lunchTime: '12:30',
+    dinnerTime: '18:30',
+    waterReminderEnabled: false,
+    waterReminderInterval: 60,
+    snoozeDuration: 5,
+  },
 };
 
 export default function OnboardingPage() {
@@ -53,11 +63,15 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     setIsClient(true);
-  }, []);
+    // If user is logged in AND onboarding is already complete, redirect them away.
+    if (isUserLoggedIn() && isOnboardingComplete()) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    if (type === 'checkbox' && name === 'healthGoals') { // Specifically for healthGoals
+    if (type === 'checkbox' && name === 'healthGoals') { 
       const { checked } = e.target as HTMLInputElement;
       setFormData((prev) => ({
         ...prev,
@@ -65,7 +79,7 @@ export default function OnboardingPage() {
           ? [...prev.healthGoals, value]
           : prev.healthGoals.filter((goal) => goal !== value),
       }));
-    } else if (type === 'checkbox' && name === 'dietaryRestrictions') { // For dietaryRestrictions
+    } else if (type === 'checkbox' && name === 'dietaryRestrictions') { 
        const { checked } = e.target as HTMLInputElement;
       setFormData((prev) => ({
         ...prev,
@@ -82,12 +96,26 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleSwitchChange = (name: keyof OnboardingData) => (checked: boolean) => {
-    setFormData((prev) => ({ ...prev, [name]: checked }));
+  const handleSwitchChange = (name: keyof OnboardingData | `reminderSettings.${keyof OnboardingData['reminderSettings']}`) => (checked: boolean) => {
+     if (name === 'reminderSettings.mealRemindersEnabled') {
+        setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, mealRemindersEnabled: checked }}));
+    } else if (name === 'reminderSettings.waterReminderEnabled') {
+        setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, waterReminderEnabled: checked }}));
+    } else {
+        setFormData((prev) => ({ ...prev, [name as keyof OnboardingData]: checked }));
+    }
   };
 
-  const handleSelectChange = (name: keyof OnboardingData) => (value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value as any }));
+  const handleSelectChange = (name: keyof OnboardingData | `reminderSettings.${keyof OnboardingData['reminderSettings']}`) => (value: string | number) => {
+     if (name === 'reminderSettings.waterReminderInterval') {
+      setFormData((prev) => ({
+        ...prev,
+        reminderSettings: { ...prev.reminderSettings, waterReminderInterval: Number(value) },
+      }));
+    }
+    else {
+        setFormData((prev) => ({ ...prev, [name as keyof OnboardingData]: value as any }));
+    }
   };
   
   const handleRadioChange = (name: keyof OnboardingData) => (value: string) => {
@@ -102,16 +130,16 @@ export default function OnboardingPage() {
         toast({ variant: "destructive", title: "Missing fields", description: "Please fill in all basic details." });
         return;
       }
-       if (currentStep === 2 && (!formData.height || !formData.weight)) {
-        toast({ variant: "destructive", title: "Missing fields", description: "Please provide height and weight." });
+       if (currentStep === 2 && (!formData.height || !formData.weight || !formData.activityLevel)) {
+        toast({ variant: "destructive", title: "Missing fields", description: "Please provide height, weight, and activity level." });
         return;
       }
-      if (currentStep === 3 && (!formData.activityLevel || formData.healthGoals.length === 0 )) {
-        toast({ variant: "destructive", title: "Missing fields", description: "Please complete all fields for goals and activity." });
+      if (currentStep === 3 && (formData.healthGoals.length === 0 )) {
+        toast({ variant: "destructive", title: "Missing fields", description: "Please select at least one health goal." });
         return;
       }
       if (currentStep === 4 && !formData.dietType) {
-        toast({ variant: "destructive", title: "Missing fields", description: "Please select your diet type and preferences." });
+        toast({ variant: "destructive", title: "Missing fields", description: "Please select your diet type." });
         return;
       }
        if (currentStep === 6 && (!formData.sleepHours || !formData.stressLevel || !formData.waterGoal)) {
@@ -131,18 +159,18 @@ export default function OnboardingPage() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     console.log('Onboarding Data:', formData);
+    // Save onboarding data to a temporary key or directly to userProfile if structure allows
     const existingProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
     const userProfileData = { ...existingProfile, ...formData }; 
     localStorage.setItem('userProfile', JSON.stringify(userProfileData));
-    localStorage.setItem('onboardingComplete', 'true');
-
+    // Do NOT set onboardingComplete here yet. It's set after login.
 
     toast({
-      title: 'Onboarding Complete!',
+      title: 'Profile Setup Complete!',
       description: "Let's choose a plan that's right for you.",
       action: <CheckCircle className="text-green-500" />,
     });
-    router.push('/subscription');
+    router.push('/subscription'); // Go to subscription page after onboarding
   };
 
   const progressValue = (currentStep / TOTAL_STEPS) * 100;
@@ -153,16 +181,22 @@ export default function OnboardingPage() {
     { id: 'maintain-weight', label: 'Maintain Weight' },
     { id: 'eat-healthier', label: 'Eat Healthier' },
     { id: 'improve-energy', label: 'Improve Energy Levels' },
-    { id: 'track-sustainability', label: 'Track Sustainability Impact'},
   ];
+
+  const currentYear = new Date().getFullYear();
 
 
   return (
     <Card className="w-full shadow-2xl">
       <CardHeader>
         <div className="flex justify-center mb-2">
-          { currentStep === 5 ? <CloudLightning className="h-10 w-10 text-primary"/> :
-            currentStep === TOTAL_STEPS -1 ? <BellRing className="h-10 w-10 text-primary"/> :
+          { currentStep === 1 ? <User className="h-10 w-10 text-primary"/> :
+            currentStep === 2 ? <BarChart3 className="h-10 w-10 text-primary"/> :
+            currentStep === 3 ? <Target className="h-10 w-10 text-primary"/> :
+            currentStep === 4 ? <Utensils className="h-10 w-10 text-primary"/> :
+            currentStep === 5 ? <Sparkles className="h-10 w-10 text-primary"/> :
+            currentStep === 6 ? <HeartHandshake className="h-10 w-10 text-primary"/> :
+            currentStep === 7 ? <BellRing className="h-10 w-10 text-primary"/> :
             <Leaf className="h-10 w-10 text-primary" />
           }
         </div>
@@ -170,22 +204,22 @@ export default function OnboardingPage() {
           { currentStep === 1 && "Welcome to EcoTrack!"}
           { currentStep === 2 && "Physical Metrics"}
           { currentStep === 3 && "Your Health Goals"}
-          { currentStep === 4 && "Dietary Preferences"}
-          { currentStep === 5 && "AI Feature Demo (Conceptual)"}
+          { currentStep === 4 && "Diet & Food Preferences"}
+          { currentStep === 5 && "AI Feature & Eco Mission"}
           { currentStep === 6 && "Lifestyle Habits"}
           { currentStep === 7 && "Notification Preferences"}
           { currentStep === TOTAL_STEPS && "Review & Get Started!"}
-          { currentStep > 1 && currentStep < TOTAL_STEPS && ` (${currentStep-1}/${TOTAL_STEPS-2})`}
+          { currentStep > 1 && currentStep < TOTAL_STEPS && ` (Step ${currentStep-1}/${TOTAL_STEPS-2})`}
         </CardTitle>
         <CardDescription className="text-center">
           { currentStep === 1 && "Track. Improve. Sustain. Let's personalize your journey."}
           { currentStep === 2 && "Tell us a bit about yourself for accurate tracking."}
           { currentStep === 3 && "What are you aiming to achieve? You can select multiple goals."}
           { currentStep === 4 && "Customize your diet and food preferences."}
-          { currentStep === 5 && "See how EcoTrack's AI makes logging effortless!"}
+          { currentStep === 5 && "See how EcoTrack makes an impact & how AI helps!"}
           { currentStep === 6 && "Understanding your habits helps us guide you better."}
           { currentStep === 7 && "Stay on track with timely reminders."}
-          { currentStep === TOTAL_STEPS && "You're all set! Review your info and start your journey."}
+          { currentStep === TOTAL_STEPS && "You're all set! Review your info and choose your plan next."}
         </CardDescription>
         <Progress value={progressValue} className="w-full mt-4 h-2 [&>div]:bg-primary" />
       </CardHeader>
@@ -211,8 +245,8 @@ export default function OnboardingPage() {
                   <Input id="name" name="name" value={formData.name} onChange={handleChange} placeholder="E.g., Alex Green" required />
                 </div>
                 <div>
-                  <Label htmlFor="age">Age</Label>
-                  <Input id="age" name="age" type="number" value={formData.age} onChange={handleChange} placeholder="E.g., 30" required />
+                  <Label htmlFor="age">Year of Birth</Label>
+                  <Input id="age" name="age" type="number" value={formData.age} onChange={handleChange} placeholder={`E.g., ${currentYear - 30}`} min="1900" max={currentYear -5} required />
                 </div>
                 <div>
                   <Label htmlFor="gender">Gender</Label>
@@ -378,7 +412,7 @@ export default function OnboardingPage() {
                         ))}
                     </div>
                 </div>
-                <Textarea id="dietaryRestrictionsOther" name="dietaryRestrictionsOther" placeholder="Other restrictions or allergies not listed..." className="mt-2"/>
+                <Textarea id="dietaryRestrictionsOther" name="dietaryRestrictionsOther" placeholder="Other restrictions or allergies not listed..." className="mt-2" value={(formData.dietaryRestrictions || []).filter(r => !ALLERGY_OPTIONS.find(ao => ao.label === r)).join(', ')} onChange={(e) => { const custom = e.target.value.split(',').map(s => s.trim()).filter(Boolean); setFormData(prev => ({...prev, dietaryRestrictions: [...(prev.dietaryRestrictions || []).filter(r => ALLERGY_OPTIONS.find(ao => ao.label ===r)), ...custom]}))}}/>
 
                 <div>
                   <Label htmlFor="favoriteCuisines">Favorite Cuisines (Optional)</Label>
@@ -402,14 +436,14 @@ export default function OnboardingPage() {
                  <div className="p-4 border rounded-lg bg-muted/30">
                     <Sparkles className="h-12 w-12 text-primary mx-auto mb-3"/>
                     <p className="font-semibold text-lg mb-2">Snap a Photo, Get Instant Insights!</p>
-                    <img src="https://placehold.co/300x180.png?text=AI+Scan+Demo+GIF" alt="AI Feature Demo" data-ai-hint="app scanner food" className="rounded-md shadow-md mx-auto mb-3"/>
+                    <img src="https://placehold.co/300x180.png?text=AI+Scan+Demo" alt="AI Feature Demo" data-ai-hint="app scanner food" className="rounded-md shadow-md mx-auto mb-3"/>
                     <p className="text-sm text-muted-foreground">Our AI (powered by Gemini) analyzes your meal photo to estimate calories, macros, and even micronutrients in seconds. Logging food has never been easier!</p>
                     <Button variant="link" className="mt-2" disabled>See Example Scan</Button>
                  </div>
                  <div className="p-4 border rounded-lg bg-primary/10">
-                    <Leaf className="h-10 w-10 text-primary mx-auto mb-2"/>
-                    <p className="font-semibold text-lg text-primary">Our Eco Mission</p>
-                    <p className="text-sm text-muted-foreground">Join 50,000+ users saving an estimated 1 Million kg of CO2 monthly by making informed, sustainable food choices. Every meal counts!</p>
+                    <Users className="h-10 w-10 text-primary mx-auto mb-2"/>
+                    <p className="font-semibold text-lg text-primary">Join Our Eco Mission!</p>
+                    <p className="text-sm text-muted-foreground">Become one of the 50,000+ users collectively saving an estimated 1 Million kg of CO2 monthly by making informed, sustainable food choices. Every meal counts!</p>
                     <Progress value={75} className="w-3/4 mx-auto mt-2 h-2 [&>div]:bg-green-500" aria-label="Eco mission progress"/>
                  </div>
               </section>
@@ -417,7 +451,7 @@ export default function OnboardingPage() {
             
             {currentStep === 6 && (
               <section className="space-y-4 animate-in fade-in duration-500">
-                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Coffee className="h-6 w-6" /> Lifestyle Habits</h3>
+                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><HeartHandshake className="h-6 w-6" /> Lifestyle Habits</h3>
                 <div>
                   <Label htmlFor="sleepHours">On average, how many hours of sleep do you get per night?</Label>
                   <Select name="sleepHours" value={formData.sleepHours} onValueChange={handleSelectChange('sleepHours')}>
@@ -439,10 +473,10 @@ export default function OnboardingPage() {
                     </RadioGroup>
                 </div>
                 <div>
-                  <Label htmlFor="waterGoal">Daily Water Goal (glasses)</Label>
+                  <Label htmlFor="waterGoal">Daily Water Goal (number of glasses, ~250ml or 8oz each)</Label>
                   <div className="flex items-center gap-2">
                     <Droplet className="h-5 w-5 text-blue-500"/>
-                    <Input id="waterGoal" name="waterGoal" type="number" value={formData.waterGoal} onChange={handleChange} placeholder="E.g., 8" min="1" max="20"/>
+                    <Input id="waterGoal" name="waterGoal" type="number" value={formData.waterGoal?.toString() || '8'} onChange={handleChange} placeholder="E.g., 8" min="1" max="20"/>
                   </div>
                 </div>
               </section>
@@ -456,7 +490,7 @@ export default function OnboardingPage() {
                             <span>Enable Meal Reminders?</span>
                             <span className="text-xs text-muted-foreground">Get notified for breakfast, lunch, and dinner.</span>
                         </Label>
-                        <Switch id="mealRemindersEnabled" name="reminderSettings.mealRemindersEnabled" checked={formData.reminderSettings?.mealRemindersEnabled} onCheckedChange={handleSwitchChange('reminderSettings.mealRemindersEnabled')} />
+                        <Switch id="mealRemindersEnabled" name="reminderSettings.mealRemindersEnabled" checked={!!formData.reminderSettings?.mealRemindersEnabled} onCheckedChange={handleSwitchChange('reminderSettings.mealRemindersEnabled')} />
                     </div>
                     {formData.reminderSettings?.mealRemindersEnabled && (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-3 border rounded-md bg-muted/30">
@@ -470,8 +504,22 @@ export default function OnboardingPage() {
                             <span>Water Intake Reminders?</span>
                              <span className="text-xs text-muted-foreground">Stay hydrated throughout the day.</span>
                         </Label>
-                        <Switch id="waterReminderEnabled" name="reminderSettings.waterReminderEnabled" checked={formData.reminderSettings?.waterReminderEnabled} onCheckedChange={handleSwitchChange('reminderSettings.waterReminderEnabled')} />
+                        <Switch id="waterReminderEnabled" name="reminderSettings.waterReminderEnabled" checked={!!formData.reminderSettings?.waterReminderEnabled} onCheckedChange={handleSwitchChange('reminderSettings.waterReminderEnabled')} />
                     </div>
+                    {formData.reminderSettings?.waterReminderEnabled && (
+                         <div className="p-3 border rounded-md bg-muted/30 space-y-2">
+                            <Label htmlFor="waterReminderInterval">Remind every:</Label>
+                            <Select name="reminderSettings.waterReminderInterval" value={formData.reminderSettings?.waterReminderInterval?.toString() || '60'} onValueChange={(val) => handleSelectChange('reminderSettings.waterReminderInterval')(Number(val))}>
+                                <SelectTrigger id="waterReminderInterval"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                <SelectItem value="30">30 minutes</SelectItem>
+                                <SelectItem value="60">60 minutes</SelectItem>
+                                <SelectItem value="90">90 minutes</SelectItem>
+                                <SelectItem value="120">120 minutes</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                      <p className="text-xs text-muted-foreground text-center">Actual notification delivery depends on your browser and device settings.</p>
                       <div className="p-4 border rounded-lg text-center">
                         <h4 className="font-semibold mb-2">Data Privacy Assurance</h4>
@@ -489,7 +537,7 @@ export default function OnboardingPage() {
               <section className="space-y-4 animate-in fade-in duration-500">
                 <div className="space-y-2 border p-4 rounded-md bg-muted/30 max-h-96 overflow-y-auto text-sm">
                   <p><strong>Name:</strong> {formData.name}</p>
-                  <p><strong>Age:</strong> {formData.age}</p>
+                  <p><strong>Year of Birth:</strong> {formData.age}</p>
                   <p><strong>Gender:</strong> {formData.gender}</p>
                   <p><strong>Height:</strong> {formData.height} {formData.heightUnit}</p>
                   <p><strong>Weight:</strong> {formData.weight} {formData.weightUnit}</p>
@@ -506,6 +554,7 @@ export default function OnboardingPage() {
                   <p><strong>Stress Level:</strong> {formData.stressLevel}</p>
                   <p><strong>Water Goal:</strong> {formData.waterGoal} glasses</p>
                   <p><strong>Meal Reminders:</strong> {formData.reminderSettings?.mealRemindersEnabled ? `Enabled (${formData.reminderSettings.breakfastTime}, ${formData.reminderSettings.lunchTime}, ${formData.reminderSettings.dinnerTime})` : 'Disabled'}</p>
+                  <p><strong>Water Reminders:</strong> {formData.reminderSettings?.waterReminderEnabled ? `Enabled, every ${formData.reminderSettings.waterReminderInterval} mins` : 'Disabled'}</p>
                 </div>
                 <div className="flex items-center gap-2 mt-4 p-3 bg-primary/10 rounded-md">
                     <Users className="h-5 w-5 text-primary"/>
@@ -524,7 +573,7 @@ export default function OnboardingPage() {
                 </Button>
               ) : (
                 <Button type="submit" className="ml-auto bg-green-600 hover:bg-green-700">
-                  Complete Setup & View Dashboard <Smile className="ml-2 h-4 w-4"/>
+                  Complete Profile & Select Plan <Smile className="ml-2 h-4 w-4"/>
                 </Button>
               )}
             </CardFooter>

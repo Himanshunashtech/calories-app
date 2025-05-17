@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, Mail, Lock, ExternalLink, UserPlus } from 'lucide-react';
-import { fakeLogin, getUserProfile, saveUserProfile, type UserProfile } from '@/lib/localStorage';
+import { fakeLogin, getUserProfile, saveUserProfile, type UserProfile, isUserLoggedIn, isOnboardingComplete } from '@/lib/localStorage';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -19,50 +19,26 @@ export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (isUserLoggedIn() && isOnboardingComplete()) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     if (email && password) {
-      let profile = getUserProfile();
-      
-      if (profile) {
-        // Onboarding data exists, associate email and log in
-        const updatedProfile: UserProfile = { ...profile, email: email };
-        saveUserProfile(updatedProfile);
-        fakeLogin(email); // Sets loggedIn flag and ensures profile email is current
+      // fakeLogin now handles associating the email with the onboarding profile
+      // or creating a new one if none exists from onboarding.
+      fakeLogin(email); // This will also set onboardingComplete to true
 
-        toast({
-          title: 'Account Ready!',
-          description: 'Welcome to EcoAI Tracker! You are now logged in.',
-        });
-        router.push('/dashboard');
-      } else {
-        // This case should be rare if user followed onboarding -> plan -> login
-        // Treat as a new user sign-up using this email and password
-        // For demo, we'll create a minimal profile. A real app might need a name field here too.
-        const newProfile: UserProfile = {
-          name: 'New User', // Or derive from email, or have a name field on this page
-          email: email,
-          age: '', gender: '', height: '', heightUnit: 'cm', weight: '', weightUnit: 'kg',
-          activityLevel: '', healthGoals: [], alsoTrackSustainability: false, exerciseFrequency: '', dietaryRestrictions: [],
-          dietType: '', favoriteCuisines: '', dislikedIngredients: '', enableCarbonTracking: false,
-          sleepHours: '', stressLevel: '', waterGoal: 8, macroSplit: { carbs: 50, protein: 25, fat: 25}, 
-          phone: '', profileImageUri: null,
-          // Assuming onboarding was skipped, these would be defaults
-          reminderSettings: { mealRemindersEnabled: true, breakfastTime: '08:00', lunchTime: '12:30', dinnerTime: '18:30', waterReminderEnabled: false, waterReminderInterval: 60, snoozeDuration: 5 },
-          appSettings: { darkModeEnabled: false, unitPreferences: { weight: 'kg', height: 'cm', volume: 'ml' }, hideNonCompliantRecipes: false }
-        };
-        saveUserProfile(newProfile);
-        fakeLogin(email); // This will now use the newly created profile
-        localStorage.setItem('onboardingComplete', 'true'); // Since they are "logging in" after plan selection
-
-        toast({
-          title: 'Account Created & Logged In!',
-          description: 'Welcome to EcoAI Tracker!',
-        });
-        router.push('/dashboard');
-      }
+      toast({
+        title: 'Account Ready & Logged In!',
+        description: 'Welcome to EcoAI Tracker!',
+      });
+      router.push('/dashboard');
     } else {
       toast({
         variant: 'destructive',

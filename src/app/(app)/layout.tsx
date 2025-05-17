@@ -22,15 +22,35 @@ export default function AppLayout({
     const userLoggedIn = isUserLoggedIn();
     const onboardingComplete = isOnboardingComplete();
 
-    if (!userLoggedIn && pathname !== '/login' && pathname !== '/signup' && pathname !== '/password-reset') {
+    // Pages that have their own layouts and don't need this AppLayout's protection/UI
+    const standalonePages = ['/login', '/signup', '/password-reset', '/onboarding'];
+
+    if (standalonePages.includes(pathname)) {
+      // If we're on a page that should have its own layout,
+      // and this AppLayout is somehow still active (e.g. during route transition before specific layout takes over),
+      // we don't want to do auth checks here or show this layout's loader.
+      // The rendering of AppLayout's UI (Header, Nav) is already skipped by the conditional below.
+      setIsCheckingAuth(false); // Stop this layout's loading spinner.
+      return;
+    }
+
+    // If we are on a page that *is* part of the (app) group and needs protection:
+    if (!userLoggedIn) {
       router.replace('/login');
-    } else if (userLoggedIn && !onboardingComplete && pathname !== '/onboarding') {
+    } else if (!onboardingComplete) {
       router.replace('/onboarding');
     } else {
+      // User is logged in and onboarding is complete, allow access.
       setIsCheckingAuth(false);
     }
   }, [router, pathname]);
 
+  // Hide layout for auth pages, or pages that have their own distinct layout
+  if (pathname === '/login' || pathname === '/signup' || pathname === '/password-reset' || pathname === '/onboarding') {
+    return <>{children}</>;
+  }
+
+  // If we're not on an auth page, and checks are still happening
   if (isCheckingAuth) {
     return (
       <div className="flex flex-col min-h-screen items-center justify-center bg-background">
@@ -39,19 +59,15 @@ export default function AppLayout({
       </div>
     );
   }
-  
-  // Hide layout for auth pages
-  if (pathname === '/login' || pathname === '/signup' || pathname === '/password-reset' || pathname === '/onboarding') {
-    return <>{children}</>;
-  }
 
+  // If not an auth page and auth checks are complete, render the full app layout
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
       <main className="flex-grow container mx-auto max-w-2xl px-4 py-8 pb-24">
         {children}
       </main>
-      <ChatFAB /> 
+      <ChatFAB />
       <BottomNavigationBar />
     </div>
   );
