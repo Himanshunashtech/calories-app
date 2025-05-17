@@ -9,7 +9,7 @@ export default function AppLayout({
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
-      <main className="flex-grow container mx-auto max-w-2xl px-4 py-8 pb-24 md:pb-8"> {/* pb-24 for bottom nav space on mobile */}
+      <main className="flex-grow container mx-auto max-w-2xl px-4 py-8 pb-24"> {/* Changed md:pb-8 to pb-24 */}
         {children}
       </main>
       <BottomNavigationBar />
