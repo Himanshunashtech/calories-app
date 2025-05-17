@@ -5,9 +5,13 @@ import { ALLERGY_OPTIONS } from '@/types'; // Import ALLERGY_OPTIONS
 const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
 const SELECTED_PLAN_KEY = 'selectedPlan';
 const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage';
-const ONBOARDING_DATA_KEY = 'onboardingData'; // Old key, for migration
-const USER_PROFILE_KEY = 'userProfile'; // New consolidated key
+const USER_PROFILE_KEY = 'userProfile';
 const WATER_INTAKE_KEY = 'ecoAi_waterIntake';
+const ONBOARDING_COMPLETE_KEY = 'onboardingComplete';
+const USER_LOGGED_IN_KEY = 'userLoggedIn';
+const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'generatedMealPlanOutput';
+const MEAL_PLAN_KEY = 'mealPlan';
+
 
 // Meal Logs
 export function getMealLogs(): MealEntry[] {
@@ -153,18 +157,10 @@ export function getUserProfile(): UserProfile | null {
   if (typeof window === 'undefined') return null;
   try {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
-    let existingProfileData: Partial<UserProfile> = {}; // Changed OnboardingData to UserProfile
+    let existingProfileData: Partial<UserProfile> = {};
 
     if (profileJson) {
       existingProfileData = JSON.parse(profileJson) as UserProfile;
-    } else {
-      // Try to migrate from old onboardingData
-      const onboardingJson = localStorage.getItem(ONBOARDING_DATA_KEY);
-      if (onboardingJson) {
-        const onboardingData = JSON.parse(onboardingJson) as OnboardingData;
-        existingProfileData = { ...onboardingData, dietaryRestrictions: Array.isArray(onboardingData.dietaryRestrictions) ? onboardingData.dietaryRestrictions : (onboardingData.dietaryRestrictions ? [onboardingData.dietaryRestrictions] : []) };
-        // Consider removing the old key: localStorage.removeItem(ONBOARDING_DATA_KEY);
-      }
     }
     
     const completeProfile: UserProfile = {
@@ -180,7 +176,7 @@ export function getUserProfile(): UserProfile | null {
       alsoTrackSustainability: existingProfileData.alsoTrackSustainability || false,
       exerciseFrequency: existingProfileData.exerciseFrequency || '',
       dietType: existingProfileData.dietType || '',
-      dietaryRestrictions: Array.isArray(existingProfileData.dietaryRestrictions) ? existingProfileData.dietaryRestrictions : (existingProfileData.dietaryRestrictions ? [existingProfileData.dietaryRestrictions] : []),
+      dietaryRestrictions: Array.isArray(existingProfileData.dietaryRestrictions) ? existingProfileData.dietaryRestrictions : (existingProfileData.dietaryRestrictions ? [String(existingProfileData.dietaryRestrictions)] : []),
       favoriteCuisines: existingProfileData.favoriteCuisines || '',
       dislikedIngredients: existingProfileData.dislikedIngredients || '',
       enableCarbonTracking: existingProfileData.enableCarbonTracking === undefined ? false : existingProfileData.enableCarbonTracking,
@@ -206,7 +202,7 @@ export function getUserProfile(): UserProfile | null {
     };
     
     // Save the potentially migrated/defaulted profile back if it wasn't loaded from USER_PROFILE_KEY
-    if (!profileJson && (existingProfileData.name || localStorage.getItem(ONBOARDING_DATA_KEY))) { 
+    if (!profileJson && existingProfileData.name ) { 
          saveUserProfile(completeProfile);
     }
 
@@ -300,7 +296,7 @@ export function getRecentMealLogs(days: number = 7): MealEntry[] {
 // Helper to check if onboarding is complete
 export function isOnboardingComplete(): boolean {
   if (typeof window === 'undefined') return false;
-  return localStorage.getItem('onboardingComplete') === 'true';
+  return localStorage.getItem(ONBOARDING_COMPLETE_KEY) === 'true';
 }
 
 // For authentication stub
@@ -310,25 +306,44 @@ export function fakeLogin(email: string): void {
     // For now, just store email to simulate logged-in state.
     const profile = getUserProfile() || {} as Partial<UserProfile>;
     saveUserProfile({ ...profile, email } as UserProfile);
-    localStorage.setItem('userLoggedIn', 'true');
+    localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
 }
 
 export function fakeSignup(email: string, name: string): void {
     if (typeof window === 'undefined') return;
     const profile = getUserProfile() || {} as Partial<UserProfile>;
     saveUserProfile({ ...profile, email, name } as UserProfile);
-    localStorage.setItem('userLoggedIn', 'true');
-    localStorage.setItem('onboardingComplete', 'false'); // New users need onboarding
+    localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
+    localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'false'); // New users need onboarding
 }
 
 
 export function fakeLogout(): void {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem('userLoggedIn');
+    localStorage.removeItem(USER_LOGGED_IN_KEY);
     // Optionally clear more user-specific data or redirect
 }
 
 export function isUserLoggedIn(): boolean {
     if (typeof window === 'undefined') return false;
-    return localStorage.getItem('userLoggedIn') === 'true';
+    return localStorage.getItem(USER_LOGGED_IN_KEY) === 'true';
+}
+
+export function clearAllUserData(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(MEAL_LOGS_KEY);
+    localStorage.removeItem(SELECTED_PLAN_KEY);
+    localStorage.removeItem(AI_SCAN_USAGE_KEY);
+    localStorage.removeItem(USER_PROFILE_KEY);
+    localStorage.removeItem(WATER_INTAKE_KEY);
+    localStorage.removeItem(ONBOARDING_COMPLETE_KEY);
+    localStorage.removeItem(USER_LOGGED_IN_KEY);
+    localStorage.removeItem(GENERATED_MEAL_PLAN_OUTPUT_KEY);
+    localStorage.removeItem(MEAL_PLAN_KEY);
+    // Add any other keys specific to your app that need clearing
+    console.log("All user data cleared from localStorage.");
+  } catch (error) {
+    console.error("Error clearing all user data from localStorage:", error);
+  }
 }

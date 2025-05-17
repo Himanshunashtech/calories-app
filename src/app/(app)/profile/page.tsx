@@ -12,8 +12,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { getUserProfile, saveUserProfile, fakeLogout, type UserProfile, type ReminderSettings, type AppSettings } from '@/lib/localStorage';
-import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, Settings, Edit3, Cog, Palette, Droplet, LogOut, PieChart, CalendarDays } from 'lucide-react';
+import { getUserProfile, saveUserProfile, fakeLogout, type UserProfile, type ReminderSettings, type AppSettings, clearAllUserData } from '@/lib/localStorage';
+import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, Settings, Edit3, Cog, Palette, Droplet, LogOut, PieChart, CalendarDays, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ALLERGY_OPTIONS } from '@/types';
@@ -228,7 +228,17 @@ export default function ProfilePage() {
         description: "You have been successfully logged out.",
     });
     router.push('/login');
-  }
+  };
+
+  const handleDeleteAccount = () => {
+    clearAllUserData();
+    toast({
+      title: 'Account Deleted',
+      description: 'All your data has been removed. We hope to see you again!',
+      variant: 'destructive',
+    });
+    router.push('/signup');
+  };
 
   if (!isClient || isLoading) {
     return (
@@ -442,7 +452,7 @@ export default function ProfilePage() {
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" className="w-full">
+              <Button variant="outline" className="w-full">
                 <LogOut className="mr-2 h-5 w-5" /> Log Out
               </Button>
             </AlertDialogTrigger>
@@ -461,6 +471,33 @@ export default function ProfilePage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" className="w-full mt-2">
+                <Trash2 className="mr-2 h-5 w-5" /> Delete Account
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete all your app data from this device.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAccount} className={cn(buttonVariants({variant: 'destructive'}))}>
+                  Yes, Delete My Account
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+           <Button variant="outline" onClick={() => router.push('/settings')} className="w-full mt-2">
+              <Cog className="mr-2 h-5 w-5"/> App Settings
+          </Button>
+           <Button variant="outline" onClick={() => router.push('/meal-planner')} className="w-full mt-2">
+              <CalendarDays className="mr-2 h-5 w-5"/> Go to Meal Planner
+          </Button>
         </CardFooter>
       </Card>
     </div>
