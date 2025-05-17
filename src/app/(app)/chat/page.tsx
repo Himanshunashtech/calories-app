@@ -2,17 +2,18 @@
 'use client';
 
 import { useState, useEffect, useRef, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Send, User, Sparkles, Loader2, MessageCircle } from 'lucide-react';
+import { Send, User, Sparkles, Loader2, MessageCircle, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { chatWithAICoach } from '@/ai/flows/chat-with-ai-coach';
 import type { ChatMessage, FlowChatMessage } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { getUserProfile } from '@/lib/localStorage'; // To get user's name for avatar
+import { getUserProfile, getSelectedPlan, type UserPlan } from '@/lib/localStorage'; 
 
 export default function ChatPage() {
   const [inputValue, setInputValue] = useState('');
@@ -22,23 +23,41 @@ export default function ChatPage() {
   const { toast } = useToast();
   const [userName, setUserName] = useState<string>('User');
   const [userImage, setUserImage] = useState<string | null>(null);
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
-    const profile = getUserProfile();
-    if (profile) {
-      setUserName(profile.name || 'User');
-      setUserImage(profile.profileImageUri || null);
-    }
-    // Add an initial greeting message from the AI
-    setChatHistory([
-      {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        text: "Hi there! I'm EcoAICoach. How can I help you with your nutrition, fitness, or using the app today?",
-        timestamp: new Date().toISOString(),
+    const plan = getSelectedPlan();
+    if (plan !== 'ecopro') {
+      toast({
+        variant: 'destructive',
+        title: 'Access Denied',
+        description: 'The AI Chat Coach is an EcoPro feature. Please upgrade your plan to use the chat.',
+        duration: 5000,
+      });
+      router.push('/subscription');
+    } else {
+      setIsAuthorized(true);
+      const profile = getUserProfile();
+      if (profile) {
+        setUserName(profile.name || 'User');
+        setUserImage(profile.profileImageUri || null);
       }
-    ]);
-  }, []);
+      // Add an initial greeting message from the AI only if authorized and history is empty
+      if (chatHistory.length === 0) {
+        setChatHistory([
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            text: "Hi there! I'm EcoAICoach. How can I help you with your nutrition, fitness, or using the app today?",
+            timestamp: new Date().toISOString(),
+          }
+        ]);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, toast]); // chatHistory removed to prevent re-triggering initial message on every chat update
+
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -48,7 +67,7 @@ export default function ChatPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || isLoading) return;
+    if (!inputValue.trim() || isLoading || !isAuthorized) return;
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -61,20 +80,17 @@ export default function ChatPage() {
     setInputValue('');
     setIsLoading(true);
 
-    const flowHistory: FlowChatMessage[] = chatHistory
+    const flowHistory: FlowChatMessage[] = chatHistory // Use current chatHistory *before* adding new user message
+      .slice(-10) // Send last 10 messages for context
       .map(msg => ({
         role: msg.role === 'user' ? 'user' : 'model',
         content: msg.text,
       }));
     
-    // Add the current user message to flow history for the AI
-    flowHistory.push({ role: 'user', content: userMessage.text });
-
-
     try {
       const result = await chatWithAICoach({
-        userInput: userMessage.text,
-        chatHistory: flowHistory.slice(-10), // Send last 10 messages for context to save tokens
+        userInput: userMessage.text, // Pass only the new user input
+        chatHistory: flowHistory, 
       });
 
       const aiMessage: ChatMessage = {
@@ -85,7 +101,7 @@ export default function ChatPage() {
       };
       setChatHistory((prevHistory) => [...prevHistory, aiMessage]);
     } catch (error) {
-      console.error('Error calling chat AI flow:', error);
+      console.error('Error calling chat AI flow from client:', error);
       toast({
         variant: 'destructive',
         title: 'Chat Error',
@@ -102,6 +118,17 @@ export default function ChatPage() {
       setIsLoading(false);
     }
   };
+
+  if (!isAuthorized) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-12rem)] text-center">
+        <ShieldAlert className="h-16 w-16 text-destructive mb-4" />
+        <h1 className="text-2xl font-semibold mb-2">Access Denied</h1>
+        <p className="text-muted-foreground mb-4">The AI Chat Coach is an EcoPro exclusive feature.</p>
+        <Button onClick={() => router.push('/subscription')}>View Subscription Plans</Button>
+      </div>
+    );
+  }
 
   return (
     <Card className="w-full h-[calc(100vh-10rem)] md:h-[calc(100vh-12rem)] flex flex-col shadow-xl border-primary/20">

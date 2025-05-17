@@ -3,14 +3,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Camera, BarChart3, LayoutDashboard, MessageCircle } from 'lucide-react'; // Added MessageCircle
+import { Camera, BarChart3, LayoutDashboard } from 'lucide-react'; // MessageCircle removed
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/log-meal', label: 'Log Meal', icon: Camera },
   { href: '/stats', label: 'Stats', icon: BarChart3 },
-  { href: '/chat', label: 'Chat', icon: MessageCircle }, // Added Chat item
+  // { href: '/chat', label: 'Chat', icon: MessageCircle }, // Chat item removed
 ];
 
 export function BottomNavigationBar() {
@@ -21,13 +21,12 @@ export function BottomNavigationBar() {
       <div className="container mx-auto flex h-16 max-w-md items-center justify-around px-4">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/');
-          // Adjusted isActive logic slightly for dashboard to be exact match.
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors duration-200 w-1/4', // Added w-1/4 for equal spacing
+                'flex flex-col items-center justify-center gap-1 p-2 rounded-md transition-colors duration-200 w-1/3', // Adjusted to w-1/3 for 3 items
                 isActive ? 'text-primary font-semibold scale-105' : 'text-muted-foreground hover:text-foreground'
               )}
               aria-current={isActive ? 'page' : undefined}

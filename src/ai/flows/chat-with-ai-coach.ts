@@ -63,25 +63,49 @@ const chatWithAICoachFlow = ai.defineFlow(
     messagesForAI.push({ role: 'user', content: [{ text: input.userInput }] });
     
     try {
-      const response = await ai.generate({
+      const modelResponse = await ai.generate({
         prompt: { messages: messagesForAI },
-        // You might want to adjust safety settings for chat if needed
+        // Consider adjusting safety settings if responses are often blocked.
         // config: {
         //   safetySettings: [
         //     { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        //     { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
         //   ],
         // },
       });
 
-      const aiTextResponse = response.text;
+      const aiTextResponse = modelResponse.text;
       if (!aiTextResponse) {
-        throw new Error("AI did not return a text response for chat.");
+        console.error("AI response was empty or undefined. Full model response object:", JSON.stringify(modelResponse, null, 2));
+        let detailedError = "AI did not return a text response.";
+        if (modelResponse.candidates && modelResponse.candidates.length > 0) {
+            const candidate = modelResponse.candidates[0];
+            if (candidate.finishReason) {
+                detailedError += ` Finish Reason: ${candidate.finishReason}.`;
+            }
+            if (candidate.finishMessage) {
+                detailedError += ` Finish Message: ${candidate.finishMessage}.`;
+            }
+            if (candidate.safetyRatings && candidate.safetyRatings.length > 0) {
+                console.warn("Safety ratings from AI model:", JSON.stringify(candidate.safetyRatings, null, 2));
+                const blockedRating = candidate.safetyRatings.find(r => r.blocked); // Check for explicitly blocked
+                if(blockedRating) {
+                   detailedError += ` Content may have been blocked due to safety settings (Category: ${blockedRating.category}).`;
+                }
+            }
+        }
+        // Return the detailed error to the client UI.
+        return { aiResponse: `Sorry, I encountered an issue: ${detailedError} Please try rephrasing or contact support if this persists.` };
       }
       return { aiResponse: aiTextResponse };
 
-    } catch (error) {
-      console.error("Error in chatWithAICoachFlow:", error);
-      return { aiResponse: "Sorry, I encountered a problem trying to respond. Please try again." };
+    } catch (error: any) {
+      console.error("Error in chatWithAICoachFlow during ai.generate() or processing:", error.message || error);
+      // Provide a more specific error to the client if possible
+      const clientErrorMessage = error.message && error.message.includes("AI did not return") 
+        ? error.message 
+        : "Sorry, I encountered a technical problem trying to respond. Please try again later or contact support.";
+      return { aiResponse: clientErrorMessage };
     }
   }
 );
