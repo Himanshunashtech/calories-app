@@ -85,6 +85,7 @@ export default function DashboardPage() {
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
 
+
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -162,7 +163,7 @@ export default function DashboardPage() {
   }, [isClient, toast]);
 
   useEffect(() => {
-    if (isClient && userProfile && plan) { 
+    if (isClient && userProfile && plan && todaysMealLogs) { 
       fetchDashboardData(plan, userProfile, todaysMealLogs);
     }
   }, [isClient, userProfile, plan, todaysMealLogs, fetchDashboardData]);
@@ -229,9 +230,9 @@ export default function DashboardPage() {
     try {
       const planOutput = await generateEcoMealPlan({
         userProfile: {
-          dietType: userProfile.diet_type,
-          healthGoals: userProfile.health_goals,
-          dietaryRestrictions: Array.isArray(userProfile.dietary_restrictions) ? userProfile.dietary_restrictions.join(', ') : userProfile.dietary_restrictions_other,
+          dietType: userProfile.dietType,
+          healthGoals: userProfile.healthGoals,
+          dietaryRestrictions: Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietaryRestrictionsOther,
         },
         durationDays: 3,
       });
@@ -308,7 +309,7 @@ export default function DashboardPage() {
     return Object.entries(data)
       .map(([date, calories]) => ({ date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), calories }))
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [isClient, allMealLogs]); // Changed dependency from todaysMealLogs to allMealLogs
+  }, [isClient, allMealLogs]);
 
 
   const scansUsedPercentage = useMemo(() => {
@@ -427,13 +428,16 @@ export default function DashboardPage() {
   }, [isClient, plan, userProfile, allMealLogs]);
 
 
+  const SkeletonLoadingUI = () => (
+    <div className="space-y-6 p-4">
+      {[...Array(5)].map((_, i) => ( <Card key={i} className="shadow-lg"><CardHeader><div className="h-6 w-3/4 bg-muted rounded animate-pulse mb-2"></div><div className="h-4 w-1/2 bg-muted rounded animate-pulse"></div></CardHeader><CardContent><div className="h-10 bg-muted rounded animate-pulse"></div>{(i % 2 === 0) && <div className="h-20 mt-2 bg-muted rounded animate-pulse"></div>}</CardContent></Card> ))}
+    </div>
+  );
+  
   if (!isClient) {
-    return (
-      <div className="space-y-6 p-4">
-        {[...Array(5)].map((_, i) => ( <Card key={i} className="shadow-lg"><CardHeader><div className="h-6 w-3/4 bg-muted rounded animate-pulse mb-2"></div><div className="h-4 w-1/2 bg-muted rounded animate-pulse"></div></CardHeader><CardContent><div className="h-10 bg-muted rounded animate-pulse"></div>{(i % 2 === 0) && <div className="h-20 mt-2 bg-muted rounded animate-pulse"></div>}</CardContent></Card> ))}
-      </div>
-    );
+    return <SkeletonLoadingUI />;
   }
+
 
   const reminderSettings = userProfile?.reminderSettings;
   const waterVolumeUnit = userProfile?.appSettings?.unitPreferences?.volume === 'fl oz' ? 'fl oz' : 'glasses';
@@ -465,14 +469,15 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      {/* Today's Vitals Card */}
       <Card className="shadow-md">
-        <CardHeader className="pb-2">
-          <div className="flex justify-between items-start">
-            <CardTitle className="flex items-center gap-2"><Utensils className="text-primary"/> Today's Overview</CardTitle>
-             <Button variant="ghost" size="sm" onClick={refreshMealLogs} className="text-xs"><Edit3 className="mr-1 h-3 w-3"/>Refresh Logs</Button>
-          </div>
-          <CardDescription>Your meals, calorie intake, and quick stats for today.</CardDescription>
-          <div className="pt-4 space-y-1">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Utensils className="text-primary"/> Today's Vitals</CardTitle>
+          <CardDescription>Your key metrics for today.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Calorie Ring and Progress */}
+          <div className="space-y-1">
             <div className="flex justify-between items-center text-sm font-medium">
               <span>Calories Consumed</span>
               <span className="text-muted-foreground">{totalCaloriesToday.toFixed(0)} / {actualDailyCalorieGoal.toFixed(0)} kcal</span>
@@ -482,6 +487,47 @@ export default function DashboardPage() {
               {calorieProgressPercentage >= 100 ? "Goal reached!" : `${(actualDailyCalorieGoal - totalCaloriesToday).toFixed(0)} kcal remaining.`}
             </p>
           </div>
+
+          {/* Water Intake, Steps, Eco Score */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+            <div className="space-y-2 p-3 rounded-lg border bg-card">
+              <div className="flex justify-between items-center text-sm font-medium">
+                <span className="flex items-center gap-1"><Droplet className="h-4 w-4 text-blue-500"/>Water Intake</span>
+                <span className="text-muted-foreground">{waterIntake?.current || 0} / {waterIntake?.goal || 8} {waterVolumeUnit}</span>
+              </div>
+              <Progress value={waterIntake ? (waterIntake.current / waterIntake.goal) * 100 : 0} className="h-3 [&>div]:bg-blue-500" />
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" variant="outline" onClick={() => handleAddWater(1)} className="flex-1 text-xs whitespace-normal text-center">+1 {waterVolumeUnit === 'glasses' ? 'Glass' : 'Serving (8oz)'}</Button>
+                <Button size="sm" variant="outline" onClick={() => handleAddWater(0.5)} className="flex-1 text-xs whitespace-normal text-center">+{waterVolumeUnit === 'glasses' ? '0.5 Glass' : '0.5 Serving (4oz)'}</Button>
+              </div>
+            </div>
+            <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center">
+              <Footprints className="h-8 w-8 text-primary mb-1"/>
+              <p className="text-lg font-semibold">7,532</p>
+              <p className="text-xs text-muted-foreground">Steps Today</p>
+              <Button size="sm" variant="ghost" className="text-xs mt-1 text-primary hover:underline" onClick={() => handlePlaceholderFeatureClick('Fitness Tracker Sync')}>Sync Health App</Button>
+            </div>
+            <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center">
+              <Leaf className="h-8 w-8 text-green-600 mb-1"/>
+              <p className="text-lg font-semibold">{mockEcoScore}</p>
+              <p className="text-xs text-muted-foreground">Daily Eco-Score</p>
+            </div>
+          </div>
+        </CardContent>
+        <CardFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+            <Button onClick={() => router.push('/log-meal')} className="flex-1 w-full sm:w-auto"><Camera className="mr-2 h-4 w-4"/> Log Meal</Button>
+            <Button onClick={() => handlePlaceholderFeatureClick('Exercise Logging')} variant="outline" className="flex-1 w-full sm:w-auto"><Bike className="mr-2 h-4 w-4" /> Log Exercise</Button>
+        </CardFooter>
+      </Card>
+
+      {/* Today's Meals Timeline Card */}
+      <Card className="shadow-md">
+        <CardHeader className="pb-2">
+          <div className="flex justify-between items-start">
+            <CardTitle className="flex items-center gap-2"><Utensils className="text-primary"/> Today's Meals</CardTitle>
+             <Button variant="ghost" size="sm" onClick={refreshMealLogs} className="text-xs"><Edit3 className="mr-1 h-3 w-3"/>Refresh Logs</Button>
+          </div>
+          <CardDescription>Your meals logged today.</CardDescription>
         </CardHeader>
         <CardContent className="pt-2 space-y-4">
           {todaysMealLogs.length > 0 ? (
@@ -508,36 +554,7 @@ export default function DashboardPage() {
           ) : (
             <p className="text-muted-foreground text-center py-4">No meals logged today.</p>
           )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-            <div className="space-y-2 p-3 rounded-lg border bg-card">
-              <div className="flex justify-between items-center text-sm font-medium">
-                <span className="flex items-center gap-1"><Droplet className="h-4 w-4 text-blue-500"/>Water Intake</span>
-                <span className="text-muted-foreground">{waterIntake?.current || 0} / {waterIntake?.goal || 8} {waterVolumeUnit}</span>
-              </div>
-              <Progress value={waterIntake ? (waterIntake.current / waterIntake.goal) * 100 : 0} className="h-3 [&>div]:bg-blue-500" />
-              <div className="flex gap-2 pt-1">
-                <Button size="sm" variant="outline" onClick={() => handleAddWater(1)} className="flex-1 text-xs whitespace-normal text-center">+1 {waterVolumeUnit === 'glasses' ? 'Glass' : 'Serving (8oz)'}</Button>
-                <Button size="sm" variant="outline" onClick={() => handleAddWater(0.5)} className="flex-1 text-xs whitespace-normal text-center">+{waterVolumeUnit === 'glasses' ? '0.5 Glass' : '0.5 Serving (4oz)'}</Button>
-              </div>
-            </div>
-            <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center">
-              <Footprints className="h-8 w-8 text-primary mb-1"/>
-              <p className="text-lg font-semibold">7,532</p>
-              <p className="text-xs text-muted-foreground">Steps Today</p>
-              <Button size="sm" variant="ghost" className="text-xs mt-1 text-primary hover:underline" onClick={() => handlePlaceholderFeatureClick('Fitness Tracker Sync')}>Sync Health App</Button>
-            </div>
-            <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center">
-              <Leaf className="h-8 w-8 text-green-600 mb-1"/>
-              <p className="text-lg font-semibold">{mockEcoScore}</p>
-              <p className="text-xs text-muted-foreground">Daily Eco-Score</p>
-            </div>
-          </div>
         </CardContent>
-         <CardFooter className="pt-4 flex flex-col sm:flex-row gap-2">
-            <Button onClick={() => router.push('/log-meal')} className="flex-1 w-full sm:w-auto"><Camera className="mr-2 h-4 w-4"/> Log Meal</Button>
-            <Button onClick={() => handlePlaceholderFeatureClick('Exercise Logging')} variant="outline" className="flex-1 w-full sm:w-auto"><Bike className="mr-2 h-4 w-4" /> Log Exercise</Button>
-        </CardFooter>
       </Card>
 
       {reminderSettings && (
