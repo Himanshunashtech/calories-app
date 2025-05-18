@@ -3,10 +3,10 @@ import type { MealEntry, UserPlan, AIScanUsage, UserProfile, WaterIntakeData, Re
 
 const USER_PROFILE_KEY = 'ecoAi_userProfile';
 const ONBOARDING_COMPLETE_KEY = 'ecoAi_onboardingComplete';
-const USER_LOGGED_IN_KEY = 'ecoAi_userLoggedIn'; // Simple flag for session
+const USER_LOGGED_IN_KEY = 'ecoAi_userLoggedIn';
 
 const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
-const SELECTED_PLAN_KEY = 'ecoAi_selectedPlan';
+const SELECTED_PLAN_KEY = 'ecoAi_selectedPlan'; // Still useful for persisting plan choice before account finalization
 const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage';
 const WATER_INTAKE_KEY = 'ecoAi_waterIntake';
 const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput';
@@ -16,7 +16,7 @@ const TEMP_ONBOARDING_DATA_KEY = 'ecoAi_onboardingTempData';
 
 
 export const defaultUserProfileData: UserProfile = {
-  id: Math.random().toString(36).substring(2, 15), // Simple client-side ID
+  id: Math.random().toString(36).substring(2, 15),
   email: '',
   name: '',
   age: '',
@@ -69,7 +69,6 @@ export function getUserProfile(): UserProfile {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
     if (profileJson) {
       const parsedProfile = JSON.parse(profileJson);
-      // Merge with defaults to ensure all fields are present
       return { 
         ...defaultUserProfileData, 
         ...parsedProfile,
@@ -91,9 +90,7 @@ export function getUserProfile(): UserProfile {
         }
       };
     }
-    // If no profile, save a default one
-    saveUserProfile({ ...defaultUserProfileData });
-    return { ...defaultUserProfileData };
+    return { ...defaultUserProfileData }; // Return default if no profile, onboarding will create it
   } catch (error) {
     console.error(`Error reading '${USER_PROFILE_KEY}' from localStorage:`, error);
     return { ...defaultUserProfileData };
@@ -141,28 +138,28 @@ export function isUserLoggedIn(): boolean {
 }
 
 export function fakeLogin(email: string): UserProfile {
-  if (typeof window === 'undefined') return { ...defaultUserProfileData, email };
-  
+  if (typeof window === 'undefined') return { ...defaultUserProfileData };
   if (!email || !email.trim()) {
     console.error("fakeLogin: Attempted to login with an empty email.");
-    return { ...defaultUserProfileData }; // Return default, not logged in
+    return { ...defaultUserProfileData }; 
   }
 
-  let profile = getUserProfile(); // Get existing profile (should contain onboarding data)
+  let profile = getUserProfile(); // Get current profile (should have onboarding data)
   
-  profile.email = email; // Ensure email is set on the profile
+  profile.email = email; // Ensure email is set/updated on the profile
   
-  saveUserProfile(profile);
   try {
     localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-    // Mark onboarding complete upon login in this flow, as login is the final step
-    setOnboardingComplete(true); 
+    localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true'); // Onboarding is now complete
+    saveUserProfile(profile); // Save the updated profile with the email and new onboarding status
   } catch (error) {
-    console.error(`Error writing auth keys to localStorage:`, error);
+    console.error(`Error writing auth keys or profile to localStorage:`, error);
   }
   return profile;
 }
 
+// Signup is now effectively handled by the onboarding flow + login/setup account.
+// This function is a fallback if user hits /signup directly.
 export function fakeSignup(email: string, name: string): UserProfile {
    if (typeof window === 'undefined') {
     return { ...defaultUserProfileData, email, name, onboarding_complete: false };
@@ -172,12 +169,12 @@ export function fakeSignup(email: string, name: string): UserProfile {
     id: Math.random().toString(36).substring(2, 15),
     email: email,
     name: name,
-    onboarding_complete: false, // Explicitly false for new signups
+    onboarding_complete: false, 
   };
   saveUserProfile(newProfile);
   setOnboardingComplete(false); 
   try {
-    localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
+    localStorage.setItem(USER_LOGGED_IN_KEY, 'true'); // Log them in to proceed to onboarding
   } catch (error) {
     console.error(`Error writing '${USER_LOGGED_IN_KEY}' to localStorage:`, error);
   }
@@ -188,29 +185,39 @@ export function fakeLogout(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(USER_LOGGED_IN_KEY);
-    // Keep profile data and onboarding status for potential re-login.
-    // If you want to clear everything, call clearAllUserData()
+    localStorage.removeItem(ONBOARDING_COMPLETE_KEY); // User will have to re-onboard if they "log out" in this model
+    // To truly clear for a new user, clearAllUserData() would be better, but this simulates a simple logout.
   } catch (error) {
     console.error(`Error during logout from localStorage:`, error);
   }
 }
 
-// Temporary Onboarding Data
-export function getLocalOnboardingData(): OnboardingData {
-  if (typeof window === 'undefined') return { ...defaultUserProfileData };
+export function checkEmailExists(email: string): boolean {
+  if (typeof window === 'undefined') return false;
   try {
-    const data = localStorage.getItem(TEMP_ONBOARDING_DATA_KEY);
-    if (data) {
-      return { ...defaultUserProfileData, ...JSON.parse(data) };
-    }
-    return { ...defaultUserProfileData };
+    const profile = getUserProfile(); 
+    // Check if profile has an email and if it matches (case-insensitive)
+    // Only return true if an email exists on the profile AND it matches
+    return !!profile.email && profile.email.toLowerCase() === email.toLowerCase();
   } catch (error) {
-    console.error(`Error reading '${TEMP_ONBOARDING_DATA_KEY}' from localStorage:`, error);
-    return { ...defaultUserProfileData };
+    console.error(`Error checking email in localStorage:`, error);
+    return false;
   }
 }
 
-export function saveLocalOnboardingData(data: OnboardingData): void {
+// Temporary Onboarding Data (still useful for multi-step form persistence before final save)
+export function getLocalOnboardingData(): Partial<UserProfile> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const data = localStorage.getItem(TEMP_ONBOARDING_DATA_KEY);
+    return data ? JSON.parse(data) : {};
+  } catch (error) {
+    console.error(`Error reading '${TEMP_ONBOARDING_DATA_KEY}' from localStorage:`, error);
+    return {};
+  }
+}
+
+export function saveLocalOnboardingData(data: Partial<UserProfile>): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(TEMP_ONBOARDING_DATA_KEY, JSON.stringify(data));
@@ -228,20 +235,6 @@ export function clearLocalOnboardingData(): void {
   }
 }
 
-export function checkEmailExists(email: string): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    // For localStorage, we assume there's only one "profile" stored.
-    // A real app with multiple users would check a database.
-    const profile = getUserProfile(); 
-    return !!profile.email && profile.email.toLowerCase() === email.toLowerCase();
-  } catch (error) {
-    console.error(`Error checking email in localStorage:`, error);
-    return false;
-  }
-}
-
-// --- Other app data using localStorage ---
 
 // Meal Logs
 export function getMealLogs(): MealEntry[] {
@@ -307,27 +300,42 @@ export function clearMealLogs(): void {
 // User Plan
 export function getSelectedPlan(): UserPlan {
   if (typeof window === 'undefined') return 'free';
-  const profile = getUserProfile();
-  if (profile.selected_plan) return profile.selected_plan;
-
   try {
-    const plan = localStorage.getItem(SELECTED_PLAN_KEY) as UserPlan | null;
-    return plan || 'free';
+    // Prioritize plan from TEMP_ONBOARDING_DATA_KEY if user is mid-onboarding flow
+    const tempOnboardingData = getLocalOnboardingData();
+    if (tempOnboardingData.selected_plan) {
+        return tempOnboardingData.selected_plan;
+    }
+    // Then try from full profile
+    const profile = getUserProfile();
+    if (profile.selected_plan) {
+        return profile.selected_plan;
+    }
+    // Fallback to old SELECTED_PLAN_KEY if necessary (e.g., for users who selected plan before profile update)
+    const planFromOldKey = localStorage.getItem(SELECTED_PLAN_KEY) as UserPlan | null;
+    return planFromOldKey || 'free';
   } catch (error) {
-    console.error(`Error reading '${SELECTED_PLAN_KEY}' from localStorage:`, error);
+    console.error(`Error reading selected plan from localStorage:`, error);
     return 'free';
   }
 }
 
 export function setSelectedPlan(plan: UserPlan): void {
   if (typeof window === 'undefined') return;
-  const profile = getUserProfile();
-  profile.selected_plan = plan;
-  saveUserProfile(profile);
   try {
+    // Save to temp onboarding data, will be merged into full profile later
+    const tempOnboardingData = getLocalOnboardingData();
+    saveLocalOnboardingData({ ...tempOnboardingData, selected_plan: plan });
+    
+    // Also update the main profile immediately if it exists
+    const profile = getUserProfile();
+    profile.selected_plan = plan;
+    saveUserProfile(profile);
+
+    // Still set the old key for compatibility or if subscription page reads it directly
     localStorage.setItem(SELECTED_PLAN_KEY, plan);
   } catch (error) {
-    console.error(`Error writing '${SELECTED_PLAN_KEY}' to localStorage:`, error);
+    console.error(`Error writing '${SELECTED_PLAN_KEY}' or updating profile in localStorage:`, error);
   }
 }
 
@@ -376,7 +384,7 @@ export function canUseAIScan(plan: UserPlan): boolean {
 const DEFAULT_DAILY_WATER_GOAL_GLASSES = 8;
 export function getWaterIntake(): WaterIntakeData {
   const today = new Date().toISOString().split('T')[0];
-  const profile = getUserProfile();
+  const profile = getUserProfile(); 
   const goal = profile.water_goal || DEFAULT_DAILY_WATER_GOAL_GLASSES;
   const defaultIntake = { current: 0, goal, lastUpdatedDate: today };
 
@@ -387,7 +395,7 @@ export function getWaterIntake(): WaterIntakeData {
     if (intakeJson) {
       intake = JSON.parse(intakeJson);
       if (intake.lastUpdatedDate !== today) { 
-        intake.current = 0;
+        intake.current = 0; 
         intake.lastUpdatedDate = today;
       }
     } else {

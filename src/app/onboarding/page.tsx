@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChartIcon, Droplet, ShieldAlert, BellRing, Smile, Users, Search, Activity, Edit3, Mail as MailIcon, Sparkles as LucideSparklesIcon, Loader2 } from 'lucide-react';
+import { User, Target, Salad, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChartIcon, Droplet, ShieldAlert, BellRing, Smile, Users, Search, Activity, Edit3, Mail as MailIcon, Sparkles as LucideSparklesIcon, Loader2, Bike } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import type { OnboardingData, UserProfile, ReminderSettings } from '@/types';
@@ -27,16 +27,16 @@ import {
   checkEmailExists,
   isUserLoggedIn,
   getUserProfile,
-  setOnboardingComplete,
-  defaultUserProfileData // Corrected: Import from localStorage
+  defaultUserProfileData,
+  setOnboardingComplete
 } from '@/lib/localStorage';
 
 
-const TOTAL_STEPS = 8; 
+const TOTAL_STEPS = 8;
 
 export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<OnboardingData>(defaultUserProfileData);
+  const [formData, setFormData] = useState<UserProfile>(defaultUserProfileData);
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [emailExistsError, setEmailExistsError] = useState(false);
@@ -46,24 +46,24 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     setIsClient(true);
-    if (!isUserLoggedIn()) {
-      router.replace('/login'); 
-      return;
-    }
-    const existingProfile = getUserProfile(); // This now returns default if nothing is there.
+    // No longer redirecting based on !isUserLoggedIn() here.
+    // The (app)/layout.tsx will handle general protection,
+    // but /onboarding is now a publicPage.
+    
+    const existingProfile = getUserProfile(); // This returns default if nothing is there.
     const localData = getLocalOnboardingData(); // Get any temporarily saved onboarding progress
 
     // Merge priorities: existing profile > local onboarding data > defaults
-    setFormData(prev => ({
-      ...defaultUserProfileData, // Start with defaults
-      ...existingProfile,       // Overlay with existing profile
-      ...localData,             // Overlay with any temp local data
-      reminderSettings: {       // Ensure reminderSettings is fully initialized
+    const mergedData = {
+      ...defaultUserProfileData,
+      ...existingProfile,
+      ...localData,
+      reminderSettings: {
         ...(defaultUserProfileData.reminderSettings || {}),
         ...(existingProfile.reminderSettings || {}),
         ...(localData.reminderSettings || {}),
       },
-      appSettings: {            // Ensure appSettings is fully initialized
+      appSettings: {
         ...(defaultUserProfileData.appSettings || {}),
         ...(existingProfile.appSettings || {}),
         ...(localData.appSettings || {}),
@@ -73,16 +73,17 @@ export default function OnboardingPage() {
             ...(localData.appSettings?.unitPreferences || {}),
         }
       },
-       macroSplit: { // Ensure macroSplit is initialized
+       macroSplit: {
         ...(defaultUserProfileData.macroSplit || { carbs: 50, protein: 25, fat: 25 }),
         ...(existingProfile.macroSplit || {}),
         ...(localData.macroSplit || {}),
       }
-    }));
-  }, [router]);
+    };
+    setFormData(mergedData as UserProfile); // Cast as UserProfile as mergedData will have all fields
+  }, [router]); // Removed isUserLoggedIn from dependency array
 
   useEffect(() => {
-    if(isClient && currentStep < TOTAL_STEPS) { // Don't save on final review step until submit
+    if(isClient && currentStep < TOTAL_STEPS) {
       saveLocalOnboardingData(formData);
     }
   }, [formData, isClient, currentStep]);
@@ -110,7 +111,7 @@ export default function OnboardingPage() {
     } else if (name === "water_goal") {
       setFormData((prev) => ({ ...prev, water_goal: parseInt(value, 10) || 0 }));
     } else if (name === "email") {
-      setEmailExistsError(false); // Reset error when email changes
+      setEmailExistsError(false); 
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
     else {
@@ -128,8 +129,6 @@ export default function OnboardingPage() {
     } else if (name === 'also_track_sustainability') {
       setFormData(prev => ({ ...prev, also_track_sustainability: checked }));
     } else {
-      // This case might not be strictly necessary if 'name' is correctly typed
-      // and all cases are handled above.
       setFormData(prev => ({ ...prev, [name as keyof OnboardingData]: checked as any }));
     }
   };
@@ -152,7 +151,6 @@ export default function OnboardingPage() {
   };
 
   const handleNext = async () => {
-    // Field validation for current step
     if (currentStep === 1) {
         if (!formData.name || !formData.age || !formData.email) {
             toast({ variant: "destructive", title: "Missing fields", description: "Please fill in your name, year of birth, and email." });
@@ -165,8 +163,8 @@ export default function OnboardingPage() {
         }
         if (checkEmailExists(formData.email)) {
             setEmailExistsError(true);
-            toast({ variant: "destructive", title: "Email Exists", description: "This email is already registered. Please log in." });
-            return; // Stay on this step, button text will change
+            toast({ variant: "destructive", title: "Email Exists", description: "This email is already registered. Please proceed to login." });
+            return;
         }
         setEmailExistsError(false);
     }
@@ -203,16 +201,14 @@ export default function OnboardingPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    let userProfile = getUserProfile(); 
-    userProfile = {
-      ...userProfile, 
-      ...formData,   
+    // Ensure onboarding_complete is false before saving, it will be set true upon final login/setup
+    const profileToSave: UserProfile = {
+        ...formData,
+        onboarding_complete: false, 
     };
     
-    saveUserProfile(userProfile); // Save all collected data including email
-    // Onboarding complete will be set at login/account finalization stage
-    // setOnboardingComplete(false); 
-    clearLocalOnboardingData(); // Clear temp onboarding data
+    saveUserProfile(profileToSave);
+    clearLocalOnboardingData(); 
 
     toast({
       title: 'Preferences Saved!',
@@ -398,12 +394,12 @@ export default function OnboardingPage() {
                       <div key={goal.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-muted/50">
                         <Checkbox
                           id={`healthGoalsCheckbox-${goal.id}`}
-                          name="healthGoalsCheckbox" // Keep a consistent name for this group of checkboxes
+                          name="healthGoalsCheckbox" 
                           value={goal.label}
                           checked={(formData.health_goals || []).includes(goal.label)}
                           onCheckedChange={(checked) => {
-                            const isChecked = !!checked; // Ensure boolean
-                            handleChange({ // Simulate event for unified handling
+                            const isChecked = !!checked; 
+                            handleChange({ 
                               target: {
                                 name: "healthGoalsCheckbox",
                                 value: goal.label,
@@ -495,7 +491,7 @@ export default function OnboardingPage() {
                         ))}
                     </div>
                 </div>
-                <Textarea id="dietaryRestrictionsOtherOnboarding" name="dietary_restrictions_other" placeholder="Other restrictions or allergies not listed (comma-separated)..." className="mt-2" value={formData.dietary_restrictions_other || ''} onChange={(e) => setFormData(prev => ({...prev, dietary_restrictions_other: e.target.value}))}/>
+                <Textarea id="dietaryRestrictionsOtherOnboarding" name="dietary_restrictions_other" placeholder="Other restrictions or allergies not listed (comma-separated)..." className="mt-2" value={formData.dietary_restrictions_other || ''} onChange={(e) => setFormData(prev => ({...prev, dietary_restrictions_other: e.target.value})) }/>
 
                 <div>
                   <Label htmlFor="favorite_cuisines-onboarding">Favorite Cuisines (Optional)</Label>
