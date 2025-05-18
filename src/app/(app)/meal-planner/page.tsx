@@ -4,9 +4,12 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { CalendarDays, ShoppingBag, Sparkles, PlusCircle, ArrowLeft, ArrowRight, Printer, Download, Loader2, FileText } from 'lucide-react';
-import { getSelectedPlan, type UserPlan, getUserProfile } from '@/lib/localStorage';
-import type { UserProfile } from '@/types';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter as ModalFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { CalendarDays, ShoppingBag, Sparkles, PlusCircle, ArrowLeft, ArrowRight, Printer, Download, Loader2, FileText, Edit2, Trash2 } from 'lucide-react';
+import { getSelectedPlan, type UserPlan, getUserProfile } from '@/lib/localStorage'; 
+import type { UserProfile } from '@/types'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateEcoMealPlan, type GenerateEcoMealPlanOutput } from '@/ai/flows/generate-eco-meal-plan';
 import { cn } from '@/lib/utils';
@@ -36,34 +39,58 @@ interface WeeklyPlan {
 export default function MealPlannerPage() {
   const [userPlan, setUserPlan] = useState<UserPlan>('free');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlan>({});
+  const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlan>(() => {
+    if (typeof window !== 'undefined') {
+      const savedPlanJson = localStorage.getItem('ecoAi_mealPlan');
+      if (savedPlanJson) {
+        try {
+          return JSON.parse(savedPlanJson);
+        } catch (e) { console.error("Error parsing saved meal plan", e); }
+      }
+    }
+    // Initialize with empty days
+    const initialPlan: WeeklyPlan = {};
+    daysOfWeek.forEach(day => {
+      initialPlan[day] = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] };
+    });
+    return initialPlan;
+  });
   const [generatedPlanOutput, setGeneratedPlanOutput] = useState<GenerateEcoMealPlanOutput | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-  const [currentWeekOffset, setCurrentWeekOffset] = useState(0); // For future week navigation
+  const [currentWeekOffset, setCurrentWeekOffset] = useState(0); 
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
+
+  // State for Add/Edit Meal Modal
+  const [isMealModalOpen, setIsMealModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+  const [selectedDayForMeal, setSelectedDayForMeal] = useState<string | null>(null);
+  const [selectedMealTypeForMeal, setSelectedMealTypeForMeal] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | null>(null);
+  const [currentMealName, setCurrentMealName] = useState('');
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
+
 
   useEffect(() => {
     setIsClient(true);
     setUserPlan(getSelectedPlan());
-    const profile = getUserProfile();
+    const profile = getUserProfile(); // Fetch profile from localStorage
     setUserProfile(profile);
     setIsLoadingProfile(false);
     
-    const savedPlanJson = localStorage.getItem('ecoAi_mealPlan');
-    if (savedPlanJson) {
-      try {
-        setWeeklyPlan(JSON.parse(savedPlanJson));
-      } catch (e) { console.error("Error parsing saved meal plan", e); localStorage.removeItem('ecoAi_mealPlan');}
-    }
     const savedGeneratedOutputJson = localStorage.getItem('ecoAi_generatedMealPlanOutput');
     if (savedGeneratedOutputJson) {
        try {
         setGeneratedPlanOutput(JSON.parse(savedGeneratedOutputJson));
        } catch (e) { console.error("Error parsing saved generated output", e); localStorage.removeItem('ecoAi_generatedMealPlanOutput');}
     }
-  }, []);
+  }, [toast]);
+
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem('ecoAi_mealPlan', JSON.stringify(weeklyPlan));
+    }
+  }, [weeklyPlan, isClient]);
   
   const handleGenerateAIMealPlan = async () => {
     if (!userProfile || (userPlan !== 'pro' && userPlan !== 'ecopro')) {
@@ -78,9 +105,9 @@ export default function MealPlannerPage() {
     try {
       const planOutput = await generateEcoMealPlan({
         userProfile: {
-          dietType: userProfile.diet_type,
-          healthGoals: userProfile.health_goals,
-          dietaryRestrictions: Array.isArray(userProfile.dietary_restrictions) ? userProfile.dietary_restrictions.join(', ') : userProfile.dietary_restrictions_other,
+          dietType: userProfile.dietType || undefined,
+          healthGoals: userProfile.healthGoals || [],
+          dietaryRestrictions: userProfile.dietaryRestrictions ? (Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietary_restrictions_other) : undefined,
         },
         durationDays: 7,
       });
@@ -95,20 +122,26 @@ export default function MealPlannerPage() {
         if (!newWeeklyPlan[dayName]) newWeeklyPlan[dayName] = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] };
         
         dayPlan.meals.forEach((meal, mealIndex) => {
+            let category: PlannerMealItem['category'] = 'Snack'; // Default
+            if (mealIndex === 0) category = 'Breakfast';
+            else if (mealIndex === 1) category = 'Lunch';
+            else if (mealIndex === 2) category = 'Dinner';
+
             const plannerItem: PlannerMealItem = {
-                id: `ai-${meal.name.replace(/\s+/g, '-').toLowerCase()}-${dayName}-${dayIndex}-${mealIndex}`,
+                id: `ai-${meal.name.replace(/\s+/g, '-').toLowerCase()}-${dayName}-${dayIndex}-${mealIndex}-${crypto.randomUUID()}`,
                 name: meal.name,
-                category: mealIndex === 0 ? 'Breakfast' : mealIndex === 1 ? 'Lunch' : 'Dinner',
+                category: category,
                 ecoScore: meal.lowCarbonScore.toString(),
                 description: meal.description
             };
-            if (mealIndex === 0) newWeeklyPlan[dayName].Breakfast?.push(plannerItem);
-            else if (mealIndex === 1) newWeeklyPlan[dayName].Lunch?.push(plannerItem);
-            else if (mealIndex === 2) newWeeklyPlan[dayName].Dinner?.push(plannerItem);
+            
+            if (!newWeeklyPlan[dayName][category]) {
+              newWeeklyPlan[dayName][category] = [];
+            }
+            newWeeklyPlan[dayName][category]?.push(plannerItem);
         });
       });
       setWeeklyPlan(newWeeklyPlan);
-      localStorage.setItem('ecoAi_mealPlan', JSON.stringify(newWeeklyPlan));
       toast({ title: "AI Meal Plan Generated!", description: "Your 7-day meal plan has been created." });
     } catch (error) {
       console.error("Error generating AI meal plan:", error);
@@ -117,6 +150,77 @@ export default function MealPlannerPage() {
       setIsLoadingAI(false);
     }
   };
+
+  const openAddMealModal = (day: string, mealType: PlannerMealItem['category']) => {
+    setModalMode('add');
+    setSelectedDayForMeal(day);
+    setSelectedMealTypeForMeal(mealType);
+    setCurrentMealName('');
+    setEditingMealId(null);
+    setIsMealModalOpen(true);
+  };
+
+  const openEditMealModal = (meal: PlannerMealItem, day: string, mealType: PlannerMealItem['category']) => {
+    setModalMode('edit');
+    setSelectedDayForMeal(day);
+    setSelectedMealTypeForMeal(mealType);
+    setCurrentMealName(meal.name);
+    setEditingMealId(meal.id);
+    setIsMealModalOpen(true);
+  };
+
+  const handleSaveMeal = () => {
+    if (!currentMealName.trim() || !selectedDayForMeal || !selectedMealTypeForMeal) {
+      toast({ variant: "destructive", title: "Missing Information", description: "Please enter a meal name." });
+      return;
+    }
+
+    setWeeklyPlan(prevPlan => {
+      const newPlan = JSON.parse(JSON.stringify(prevPlan)); // Deep copy
+
+      if (!newPlan[selectedDayForMeal!]) {
+        newPlan[selectedDayForMeal!] = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] };
+      }
+      if (!newPlan[selectedDayForMeal!][selectedMealTypeForMeal!]) {
+        newPlan[selectedDayForMeal!][selectedMealTypeForMeal!] = [];
+      }
+
+      if (modalMode === 'add') {
+        const newMeal: PlannerMealItem = {
+          id: crypto.randomUUID(),
+          name: currentMealName.trim(),
+          category: selectedMealTypeForMeal!,
+        };
+        newPlan[selectedDayForMeal!][selectedMealTypeForMeal!]!.push(newMeal);
+        toast({ title: "Meal Added", description: `${newMeal.name} added to ${selectedMealTypeForMeal} on ${selectedDayForMeal}.` });
+      } else if (modalMode === 'edit' && editingMealId) {
+        const mealTypeArray = newPlan[selectedDayForMeal!][selectedMealTypeForMeal!] as PlannerMealItem[];
+        const mealIndex = mealTypeArray.findIndex(m => m.id === editingMealId);
+        if (mealIndex > -1) {
+          mealTypeArray[mealIndex].name = currentMealName.trim();
+          toast({ title: "Meal Updated", description: `Meal updated in ${selectedMealTypeForMeal} on ${selectedDayForMeal}.` });
+        }
+      }
+      return newPlan;
+    });
+
+    setIsMealModalOpen(false);
+    setCurrentMealName('');
+    setEditingMealId(null);
+  };
+  
+  const handleDeleteMeal = (mealId: string, day: string, mealType: PlannerMealItem['category']) => {
+    setWeeklyPlan(prevPlan => {
+      const newPlan = JSON.parse(JSON.stringify(prevPlan)); // Deep copy
+      const mealTypeArray = newPlan[day]?.[mealType] as PlannerMealItem[] | undefined;
+      if (mealTypeArray) {
+        newPlan[day][mealType] = mealTypeArray.filter(m => m.id !== mealId);
+      }
+      return newPlan;
+    });
+    toast({ title: "Meal Deleted", description: `Meal removed from ${mealType} on ${day}.` });
+  };
+
 
   const getWeekDisplay = () => {
     const today = new Date();
@@ -154,7 +258,7 @@ export default function MealPlannerPage() {
     }
     const listHtml = `
         <html>
-            <head><title>Grocery List</title>
+            <head><title>Grocery List - EcoAI Calorie Tracker</title>
             <style>
                 body { font-family: sans-serif; margin: 20px; }
                 h1 { text-align: center; color: hsl(var(--primary)); }
@@ -224,21 +328,24 @@ export default function MealPlannerPage() {
           </div>
           <CardDescription>
             {canUseAIPlanner ? "Use AI to generate a weekly meal plan or add meals manually." : "Upgrade to Pro or EcoPro for AI-powered meal plan generation."}
-             {!canUseAIPlanner && <span className="block text-xs mt-1">Manual meal adding coming soon.</span>}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between mb-4">
-            <Button variant="outline" size="icon" onClick={() => handlePlaceholderFeatureClick('Previous Week Navigation')} disabled={isLoadingAI}><ArrowLeft/></Button>
+            <Button variant="outline" size="icon" onClick={() => setCurrentWeekOffset(prev => prev - 1)} disabled={isLoadingAI}>
+                <ArrowLeft onClick={() => handlePlaceholderFeatureClick("Previous Week Navigation")}/>
+            </Button>
             <h3 className="text-lg font-semibold">{getWeekDisplay()}</h3>
-            <Button variant="outline" size="icon" onClick={() => handlePlaceholderFeatureClick('Next Week Navigation')} disabled={isLoadingAI}><ArrowRight/></Button>
+            <Button variant="outline" size="icon" onClick={() => setCurrentWeekOffset(prev => prev + 1)} disabled={isLoadingAI}>
+                <ArrowRight onClick={() => handlePlaceholderFeatureClick("Next Week Navigation")}/>
+            </Button>
           </div>
 
-          {(Object.keys(weeklyPlan).length === 0 && !generatedPlanOutput) && !isLoadingAI && (
+          {(Object.keys(weeklyPlan).length === 0 || daysOfWeek.every(day => Object.values(weeklyPlan[day] || {}).every(arr => arr?.length === 0))) && !generatedPlanOutput && !isLoadingAI && (
             <div className="text-center py-8 text-muted-foreground">
               <p>Your meal planner is empty for this week.</p>
-              {canUseAIPlanner && <p>Try using the "AI Generate Week Plan" button above!</p>}
-              {!canUseAIPlanner && <p className="text-xs mt-2">Manual meal adding will be available soon.</p>}
+              {canUseAIPlanner && <p>Try using the "AI Generate Week Plan" button above or add meals manually!</p>}
+              {!canUseAIPlanner && <p>You can add meals manually by clicking the "+" icon in each slot.</p>}
             </div>
           )}
            {isLoadingAI && (
@@ -251,28 +358,38 @@ export default function MealPlannerPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
             {daysOfWeek.map(day => (
-              <Card key={day} className="min-h-[250px] flex flex-col bg-muted/20">
+              <Card key={day} className="min-h-[300px] flex flex-col bg-muted/20">
                 <CardHeader className="p-2 bg-muted/50">
                   <CardTitle className="text-sm font-semibold text-center">{day}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-2 space-y-1 flex-grow">
-                  {['Breakfast', 'Lunch', 'Dinner', 'Snack'].map(mealType => (
-                    <div key={mealType} className="text-xs p-1.5 border-b border-dashed last:border-b-0 min-h-[50px]">
-                      <p className="font-medium text-muted-foreground">{mealType}</p>
-                      {weeklyPlan[day]?.[mealType as keyof WeeklyPlanDay]?.map(item => (
-                        <div key={item.id} className="p-1 my-0.5 rounded bg-card shadow-sm">
-                            <p className="font-semibold truncate text-primary/90" title={item.name}>{item.name}</p>
+                  {(['Breakfast', 'Lunch', 'Dinner', 'Snack'] as PlannerMealItem['category'][]).map(mealType => (
+                    <div key={mealType} className="text-xs p-1.5 border-b border-dashed last:border-b-0 min-h-[60px] relative group">
+                      <div className="flex justify-between items-center mb-1">
+                        <p className="font-medium text-muted-foreground">{mealType}</p>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 group-hover:opacity-100" onClick={() => openAddMealModal(day, mealType)}>
+                          <PlusCircle className="h-4 w-4 text-primary"/>
+                        </Button>
+                      </div>
+                      {weeklyPlan[day]?.[mealType]?.map(item => (
+                        <div key={item.id} className="p-1.5 my-0.5 rounded bg-card shadow-sm group relative">
+                            <p className="font-semibold truncate text-primary/90 pr-10" title={item.name}>{item.name}</p>
                             {item.description && <p className="text-xs text-muted-foreground truncate" title={item.description}>{item.description}</p>}
                             {item.ecoScore && <p className="text-xs text-green-600">Eco: {item.ecoScore}/5</p>}
+                             <div className="absolute top-0 right-0 flex opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEditMealModal(item, day, mealType)}>
+                                    <Edit2 className="h-3 w-3 text-blue-500"/>
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleDeleteMeal(item.id, day, mealType)}>
+                                    <Trash2 className="h-3 w-3 text-red-500"/>
+                                </Button>
+                            </div>
                         </div>
                       ))}
-                      {(!weeklyPlan[day]?.[mealType as keyof WeeklyPlanDay] || weeklyPlan[day]?.[mealType as keyof WeeklyPlanDay]?.length === 0) && <p className="text-gray-400 italic text-xs">No meal planned</p>}
+                      {(!weeklyPlan[day]?.[mealType] || weeklyPlan[day]?.[mealType]?.length === 0) && <p className="text-gray-400 italic text-xs text-center py-2">No meal planned</p>}
                     </div>
                   ))}
                 </CardContent>
-                <CardFooter className="p-1 mt-auto">
-                    <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => handlePlaceholderFeatureClick('Add Meal to Planner')}><PlusCircle className="mr-1 h-3 w-3"/>Add Meal</Button>
-                </CardFooter>
               </Card>
             ))}
           </div>
@@ -285,7 +402,7 @@ export default function MealPlannerPage() {
             <ShoppingBag /> Grocery List
           </CardTitle>
           <CardDescription>
-            {canUseAIPlanner ? "Auto-generated based on your AI-planned meals." : "Upgrade to Pro/EcoPro for AI-generated grocery lists."}
+            {canUseAIPlanner ? "Auto-generated based on your AI-planned meals." : "Upgrade to Pro or EcoPro for AI-generated grocery lists."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -306,6 +423,38 @@ export default function MealPlannerPage() {
             <Button variant="outline" onClick={handleExportGroceryList} disabled={!generatedPlanOutput || generatedPlanOutput.groceryList.length === 0}><FileText className="mr-2 h-4 w-4"/> Export as CSV</Button>
         </CardFooter>
       </Card>
+
+      {/* Add/Edit Meal Modal */}
+      <Dialog open={isMealModalOpen} onOpenChange={setIsMealModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{modalMode === 'add' ? 'Add Meal to Plan' : 'Edit Meal'}</DialogTitle>
+            <DialogDescription>
+              {modalMode === 'add' ? `Adding to ${selectedMealTypeForMeal} on ${selectedDayForMeal}.` : `Editing meal in ${selectedMealTypeForMeal} on ${selectedDayForMeal}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="meal-name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="meal-name"
+                value={currentMealName}
+                onChange={(e) => setCurrentMealName(e.target.value)}
+                className="col-span-3"
+                placeholder="e.g., Oatmeal with Berries"
+              />
+            </div>
+            {/* Add more fields here if needed e.g. calories, description */}
+          </div>
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={() => setIsMealModalOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={handleSaveMeal}>Save Meal</Button>
+          </ModalFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
