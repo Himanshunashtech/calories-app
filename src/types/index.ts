@@ -1,4 +1,5 @@
 
+
 export interface DetailedNutrient {
   value: number;
   unit: string;
@@ -12,8 +13,7 @@ export interface DetailedNutrients {
 export type MealCategory = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
 
 export interface MealEntry {
-  id: string; // For client-side identification, Supabase will have its own ID
-  user_id?: string; // Foreign key to profiles table
+  id: string;
   date: string; // ISO string
   category?: MealCategory;
   photoDataUri?: string;
@@ -51,8 +51,8 @@ export interface ReminderSettings {
   lunchTime?: string;
   dinnerTime?: string;
   waterReminderEnabled?: boolean;
-  waterReminderInterval?: number;
-  snoozeDuration?: number;
+  waterReminderInterval?: number; // in minutes
+  snoozeDuration?: number; // in minutes
 }
 
 export interface AppSettings {
@@ -60,18 +60,16 @@ export interface AppSettings {
   unitPreferences?: {
     weight: 'kg' | 'lbs';
     height: 'cm' | 'in';
-    volume?: 'ml' | 'fl oz';
+    volume: 'ml' | 'fl oz'; // Added volume
   };
   hideNonCompliantRecipes?: boolean;
 }
 
-// This represents the data collected during onboarding
-// and also aligns with the `profiles` table structure in Supabase.
 export interface UserProfile {
-  id?: string; // Supabase user ID (from auth.users.id)
+  id?: string; // Simple client-side ID for localStorage
   email?: string;
   name?: string;
-  age?: string;
+  age?: string; // Year of birth as string
   gender?: string;
   height?: string;
   height_unit?: 'cm' | 'in';
@@ -80,40 +78,37 @@ export interface UserProfile {
   activity_level?: string;
   health_goals?: string[];
   also_track_sustainability?: boolean;
-  exercise_frequency?: string;
+  exercise_frequency?: string; // e.g., "0", "1-2", "3-4", "5+" days/week
   diet_type?: string;
-  dietary_restrictions?: string[];
-  favorite_cuisines?: string;
-  disliked_ingredients?: string;
+  dietary_restrictions?: string[]; // From ALLERGY_OPTIONS
+  dietary_restrictions_other?: string; // Comma-separated custom restrictions
+  favorite_cuisines?: string; // Comma-separated
+  disliked_ingredients?: string; // Comma-separated
   enable_carbon_tracking?: boolean;
-  sleep_hours?: string;
-  stress_level?: string;
-  water_goal?: number;
-  macroSplit?: { carbs: number, protein: number, fat: number }; // Will need to decide how to store in Supabase (e.g., JSONB or separate columns)
-  profile_image_url?: string | null;
+  sleep_hours?: string; // e.g., "<5", "5-6", "7-8", "8+"
+  stress_level?: string; // e.g., "low", "moderate", "high"
+  water_goal?: number; // number of glasses/units
+  macroSplit?: { carbs: number, protein: number, fat: number };
+  profile_image_url?: string | null; // Data URI or placeholder URL
   onboarding_complete?: boolean;
-  selected_plan?: UserPlan; // Store selected plan here
-  reminderSettings?: ReminderSettings; // Store as JSONB in Supabase
-  appSettings?: AppSettings; // Store as JSONB in Supabase
-  // Supabase audit columns
-  created_at?: string;
-  updated_at?: string;
+  selected_plan?: UserPlan;
+  reminderSettings?: ReminderSettings;
+  appSettings?: AppSettings;
 }
 
-// OnboardingData is now essentially UserProfile, but without Supabase 'id' for initial collection
-export type OnboardingData = Omit<UserProfile, 'id' | 'created_at' | 'updated_at'>;
+// OnboardingData is now essentially UserProfile, but with all fields optional initially
+export type OnboardingData = Partial<UserProfile>;
 
 
 export interface WaterIntakeData {
   current: number;
   goal: number;
-  lastUpdatedDate: string;
+  lastUpdatedDate: string; // YYYY-MM-DD to reset daily
 }
 
 export interface WeightEntry {
-  id?: string; // Client-side or Supabase ID
-  user_id?: string;
-  date: string;
+  id?: string;
+  date: string; // ISO string
   weight: number;
   unit: 'kg' | 'lbs';
 }
@@ -172,10 +167,16 @@ export interface FlowChatMessage {
 export const ALLERGY_OPTIONS = [
   { id: 'gluten', label: 'Gluten' },
   { id: 'dairy', label: 'Dairy' },
-  { id: 'nuts', label: 'Nuts' },
+  { id: 'nuts', label: 'Nuts' }, // General nuts
   { id: 'peanuts', label: 'Peanuts' },
   { id: 'soy', label: 'Soy' },
   { id: 'shellfish', label: 'Shellfish' },
   { id: 'fish', label: 'Fish' },
   { id: 'eggs', label: 'Eggs' },
+  // { id: 'wheat', label: 'Wheat' }, // Can add more specifics if needed
+  // { id: 'sesame', label: 'Sesame' },
 ];
+
+// export const defaultUserProfileData: UserProfile = { // defined in localStorage.ts to avoid circular deps
+//   // ...
+// };

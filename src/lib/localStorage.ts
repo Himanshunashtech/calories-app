@@ -1,23 +1,22 @@
 
 import type { MealEntry, UserPlan, AIScanUsage, UserProfile, WaterIntakeData, ReminderSettings, MealCategory, AppSettings, WeightEntry, OnboardingData } from '@/types';
-// Supabase will handle user profile and auth state, so these are removed or modified:
-// const USER_PROFILE_KEY = 'ecoAi_userProfile';
-// const ONBOARDING_COMPLETE_KEY = 'ecoAi_onboardingComplete';
-// const USER_LOGGED_IN_KEY = 'ecoAi_userLoggedIn';
 
-const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs'; // Keep for now, migrate later
-const SELECTED_PLAN_KEY = 'ecoAi_selectedPlan'; // Keep for now, migrate to profile later
-const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage'; // Keep for now, migrate later
-const WATER_INTAKE_KEY = 'ecoAi_waterIntake'; // Keep for now, migrate later
-const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput'; // Temporary client-side storage
-const MEAL_PLAN_KEY = 'ecoAi_mealPlan'; // Temporary client-side storage
-const WEIGHT_ENTRIES_KEY = 'ecoAi_weightEntries'; // Keep for now, migrate later
+const USER_PROFILE_KEY = 'ecoAi_userProfile';
+const ONBOARDING_COMPLETE_KEY = 'ecoAi_onboardingComplete';
+const USER_LOGGED_IN_KEY = 'ecoAi_userLoggedIn'; // Simple flag for session
+
+const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
+const SELECTED_PLAN_KEY = 'ecoAi_selectedPlan';
+const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage';
+const WATER_INTAKE_KEY = 'ecoAi_waterIntake';
+const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput';
+const MEAL_PLAN_KEY = 'ecoAi_mealPlan';
+const WEIGHT_ENTRIES_KEY = 'ecoAi_weightEntries';
+const TEMP_ONBOARDING_DATA_KEY = 'ecoAi_onboardingTempData';
 
 
-// --- User Profile & Auth (To be mostly handled by Supabase) ---
-// These functions are now simplified or will be phased out.
-
-export const defaultUserProfileData: OnboardingData = {
+export const defaultUserProfileData: UserProfile = {
+  id: Math.random().toString(36).substring(2, 15), // Simple client-side ID
   email: '',
   name: '',
   age: '',
@@ -62,15 +61,136 @@ export const defaultUserProfileData: OnboardingData = {
   }
 };
 
-// This function will be less used as profile data comes from Supabase
-// but can be a fallback or for initial non-logged-in onboarding state.
-export function getLocalOnboardingData(): OnboardingData {
+// User Profile
+export function getUserProfile(): UserProfile {
   if (typeof window === 'undefined') return { ...defaultUserProfileData };
   try {
-    const data = localStorage.getItem('ecoAi_onboardingTempData');
-    return data ? JSON.parse(data) : { ...defaultUserProfileData };
+    const profileJson = localStorage.getItem(USER_PROFILE_KEY);
+    if (profileJson) {
+      const parsedProfile = JSON.parse(profileJson);
+      // Ensure all default fields exist
+      return { ...defaultUserProfileData, ...parsedProfile };
+    }
+    // If no profile, save a default one
+    saveUserProfile({ ...defaultUserProfileData });
+    return { ...defaultUserProfileData };
   } catch (error) {
-    console.error("Error reading onboardingTempData from localStorage:", error);
+    console.error(`Error reading '${USER_PROFILE_KEY}' from localStorage:`, error);
+    return { ...defaultUserProfileData };
+  }
+}
+
+export function saveUserProfile(profile: UserProfile): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+  } catch (error) {
+    console.error(`Error writing '${USER_PROFILE_KEY}' to localStorage:`, error);
+  }
+}
+
+// Onboarding Status
+export function isOnboardingComplete(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(ONBOARDING_COMPLETE_KEY) === 'true';
+  } catch (error) {
+    console.error(`Error reading '${ONBOARDING_COMPLETE_KEY}' from localStorage:`, error);
+    return false;
+  }
+}
+
+export function setOnboardingComplete(status: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(ONBOARDING_COMPLETE_KEY, status.toString());
+  } catch (error) {
+    console.error(`Error writing '${ONBOARDING_COMPLETE_KEY}' to localStorage:`, error);
+  }
+}
+
+// Login Status
+export function isUserLoggedIn(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(USER_LOGGED_IN_KEY) === 'true';
+  } catch (error) {
+    console.error(`Error reading '${USER_LOGGED_IN_KEY}' from localStorage:`, error);
+    return false;
+  }
+}
+
+export function fakeLogin(email: string): UserProfile {
+  if (typeof window === 'undefined') return { ...defaultUserProfileData, email };
+  let profile = getUserProfile();
+  
+  // If current profile's email is different, or no email, update it.
+  // This simulates finding or associating the profile with this email.
+  if (profile.email !== email || !profile.email) {
+    profile.email = email;
+  }
+  // If onboarding was completed with a temp profile (no email),
+  // this login finalizes it with an email.
+  if (!profile.id) { // ensure ID if somehow missing
+      profile.id = Math.random().toString(36).substring(2, 15);
+  }
+
+  saveUserProfile(profile);
+  try {
+    localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
+  } catch (error) {
+    console.error(`Error writing '${USER_LOGGED_IN_KEY}' to localStorage:`, error);
+  }
+  return profile;
+}
+
+export function fakeSignup(email: string, name: string): UserProfile {
+   if (typeof window === 'undefined') {
+    return { ...defaultUserProfileData, email, name, onboarding_complete: false };
+  }
+  // For signup, we create a new default profile but set the email and name.
+  // Onboarding is considered incomplete.
+  const newProfile: UserProfile = {
+    ...defaultUserProfileData,
+    id: Math.random().toString(36).substring(2, 15),
+    email: email,
+    name: name,
+    onboarding_complete: false, // Explicitly false for new signups
+  };
+  saveUserProfile(newProfile);
+  setOnboardingComplete(false); // Ensure this is also set
+  try {
+    localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
+  } catch (error) {
+    console.error(`Error writing '${USER_LOGGED_IN_KEY}' to localStorage:`, error);
+  }
+  return newProfile;
+}
+
+export function fakeLogout(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(USER_LOGGED_IN_KEY);
+    // Optional: Do NOT clear USER_PROFILE_KEY on logout, so data persists if they log back in.
+    // If you want to clear profile on logout: localStorage.removeItem(USER_PROFILE_KEY);
+    // Do NOT clear ONBOARDING_COMPLETE_KEY, as that's tied to the profile data.
+  } catch (error) {
+    console.error(`Error during logout from localStorage:`, error);
+  }
+}
+
+
+// Temporary Onboarding Data (used by onboarding flow before final "login/account setup")
+export function getLocalOnboardingData(): OnboardingData {
+  if (typeof window === 'undefined') return { ...defaultUserProfileData }; // Use UserProfile structure as base
+  try {
+    const data = localStorage.getItem(TEMP_ONBOARDING_DATA_KEY);
+    if (data) {
+      return { ...defaultUserProfileData, ...JSON.parse(data) };
+    }
+    return { ...defaultUserProfileData }; // Ensure all fields from UserProfile are present
+  } catch (error) {
+    console.error(`Error reading '${TEMP_ONBOARDING_DATA_KEY}' from localStorage:`, error);
     return { ...defaultUserProfileData };
   }
 }
@@ -78,23 +198,29 @@ export function getLocalOnboardingData(): OnboardingData {
 export function saveLocalOnboardingData(data: OnboardingData): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem('ecoAi_onboardingTempData', JSON.stringify(data));
+    localStorage.setItem(TEMP_ONBOARDING_DATA_KEY, JSON.stringify(data));
   } catch (error) {
-    console.error("Error writing onboardingTempData to localStorage:", error);
+    console.error(`Error writing '${TEMP_ONBOARDING_DATA_KEY}' to localStorage:`, error);
   }
 }
 
 export function clearLocalOnboardingData(): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.removeItem('ecoAi_onboardingTempData');
+    localStorage.removeItem(TEMP_ONBOARDING_DATA_KEY);
   } catch (error) {
-    console.error("Error removing onboardingTempData from localStorage:", error);
+    console.error(`Error removing '${TEMP_ONBOARDING_DATA_KEY}' from localStorage:`, error);
   }
 }
 
+export function checkEmailExists(email: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const profile = getUserProfile(); // In localStorage, there's effectively one "main" profile
+  return !!profile.email && profile.email.toLowerCase() === email.toLowerCase();
+}
 
-// --- Features still using localStorage temporarily (to be migrated) ---
+
+// --- Other app data using localStorage ---
 
 // Meal Logs
 export function getMealLogs(): MealEntry[] {
@@ -111,7 +237,7 @@ export function getMealLogs(): MealEntry[] {
 export function addMealLog(entry: Omit<MealEntry, 'id' | 'date'>): MealEntry {
   const newEntry: MealEntry = {
     ...entry,
-    id: Math.random().toString(36).substring(2, 15), // Client-side temp ID
+    id: Math.random().toString(36).substring(2, 15),
     date: new Date().toISOString(),
     category: entry.category,
   };
@@ -157,9 +283,13 @@ export function clearMealLogs(): void {
   }
 }
 
-// User Plan (temporary, should move to Supabase profile)
+// User Plan
 export function getSelectedPlan(): UserPlan {
   if (typeof window === 'undefined') return 'free';
+  // Try to get from profile first, then fallback to direct localStorage item
+  const profile = getUserProfile();
+  if (profile.selected_plan) return profile.selected_plan;
+
   try {
     const plan = localStorage.getItem(SELECTED_PLAN_KEY) as UserPlan | null;
     return plan || 'free';
@@ -171,6 +301,10 @@ export function getSelectedPlan(): UserPlan {
 
 export function setSelectedPlan(plan: UserPlan): void {
   if (typeof window === 'undefined') return;
+  // Save to profile AND direct localStorage item for robustness during transition
+  const profile = getUserProfile();
+  profile.selected_plan = plan;
+  saveUserProfile(profile);
   try {
     localStorage.setItem(SELECTED_PLAN_KEY, plan);
   } catch (error) {
@@ -221,17 +355,19 @@ export function canUseAIScan(plan: UserPlan): boolean {
 
 // Water Intake
 const DEFAULT_DAILY_WATER_GOAL_GLASSES = 8;
-export function getWaterIntake(profileGoal?: number): WaterIntakeData {
+export function getWaterIntake(): WaterIntakeData { // Removed profileGoal param as it's on profile
   const today = new Date().toISOString().split('T')[0];
-  const goal = profileGoal || DEFAULT_DAILY_WATER_GOAL_GLASSES;
+  const profile = getUserProfile();
+  const goal = profile.water_goal || DEFAULT_DAILY_WATER_GOAL_GLASSES;
   const defaultIntake = { current: 0, goal, lastUpdatedDate: today };
+
   if (typeof window === 'undefined') return defaultIntake;
   let intake: WaterIntakeData;
   try {
     const intakeJson = localStorage.getItem(WATER_INTAKE_KEY);
     if (intakeJson) {
       intake = JSON.parse(intakeJson);
-      if (intake.lastUpdatedDate !== today) {
+      if (intake.lastUpdatedDate !== today) { // Reset if date changed
         intake.current = 0;
         intake.lastUpdatedDate = today;
       }
@@ -242,16 +378,16 @@ export function getWaterIntake(profileGoal?: number): WaterIntakeData {
     console.error(`Error reading '${WATER_INTAKE_KEY}' from localStorage:`, error);
     intake = { ...defaultIntake };
   }
-  intake.goal = goal;
+  intake.goal = goal; // Ensure goal matches profile
   try { localStorage.setItem(WATER_INTAKE_KEY, JSON.stringify(intake)); }
   catch (e) { console.error("Error saving initial water intake", e); }
   return intake;
 }
 
-export function addWater(amountInUnits: number = 1, profileGoal?: number): WaterIntakeData {
-  const intake = getWaterIntake(profileGoal);
+export function addWater(amountInUnits: number = 1): WaterIntakeData { // Removed profileGoal param
+  const intake = getWaterIntake();
   const safeGoal = intake.goal > 0 ? intake.goal : DEFAULT_DAILY_WATER_GOAL_GLASSES;
-  intake.current = Math.max(0, Math.min(intake.current + amountInUnits, safeGoal * 3));
+  intake.current = Math.max(0, Math.min(intake.current + amountInUnits, safeGoal * 3)); // Allow up to 3x goal
   try {
     localStorage.setItem(WATER_INTAKE_KEY, JSON.stringify(intake));
   } catch (error) {
@@ -279,7 +415,7 @@ export function getWeightEntries(): WeightEntry[] {
   if (typeof window === 'undefined') return [];
   try {
     const entriesJson = localStorage.getItem(WEIGHT_ENTRIES_KEY);
-    return entriesJson ? JSON.parse(entriesJson) : [];
+    return entriesJson ? JSON.parse(entriesJson).sort((a: WeightEntry, b: WeightEntry) => new Date(a.date).getTime() - new Date(b.date).getTime()) : [];
   } catch (error) {
     console.error(`Error reading '${WEIGHT_ENTRIES_KEY}' from localStorage:`, error);
     return [];
@@ -288,6 +424,7 @@ export function getWeightEntries(): WeightEntry[] {
 
 export function addWeightEntry(weight: number, unit: 'kg' | 'lbs'): WeightEntry {
   const newEntry: WeightEntry = {
+    id: Math.random().toString(36).substring(2, 15), // Add client-side ID
     date: new Date().toISOString(),
     weight,
     unit,
@@ -306,32 +443,28 @@ export function addWeightEntry(weight: number, unit: 'kg' | 'lbs'): WeightEntry 
   return newEntry;
 }
 
-
 // General LocalStorage clear for testing or full data removal
-export function clearAllNonAuthLocalStorage(): void {
+export function clearAllUserData(): void {
   if (typeof window === 'undefined') return;
-  const keysToKeep = []; // Add any keys here you DON'T want to clear
   const keysToRemove = [
     MEAL_LOGS_KEY,
     SELECTED_PLAN_KEY,
     AI_SCAN_USAGE_KEY,
-    // USER_PROFILE_KEY, // Managed by Supabase
+    USER_PROFILE_KEY,
     WATER_INTAKE_KEY,
-    // ONBOARDING_COMPLETE_KEY, // Managed by Supabase
-    // USER_LOGGED_IN_KEY, // Managed by Supabase session
+    ONBOARDING_COMPLETE_KEY,
+    USER_LOGGED_IN_KEY,
     GENERATED_MEAL_PLAN_OUTPUT_KEY,
     MEAL_PLAN_KEY,
     WEIGHT_ENTRIES_KEY,
-    'ecoAi_onboardingTempData',
+    TEMP_ONBOARDING_DATA_KEY,
   ];
   keysToRemove.forEach(key => {
-    if (!keysToKeep.includes(key)) {
-      try {
-        localStorage.removeItem(key);
-      } catch (error) {
-        console.error(`Error removing '${key}' from localStorage:`, error);
-      }
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error(`Error removing '${key}' from localStorage:`, error);
     }
   });
-  console.log("Attempted to clear app-specific (non-auth) localStorage data.");
+  console.log("Cleared all app-specific localStorage data.");
 }
