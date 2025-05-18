@@ -463,7 +463,6 @@ export default function DashboardPage() {
           </Link>
         </CardHeader>
         <CardFooter className="flex-wrap gap-2"> 
-            <Button onClick={() => router.push('/subscription')} variant="outline"> Manage Subscription </Button> 
             <Button onClick={() => router.push('/settings')} variant="ghost"><Cog className="mr-2 h-4 w-4"/> App Settings</Button>
         </CardFooter>
       </Card>
