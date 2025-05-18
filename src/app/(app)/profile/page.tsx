@@ -136,7 +136,6 @@ export default function ProfilePage() {
     const file = event.target.files?.[0];
     if (file) {
       setIsSaving(true);
-      // Convert to data URI for localStorage
       const reader = new FileReader();
       reader.onloadend = () => {
         const dataUri = reader.result as string;
@@ -187,7 +186,7 @@ export default function ProfilePage() {
     setIsSaving(true);
     fakeLogout();
     toast({ title: "Logged Out", description: "You have been successfully logged out." });
-    router.push('/login');
+    router.push('/'); // Redirect to home page
     setIsSaving(false);
   };
 
@@ -292,7 +291,7 @@ export default function ProfilePage() {
                       <PieChartIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                       <p className="text-sm text-muted-foreground">C: {profile.macroSplit?.carbs}% | P: {profile.macroSplit?.protein}% | F: {profile.macroSplit?.fat}%</p>
                       <ModalTrigger asChild>
-                        <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => { setTempMacroSplit(profile.macroSplit || { carbs: 50, protein: 25, fat: 25 }); setIsMacroModalOpen(true); }}>Edit Split</Button>
+                        <Button type="button" variant="link" size="sm" className="p-0 h-auto">Edit Split</Button>
                       </ModalTrigger>
                       or <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('AI Macro Recommendation')}>Use AI Recommendation</Button>
                     </div>
