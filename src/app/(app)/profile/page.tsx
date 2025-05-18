@@ -13,8 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile, ReminderSettings, AppSettings } from '@/types';
-import { ALLERGY_OPTIONS } from '@/types'; // ALLERGY_OPTIONS is from here
-import { defaultUserProfileData, getUserProfile, saveUserProfile, fakeLogout, clearAllUserData } from '@/lib/localStorage'; // defaultUserProfileData is from here
+import { ALLERGY_OPTIONS } from '@/types';
+import { defaultUserProfileData, getUserProfile, saveUserProfile, fakeLogout, clearAllUserData } from '@/lib/localStorage';
 import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, Settings as SettingsIcon, Edit3, Cog, Palette, Droplet, LogOut, PieChartIcon, CalendarDays, Trash2, Sprout, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -287,14 +287,41 @@ export default function ProfilePage() {
               </div>
               <div>
                 <Label>Current Macro Split</Label>
-                <div className="p-4 border rounded-md text-center bg-muted/50">
-                  <PieChartIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">C: {profile.macroSplit?.carbs}% | P: {profile.macroSplit?.protein}% | F: {profile.macroSplit?.fat}%</p>
-                  <ModalTrigger asChild>
-                    <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => { setTempMacroSplit(profile.macroSplit || { carbs: 50, protein: 25, fat: 25 }); setIsMacroModalOpen(true); }}>Edit Split</Button>
-                  </ModalTrigger>
-                  or <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('AI Macro Recommendation')}>Use AI Recommendation</Button>
-                </div>
+                 <Dialog open={isMacroModalOpen} onOpenChange={setIsMacroModalOpen}>
+                    <div className="p-4 border rounded-md text-center bg-muted/50">
+                      <PieChartIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm text-muted-foreground">C: {profile.macroSplit?.carbs}% | P: {profile.macroSplit?.protein}% | F: {profile.macroSplit?.fat}%</p>
+                      <ModalTrigger asChild>
+                        <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => { setTempMacroSplit(profile.macroSplit || { carbs: 50, protein: 25, fat: 25 }); setIsMacroModalOpen(true); }}>Edit Split</Button>
+                      </ModalTrigger>
+                      or <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('AI Macro Recommendation')}>Use AI Recommendation</Button>
+                    </div>
+                    <DialogContent>
+                        <DialogHeader>
+                        <DialogTitle>Edit Macro Split</DialogTitle>
+                        <DialogDescription>Adjust your target macronutrient percentages. They must sum to 100%.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="macro-carbs" className="text-right">Carbs (%)</Label>
+                            <Input id="macro-carbs" type="number" value={tempMacroSplit?.carbs || ''} onChange={(e) => handleMacroSplitChange('carbs', e.target.value)} className="col-span-3" />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="macro-protein" className="text-right">Protein (%)</Label>
+                            <Input id="macro-protein" type="number" value={tempMacroSplit?.protein || ''} onChange={(e) => handleMacroSplitChange('protein', e.target.value)} className="col-span-3" />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="macro-fat" className="text-right">Fat (%)</Label>
+                            <Input id="macro-fat" type="number" value={tempMacroSplit?.fat || ''} onChange={(e) => handleMacroSplitChange('fat', e.target.value)} className="col-span-3" />
+                        </div>
+                        <p className="text-sm text-center text-muted-foreground">Total: {(tempMacroSplit?.carbs || 0) + (tempMacroSplit?.protein || 0) + (tempMacroSplit?.fat || 0)}%</p>
+                        </div>
+                        <ModalFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsMacroModalOpen(false)}>Cancel</Button>
+                        <Button type="button" onClick={saveMacroSplit}>Save Split</Button>
+                        </ModalFooter>
+                    </DialogContent>
+                 </Dialog>
               </div>
               <div className="p-3 border rounded-md flex items-center justify-between">
                 <Label htmlFor="fitnessSyncProfile" className="text-sm">Sync fitness tracker?</Label>
@@ -385,8 +412,6 @@ export default function ProfilePage() {
             {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5" />}
             Save Profile & Preferences
           </Button>
-          <Button variant="outline" className="w-full" onClick={() => router.push('/settings')}><SettingsIcon className="mr-2 h-5 w-5"/>App Settings</Button>
-          <Button variant="outline" className="w-full" onClick={() => router.push('/meal-planner')}><CalendarDays className="mr-2 h-5 w-5"/>Go to Meal Planner</Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" className="w-full" disabled={isSaving}> <LogOut className="mr-2 h-5 w-5" /> Log Out </Button>
@@ -407,35 +432,6 @@ export default function ProfilePage() {
           </AlertDialog>
         </CardFooter>
       </Card>
-
-      {/* Macro Split Modal */}
-      <Dialog open={isMacroModalOpen} onOpenChange={setIsMacroModalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Macro Split</DialogTitle>
-              <DialogDescription>Adjust your target macronutrient percentages. They must sum to 100%.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="macro-carbs" className="text-right">Carbs (%)</Label>
-                <Input id="macro-carbs" type="number" value={tempMacroSplit?.carbs || ''} onChange={(e) => handleMacroSplitChange('carbs', e.target.value)} className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="macro-protein" className="text-right">Protein (%)</Label>
-                <Input id="macro-protein" type="number" value={tempMacroSplit?.protein || ''} onChange={(e) => handleMacroSplitChange('protein', e.target.value)} className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="macro-fat" className="text-right">Fat (%)</Label>
-                <Input id="macro-fat" type="number" value={tempMacroSplit?.fat || ''} onChange={(e) => handleMacroSplitChange('fat', e.target.value)} className="col-span-3" />
-              </div>
-              <p className="text-sm text-center text-muted-foreground">Total: {(tempMacroSplit?.carbs || 0) + (tempMacroSplit?.protein || 0) + (tempMacroSplit?.fat || 0)}%</p>
-            </div>
-            <ModalFooter>
-              <Button type="button" variant="outline" onClick={() => setIsMacroModalOpen(false)}>Cancel</Button>
-              <Button type="button" onClick={saveMacroSplit}>Save Split</Button>
-            </ModalFooter>
-          </DialogContent>
-      </Dialog>
     </div>
   );
 }
