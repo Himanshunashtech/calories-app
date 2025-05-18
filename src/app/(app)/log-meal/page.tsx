@@ -12,20 +12,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  addMealLog, 
-  getSelectedPlan, 
-  canUseAIScan, 
-  incrementAIScanCount, 
-  getAIScanUsage, 
+import {
+  addMealLog,
+  getSelectedPlan,
+  canUseAIScan,
+  incrementAIScanCount,
+  getAIScanUsage,
   type UserPlan,
   getTodaysMealLogs,
   getUserProfile,
   type UserProfile as UserProfileType,
 } from '@/lib/localStorage';
-import type { FoodAnalysisResult, DetailedNutrients, MealCategory, MealEntry } from '@/types'; 
-import { 
-  UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle, Info, Camera as CameraIcon, RefreshCcw, 
+import type { FoodAnalysisResult, DetailedNutrients, MealCategory, MealEntry } from '@/types';
+import {
+  UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle, Info, Camera as CameraIcon, RefreshCcw,
   ListPlus, ScanBarcode, X, CalendarClock, Zap, Activity, Clock, UserCircle, Apple, Drumstick, Wheat, MinusCircle, PlusCircle, Pizza, EggFried, Salad, GlassWater, Bike
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -74,9 +74,9 @@ export default function LogMealPageEnhanced() {
       setAiScansRemaining(usage.limit - usage.count);
     }
     setTodaysMealLogs(getTodaysMealLogs());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
+
   useEffect(() => {
     if (userPlan === 'free') {
       const usage = getAIScanUsage();
@@ -91,10 +91,14 @@ export default function LogMealPageEnhanced() {
         setPhotoPreview(reader.result as string);
       };
       reader.readAsDataURL(photoFile);
-      if (isCameraMode) setIsCameraMode(false); 
+      if (isCameraMode) setIsCameraMode(false);
       setShowWatermark(false);
+    } else {
+      // If photoFile is null (e.g., after clearing), ensure preview is also cleared.
+      // setPhotoPreview(null); // This was causing issues if clearing photo but not intending to remove preview if manually set
     }
   }, [photoFile, isCameraMode]);
+
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -141,7 +145,7 @@ export default function LogMealPageEnhanced() {
       disableCamera();
     }
 
-    return () => { 
+    return () => {
       disableCamera();
     };
   }, [isCameraMode, hasCameraPermission, photoPreview, toast]);
@@ -163,20 +167,20 @@ export default function LogMealPageEnhanced() {
   }, [isClient, todaysMealLogs]
   );
 
-  const calorieProgressPercentage = useMemo(() => 
+  const calorieProgressPercentage = useMemo(() =>
     Math.min((totalCaloriesToday / actualDailyCalorieGoal) * 100, 100),
     [totalCaloriesToday, actualDailyCalorieGoal]
   );
 
   const getCalorieProgressColorClass = () => {
     if (calorieProgressPercentage < 75) return 'text-primary';
-    if (calorieProgressPercentage < 100) return 'text-yellow-500';
+    if (calorieProgressPercentage < 100) return 'text-yellow-500'; // Ensure this Tailwind class exists or use an appropriate one.
     return 'text-destructive';
   };
 
   const caloriesByMealType = useMemo(() => {
-    const categories: MealCategory[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
-    const totals: Record<MealCategory, number> = { Breakfast: 0, Lunch: 0, Dinner: 0, Snack: 0 };
+    const categories: MealCategory[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Fast Food'];
+    const totals: Record<MealCategory, number> = { Breakfast: 0, Lunch: 0, Dinner: 0, Snack: 0, 'Fast Food': 0 };
     todaysMealLogs.forEach(log => {
       if (log.category && categories.includes(log.category)) {
         totals[log.category] += log.calories;
@@ -185,52 +189,55 @@ export default function LogMealPageEnhanced() {
     return totals;
   }, [todaysMealLogs]);
 
-  const mealTimeIcons = {
+  const mealTimeIcons: Record<MealCategory, React.ElementType> = {
     Breakfast: EggFried,
     Lunch: Salad,
     Dinner: Drumstick,
     Snack: Apple,
+    'Fast Food': Pizza,
   };
+  const mealCategories: MealCategory[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Fast Food'];
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setPhotoFile(file); 
-      setPhotoPreview(null); 
-      setAnalysisResult(null); 
+      setPhotoFile(file);
+      setPhotoPreview(null); // Clear previous preview to trigger re-render from file
+      setAnalysisResult(null);
       setError(null);
-      setIsCameraMode(false); 
+      setIsCameraMode(false);
       setShowWatermark(false);
       loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   };
-  
-  const handleCapturePhoto = useCallback(() => {
-    if (videoRef.current && videoRef.current.readyState >= videoRef.current.HAVE_METADATA) { 
-        const canvas = document.createElement('canvas');
-        const videoWidth = videoRef.current.videoWidth;
-        const videoHeight = videoRef.current.videoHeight;
 
-        if (videoWidth === 0 || videoHeight === 0) {
-            toast({ variant: "destructive", title: "Capture Error", description: "Could not get video dimensions."});
-            return;
-        }
-        canvas.width = videoWidth;
-        canvas.height = videoHeight;
-        const context = canvas.getContext('2d');
-        if (context) {
-            context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-            const dataUri = canvas.toDataURL('image/jpeg');
-            setPhotoPreview(dataUri);
-            setPhotoFile(null); 
-            setAnalysisResult(null);
-            setError(null);
-            setShowWatermark(false);
-            setIsCameraMode(false); 
-            loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
+  const handleCapturePhoto = useCallback(() => {
+    if (videoRef.current && videoRef.current.readyState >= videoRef.current.HAVE_METADATA) {
+      const canvas = document.createElement('canvas');
+      const videoWidth = videoRef.current.videoWidth;
+      const videoHeight = videoRef.current.videoHeight;
+
+      if (videoWidth === 0 || videoHeight === 0) {
+        toast({ variant: "destructive", title: "Capture Error", description: "Could not get video dimensions." });
+        return;
+      }
+      canvas.width = videoWidth;
+      canvas.height = videoHeight;
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const dataUri = canvas.toDataURL('image/jpeg');
+        setPhotoPreview(dataUri); // This will trigger useEffect to read this dataUri for the preview
+        setPhotoFile(null); // Clear any selected file
+        setAnalysisResult(null);
+        setError(null);
+        setShowWatermark(false);
+        setIsCameraMode(false); // Exit camera mode
+        loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
     } else {
-        toast({ variant: "destructive", title: "Camera Not Ready", description: "Wait for camera to initialize."});
+      toast({ variant: "destructive", title: "Camera Not Ready", description: "Wait for camera to initialize." });
     }
   }, [videoRef, toast]);
 
@@ -253,13 +260,13 @@ export default function LogMealPageEnhanced() {
     setShowWatermark(false);
 
     try {
-      const photoDataUri = photoPreview; 
+      const photoDataUri = photoPreview;
 
       const [foodDetails, macroDetails] = await Promise.all([
         analyzeFoodPhoto({ photoDataUri }),
         autoLogMacros({ photoDataUri, description: description || 'A meal' })
       ]);
-      
+
       setAnalysisResult({
         estimatedCalories: foodDetails.estimatedCalories,
         nutritionalInformation: foodDetails.nutritionalInformation,
@@ -272,7 +279,7 @@ export default function LogMealPageEnhanced() {
 
       if (userPlan === 'free') {
         incrementAIScanCount();
-        const usage = getAIScanUsage(); 
+        const usage = getAIScanUsage();
         setAiScansRemaining(usage.limit - usage.count);
         setShowWatermark(true);
         toast({
@@ -302,7 +309,7 @@ export default function LogMealPageEnhanced() {
     }
 
     addMealLog({
-      photoDataUri: photoPreview || undefined, 
+      photoDataUri: photoPreview || undefined,
       description: description,
       category: mealCategory,
       calories: analysisResult.estimatedCalories,
@@ -322,7 +329,7 @@ export default function LogMealPageEnhanced() {
     setTodaysMealLogs(getTodaysMealLogs()); // Refresh logs for calorie ring etc.
     resetForm(false); // Keep category selected
   };
-  
+
   const resetForm = (resetCategory = true) => {
     setPhotoFile(null);
     setPhotoPreview(null);
@@ -332,26 +339,26 @@ export default function LogMealPageEnhanced() {
     setError(null);
     setIsLoading(false);
     setShowWatermark(false);
-    setIsCameraMode(false); 
+    setIsCameraMode(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
-  
+
   const handleToggleCameraMode = (scrollToLogging = true) => {
     setIsCameraMode(prev => {
       const newMode = !prev;
-      if (newMode) { 
-        setPhotoFile(null); 
-        setPhotoPreview(null); 
-        setHasCameraPermission(null); 
-        if(scrollToLogging) loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
-      } else { 
-         if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-         }
-         if(videoRef.current) videoRef.current.srcObject = null;
+      if (newMode) {
+        setPhotoFile(null);
+        setPhotoPreview(null);
+        setHasCameraPermission(null);
+        if (scrollToLogging) loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        if (videoRef.current && videoRef.current.srcObject) {
+          const stream = videoRef.current.srcObject as MediaStream;
+          stream.getTracks().forEach(track => track.stop());
+        }
+        if (videoRef.current) videoRef.current.srcObject = null;
       }
       return newMode;
     });
@@ -361,14 +368,14 @@ export default function LogMealPageEnhanced() {
   };
 
   const handleRetakePhoto = () => {
-    setPhotoPreview(null); 
+    setPhotoPreview(null);
     setAnalysisResult(null);
     setError(null);
     setShowWatermark(false);
-    setIsCameraMode(true); 
-    setHasCameraPermission(null); 
+    setIsCameraMode(true);
+    setHasCameraPermission(null); // Re-trigger camera permission check
   };
-  
+
   const handlePlaceholderFeatureClick = (featureName: string) => {
     toast({
       title: `${featureName} Coming Soon!`,
@@ -382,7 +389,7 @@ export default function LogMealPageEnhanced() {
   };
 
   const canAnalyze = isClient && (userPlan !== 'free' || (userPlan === 'free' && aiScansRemaining > 0));
-  const mealCategories: MealCategory[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+
 
   if (!isClient) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
@@ -397,14 +404,14 @@ export default function LogMealPageEnhanced() {
         </CardHeader>
         <CardContent className="flex flex-col items-center space-y-3">
           <div className="relative w-48 h-48">
-            <svg className="w-full h-full" viewBox="0 0 36 36">
+            <svg className="w-full h-full" viewBox="0 0 36 36" transform="rotate(-90 18 18)">
               <path
                 className="text-muted/30"
                 d="M18 2.0845
                   a 15.9155 15.9155 0 0 1 0 31.831
                   a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
-                strokeWidth="3"
+                strokeWidth="3.5"
               />
               <path
                 className={cn(getCalorieProgressColorClass())}
@@ -413,7 +420,7 @@ export default function LogMealPageEnhanced() {
                   a 15.9155 15.9155 0 0 1 0 31.831
                   a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
-                strokeWidth="3"
+                strokeWidth="3.5"
                 strokeLinecap="round"
               />
             </svg>
@@ -435,8 +442,8 @@ export default function LogMealPageEnhanced() {
             {mealCategories.map((cat) => {
               const IconComponent = mealTimeIcons[cat] || Utensils;
               return (
-                <Card 
-                  key={cat} 
+                <Card
+                  key={cat}
                   className="min-w-[130px] max-w-[150px] shrink-0 hover:shadow-md transition-shadow cursor-pointer border-2 border-transparent hover:border-primary/50 relative group"
                   onClick={() => handleMealCardClick(cat)}
                 >
@@ -445,14 +452,14 @@ export default function LogMealPageEnhanced() {
                     <p className="font-medium text-sm">{cat}</p>
                     <p className="text-xs text-muted-foreground">{caloriesByMealType[cat].toFixed(0)} kcal</p>
                   </CardContent>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity bg-card/70 hover:bg-muted/80"
                     onClick={(e) => { e.stopPropagation(); handleMealCardClick(cat); }}
                     aria-label={`Add to ${cat}`}
                   >
-                    <PlusCircle className="h-4 w-4 text-primary"/>
+                    <PlusCircle className="h-4 w-4 text-primary" />
                   </Button>
                 </Card>
               );
@@ -465,7 +472,7 @@ export default function LogMealPageEnhanced() {
       {/* Fasting Card */}
       <Card className="shadow-md">
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-primary"/>Fasting Tracker</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-primary" />Fasting Tracker</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-center">
           <p className="text-2xl font-semibold text-muted-foreground">Not Fasting</p>
@@ -480,17 +487,17 @@ export default function LogMealPageEnhanced() {
       {/* Exercise Card */}
       <Card className="shadow-md">
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2"><Bike className="h-5 w-5 text-primary"/>Log Your Activity</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2"><Bike className="h-5 w-5 text-primary" />Log Your Activity</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground text-center">Track your workouts, steps, and active minutes to see how they contribute to your daily energy balance.
-          <br/> Placeholder for total active calories: 250 kcal.
+            <br /> Placeholder for total active calories: 250 kcal.
           </p>
         </CardContent>
         <CardFooter>
-            <Button variant="outline" className="w-full" onClick={() => handlePlaceholderFeatureClick('Add Exercise')}>
-              <PlusCircle className="mr-2 h-4 w-4"/> Add Exercise
-            </Button>
+          <Button variant="outline" className="w-full" onClick={() => handlePlaceholderFeatureClick('Add Exercise')}>
+            <PlusCircle className="mr-2 h-4 w-4" /> Add Exercise
+          </Button>
         </CardFooter>
       </Card>
 
@@ -504,7 +511,7 @@ export default function LogMealPageEnhanced() {
                 {mealCategory ? `Log ${mealCategory}` : "Log Your Meal"}
               </CardTitle>
               <Button variant="outline" onClick={() => handleToggleCameraMode(false)} size="sm"> {/* Set scrollToLogging to false here */}
-                {isCameraMode ? <UploadCloud className="mr-2 h-4 w-4"/> : <CameraIcon className="mr-2 h-4 w-4"/>}
+                {isCameraMode ? <UploadCloud className="mr-2 h-4 w-4" /> : <CameraIcon className="mr-2 h-4 w-4" />}
                 {isCameraMode ? 'Upload File' : 'Use Camera'}
               </Button>
             </div>
@@ -523,53 +530,53 @@ export default function LogMealPageEnhanced() {
                 <div className="relative w-full aspect-[4/3] bg-muted rounded-md overflow-hidden border">
                   <video ref={videoRef} className="w-full h-full object-cover" playsInline />
                   {!photoPreview && hasCameraPermission === null && !videoRef.current?.srcObject && (
-                      <div className="absolute inset-0 flex items-center justify-center z-20 bg-background/50"> <Loader2 className="h-8 w-8 animate-spin text-primary"/> </div>
+                    <div className="absolute inset-0 flex items-center justify-center z-20 bg-background/50"> <Loader2 className="h-8 w-8 animate-spin text-primary" /> </div>
                   )}
                   {!photoPreview && hasCameraPermission === false && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 p-4 z-20">
-                          <Alert variant="destructive" className="max-w-sm">
-                              <AlertCircle className="h-4 w-4" /> <AlertTitle>Camera Access Denied</AlertTitle>
-                              <AlertDescription>Enable camera permissions & refresh.</AlertDescription>
-                          </Alert>
-                      </div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 p-4 z-20">
+                      <Alert variant="destructive" className="max-w-sm">
+                        <AlertCircle className="h-4 w-4" /> <AlertTitle>Camera Access Denied</AlertTitle>
+                        <AlertDescription>Enable camera permissions & refresh.</AlertDescription>
+                      </Alert>
+                    </div>
                   )}
                 </div>
                 {hasCameraPermission && !photoPreview && (
                   <Button onClick={handleCapturePhoto} className="w-full" disabled={isLoading || hasCameraPermission === false}>
-                      <CameraIcon className="mr-2 h-5 w-5"/> Capture Photo
+                    <CameraIcon className="mr-2 h-5 w-5" /> Capture Photo
                   </Button>
                 )}
                 {photoPreview && (
                   <Button onClick={handleRetakePhoto} variant="outline" className="w-full">
-                    <RefreshCcw className="mr-2 h-5 w-5"/> Retake Photo
+                    <RefreshCcw className="mr-2 h-5 w-5" /> Retake Photo
                   </Button>
                 )}
               </div>
-            ) : photoPreview ? ( 
+            ) : photoPreview ? (
               <div className="relative group w-full aspect-[4/3] sm:w-64 sm:h-48 mx-auto">
-                  <Image
-                      src={photoPreview}
-                      alt="Meal preview"
-                      fill
-                      sizes="(max-width: 640px) 100vw, 256px"
-                      style={{objectFit:"cover"}}
-                      className="rounded-md shadow-md"
-                  />
-                  {showWatermark && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30">
-                          <p className="text-white text-lg font-bold transform -rotate-12 opacity-75">Watermarked</p>
-                      </div>
-                  )}
-                  <Button variant="ghost" size="icon" className="absolute top-1 right-1 bg-background/50 hover:bg-background/80 z-20 h-8 w-8" onClick={() => {setPhotoFile(null); setPhotoPreview(null); setAnalysisResult(null); if(fileInputRef.current) fileInputRef.current.value = ""; setShowWatermark(false);}}>
-                      <X className="h-4 w-4"/>
-                  </Button>
+                <Image
+                  src={photoPreview}
+                  alt="Meal preview"
+                  fill
+                  sizes="(max-width: 640px) 100vw, 256px"
+                  style={{ objectFit: "cover" }}
+                  className="rounded-md shadow-md"
+                />
+                {showWatermark && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30">
+                    <p className="text-white text-lg font-bold transform -rotate-12 opacity-75">Watermarked</p>
+                  </div>
+                )}
+                <Button variant="ghost" size="icon" className="absolute top-1 right-1 bg-background/50 hover:bg-background/80 z-20 h-8 w-8" onClick={() => { setPhotoFile(null); setPhotoPreview(null); setAnalysisResult(null); if (fileInputRef.current) fileInputRef.current.value = ""; setShowWatermark(false); }}>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-            ) : ( 
+            ) : (
               <div>
                 <Label htmlFor="meal-photo-input" className="text-base sr-only">Meal Photo Upload</Label>
                 <div className="mt-2 flex justify-center rounded-lg border border-dashed border-input px-6 py-10 hover:border-primary transition-colors">
                   <div className="text-center">
-                      <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" aria-hidden="true" />
+                    <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" aria-hidden="true" />
                     <div className="mt-4 flex text-sm leading-6 text-muted-foreground justify-center">
                       <Label htmlFor="meal-photo-input" className="relative cursor-pointer rounded-md font-semibold text-primary focus-within:outline-none hover:text-primary/80">
                         <span>Upload a file</span>
@@ -581,9 +588,9 @@ export default function LogMealPageEnhanced() {
                   </div>
                 </div>
                 <div className="mt-4 text-center">
-                    <Button variant="outline" onClick={() => handlePlaceholderFeatureClick('Scan Barcode')} className="text-sm">
-                        <ScanBarcode className="mr-2 h-4 w-4"/> Scan Barcode
-                    </Button>
+                  <Button variant="outline" onClick={() => handlePlaceholderFeatureClick('Scan Barcode')} className="text-sm">
+                    <ScanBarcode className="mr-2 h-4 w-4" /> Scan Barcode
+                  </Button>
                 </div>
               </div>
             )}
@@ -593,14 +600,26 @@ export default function LogMealPageEnhanced() {
               <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g., Chicken salad with avocado" className="mt-2 min-h-[80px]" />
             </div>
 
-            {mealCategory && <p className="text-sm text-center font-medium text-primary">Logging to: {mealCategory}</p>}
-            {!mealCategory && <p className="text-sm text-center text-destructive">Please select a meal category above.</p>}
-            
-            {error && ( <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-md"> <AlertCircle className="h-5 w-5"/> <span>{error}</span> </div> )}
+            <div>
+              <Label htmlFor="mealCategorySelect" className="text-base">Category</Label>
+              <Select value={mealCategory} onValueChange={(value: MealCategory) => setMealCategory(value)}>
+                <SelectTrigger id="mealCategorySelect" className="mt-2">
+                  <SelectValue placeholder="Select meal category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mealCategories.map(cat => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+
+            {error && (<div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-md"> <AlertCircle className="h-5 w-5" /> <span>{error}</span> </div>)}
 
             <Button onClick={handleAnalyzeMeal} disabled={!photoPreview || isLoading || !canAnalyze} className="w-full text-lg py-6">
               {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Sparkles className="mr-2 h-5 w-5" />}
-              {isLoading ? 'Analyzing...' : (canAnalyze ? 'Analyze Meal with AI' : (isClient && userPlan ==='free' && aiScansRemaining <=0 ? 'AI Scan Limit Reached' : 'Analyze Meal with AI'))}
+              {isLoading ? 'Analyzing...' : (canAnalyze ? 'Analyze Meal with AI' : (isClient && userPlan === 'free' && aiScansRemaining <= 0 ? 'AI Scan Limit Reached' : 'Analyze Meal with AI'))}
             </Button>
             {!canAnalyze && isClient && userPlan === 'free' && aiScansRemaining <= 0 && (
               <p className="text-xs text-center text-muted-foreground mt-2">Upgrade for unlimited AI scans.</p>
@@ -613,7 +632,7 @@ export default function LogMealPageEnhanced() {
         <Card className="shadow-lg animate-in fade-in duration-500">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl"> <Leaf className="h-7 w-7 text-primary" /> AI Analysis Results </CardTitle>
-            {showWatermark && ( <CardDescription className="text-xs text-amber-600">Note: Results are watermarked for free tier.</CardDescription> )}
+            {showWatermark && (<CardDescription className="text-xs text-amber-600">Note: Results are watermarked for free tier.</CardDescription>)}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="text-3xl font-bold text-primary text-center"> {analysisResult.estimatedCalories.toFixed(0)} kcal </div>
@@ -645,19 +664,19 @@ export default function LogMealPageEnhanced() {
               </div>
             )}
             <div className="flex flex-col sm:flex-row gap-2 pt-4">
-              <Button 
-                onClick={handleLogMeal} 
-                className="w-full whitespace-normal text-center sm:whitespace-nowrap" 
-                size="lg" 
-                disabled={!mealCategory}> 
-                  <ListPlus className="mr-2 h-5 w-5" /> Log This Meal {mealCategory && `to ${mealCategory}`}
+              <Button
+                onClick={handleLogMeal}
+                className="w-full whitespace-normal text-center sm:whitespace-nowrap"
+                size="lg"
+                disabled={!mealCategory}>
+                <ListPlus className="mr-2 h-5 w-5" /> Log This Meal {mealCategory && `to ${mealCategory}`}
               </Button>
-              <Button 
-                onClick={() => resetForm(true)} 
-                className="w-full whitespace-normal text-center sm:whitespace-nowrap" 
-                variant="outline" 
-                size="lg"> 
-                  Clear & Start New 
+              <Button
+                onClick={() => resetForm(true)}
+                className="w-full whitespace-normal text-center sm:whitespace-nowrap"
+                variant="outline"
+                size="lg">
+                Clear & Start New
               </Button>
             </div>
           </CardContent>
@@ -667,24 +686,24 @@ export default function LogMealPageEnhanced() {
       {/* Quick Log Buttons - Fixed at bottom */}
       <div className="fixed bottom-16 left-0 right-0 bg-background/90 backdrop-blur-sm border-t p-2 shadow-lg z-30 md:hidden">
         <div className="container mx-auto max-w-md flex justify-around items-center">
-          <Button variant="ghost" className="flex flex-col h-auto p-2 items-center" onClick={() => loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}>
-            <ScanBarcode className="h-6 w-6 text-primary"/>
+          <Button variant="ghost" className="flex flex-col h-auto p-2 items-center" onClick={() => { setIsCameraMode(false); loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' }); }}>
+            <ScanBarcode className="h-6 w-6 text-primary" />
             <span className="text-xs text-primary">Scan Food</span>
           </Button>
-           <Button variant="ghost" className="flex flex-col h-auto p-2 items-center" onClick={() => handlePlaceholderFeatureClick('Manual Text Entry')}>
-            <Pizza className="h-6 w-6 text-primary"/>
+          <Button variant="ghost" className="flex flex-col h-auto p-2 items-center" onClick={() => handlePlaceholderFeatureClick('Manual Text Entry')}>
+            <Pizza className="h-6 w-6 text-primary" />
             <span className="text-xs text-primary">Manual</span>
           </Button>
           <Button variant="ghost" className="flex flex-col h-auto p-2 items-center" onClick={() => handlePlaceholderFeatureClick('Add Activity')}>
-            <Zap className="h-6 w-6 text-primary"/>
+            <Zap className="h-6 w-6 text-primary" />
             <span className="text-xs text-primary">Activity</span>
           </Button>
           <Button variant="ghost" className="flex flex-col h-auto p-2 items-center" onClick={() => handlePlaceholderFeatureClick('Start Fasting Timer')}>
-            <Clock className="h-6 w-6 text-primary"/>
+            <Clock className="h-6 w-6 text-primary" />
             <span className="text-xs text-primary">Fast</span>
           </Button>
-           <Button variant="ghost" className="flex flex-col h-auto p-2 items-center" onClick={() => handlePlaceholderFeatureClick('Add Water')}>
-            <GlassWater className="h-6 w-6 text-primary"/>
+          <Button variant="ghost" className="flex flex-col h-auto p-2 items-center" onClick={() => handlePlaceholderFeatureClick('Add Water')}>
+            <GlassWater className="h-6 w-6 text-primary" />
             <span className="text-xs text-primary">Water</span>
           </Button>
         </div>
@@ -692,4 +711,3 @@ export default function LogMealPageEnhanced() {
     </div>
   );
 }
-

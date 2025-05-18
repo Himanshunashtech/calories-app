@@ -9,7 +9,7 @@ export interface DetailedNutrients {
   [key: string]: DetailedNutrient;
 }
 
-export type MealCategory = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
+export type MealCategory = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Fast Food';
 
 export interface MealEntry {
   id: string;
