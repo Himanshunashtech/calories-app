@@ -10,7 +10,7 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 const firebaseConfig = {
   apiKey: "AIzaSyCzcOpDNUMmd3fskROMR6x5NBUhsJ8wGtA", // REPLACE WITH YOUR ACTUAL API KEY
   authDomain: "YOUR_PROJECT_ID.firebaseapp.com", // REPLACE WITH YOUR ACTUAL AUTH DOMAIN
-  projectId: "YOUR_PROJECT_ID", // REPLACE WITH YOUR ACTUAL PROJECT ID
+  projectId: "ecoai-calorie-tracker", // REPLACE WITH YOUR ACTUAL PROJECT ID
   storageBucket: "YOUR_PROJECT_ID.appspot.com", // REPLACE WITH YOUR ACTUAL STORAGE BUCKET
   messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // REPLACE WITH YOUR ACTUAL MESSAGING SENDER ID
   appId: "YOUR_APP_ID", // REPLACE WITH YOUR ACTUAL APP ID

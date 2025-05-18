@@ -3,6 +3,7 @@
 
 import { useState, ChangeEvent, FormEvent, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image'; // Added or ensured this import
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,12 +14,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, Utensils, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, CloudLightning, Users, Search, Sparkles as LucideSparklesIcon, Activity, Edit3 } from 'lucide-react';
+import { User, Target, Salad, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, CloudLightning, Users, Search, Sparkles as LucideSparklesIcon, Activity, Edit3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
-import type { OnboardingData, UserProfile } from '@/types';
+import type { OnboardingData, UserProfile, ReminderSettings } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
-import { isUserLoggedIn, getUserProfile, saveUserProfile, setOnboardingComplete } from '@/lib/localStorage';
+import { isUserLoggedIn, getUserProfile, saveUserProfile, setOnboardingComplete as saveOnboardingCompleteStatus } from '@/lib/localStorage';
 
 const TOTAL_STEPS = 8; 
 
@@ -68,17 +69,13 @@ export default function OnboardingPage() {
         router.replace('/login');
         return;
     }
-    // Commenting out direct redirect if onboarding is complete to allow re-onboarding for now
-    // if (isUserLoggedIn() && isOnboardingComplete()) {
-    //     router.replace('/dashboard');
-    //     return;
-    // }
+    
     const existingProfile = getUserProfile();
     if (existingProfile) {
+        // Pre-fill form with existing profile data
         setFormData(prev => ({
             ...prev, 
             ...existingProfile,
-            // Ensure healthGoals and dietaryRestrictions are always arrays
             healthGoals: Array.isArray(existingProfile.healthGoals) ? existingProfile.healthGoals : [],
             dietaryRestrictions: Array.isArray(existingProfile.dietaryRestrictions) ? existingProfile.dietaryRestrictions : [],
             reminderSettings: { 
@@ -86,9 +83,11 @@ export default function OnboardingPage() {
                 ...(existingProfile.reminderSettings || {})
             }
         }));
+        // If onboarding was already marked complete, perhaps redirect or ask if they want to re-do it
+        // For now, we allow re-doing it.
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+  }, [router]); // Removed toast from dependencies as it's stable
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -100,7 +99,7 @@ export default function OnboardingPage() {
           ? [...prev.healthGoals, value]
           : prev.healthGoals.filter((goal) => goal !== value),
       }));
-    } else if (type === 'checkbox' && name === 'dietaryRestrictions') { 
+    } else if (type === 'checkbox' && name === 'dietaryRestrictionsCheckbox') { // Renamed to avoid conflict
        const { checked } = e.target as HTMLInputElement;
       setFormData((prev) => ({
         ...prev,
@@ -117,11 +116,11 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleSwitchChange = (name: keyof OnboardingData | `reminderSettings.${keyof OnboardingData['reminderSettings']}`) => (checked: boolean) => {
+  const handleSwitchChange = (name: keyof OnboardingData | `reminderSettings.${keyof ReminderSettings}`) => (checked: boolean) => {
      if (name === 'reminderSettings.mealRemindersEnabled') {
-        setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, mealRemindersEnabled: checked }}));
+        setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings!, mealRemindersEnabled: checked }}));
     } else if (name === 'reminderSettings.waterReminderEnabled') {
-        setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, waterReminderEnabled: checked }}));
+        setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings!, waterReminderEnabled: checked }}));
     } else if (name === 'enableCarbonTracking') {
         setFormData(prev => ({ ...prev, enableCarbonTracking: checked }));
     } else if (name === 'alsoTrackSustainability') {
@@ -132,11 +131,11 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleSelectChange = (name: keyof OnboardingData | `reminderSettings.${keyof OnboardingData['reminderSettings']}`) => (value: string | number) => {
+  const handleSelectChange = (name: keyof OnboardingData | `reminderSettings.${keyof ReminderSettings}`) => (value: string | number) => {
      if (name === 'reminderSettings.waterReminderInterval') {
       setFormData((prev) => ({
         ...prev,
-        reminderSettings: { ...prev.reminderSettings, waterReminderInterval: Number(value) },
+        reminderSettings: { ...prev.reminderSettings!, waterReminderInterval: Number(value) },
       }));
     }
     else {
@@ -183,40 +182,39 @@ export default function OnboardingPage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const existingProfile = getUserProfile(); // Get the profile created during signup/login
+    const existingProfile = getUserProfile(); 
     if (!existingProfile) {
         toast({title: "Error", description: "User profile not found. Please ensure you are logged in.", variant: "destructive"});
-        router.push('/login'); // Or appropriate error handling/redirect
+        router.push('/login'); 
         return;
     }
 
-    // Merge onboarding data into the existing profile
     const updatedProfile: UserProfile = {
         ...existingProfile,
-        ...formData, // formData will overwrite overlapping fields from existingProfile
-        name: formData.name || existingProfile.name, // Ensure name from onboarding is used
-        email: existingProfile.email, // Preserve email from login/signup
-        profileImageUri: existingProfile.profileImageUri, // Preserve existing image
-        reminderSettings: { // Deep merge for reminderSettings
-          ...defaultFormData.reminderSettings, // Start with defaults
-          ...(existingProfile.reminderSettings || {}), // Apply existing settings from profile
-          ...formData.reminderSettings, // Apply onboarding reminder settings
+        ...formData, 
+        name: formData.name || existingProfile.name, 
+        email: existingProfile.email, 
+        profileImageUri: existingProfile.profileImageUri, 
+        reminderSettings: { 
+          ...defaultFormData.reminderSettings!,
+          ...(existingProfile.reminderSettings || {}), 
+          ...formData.reminderSettings, 
         },
-        appSettings: { // Deep merge for appSettings
+        appSettings: { 
           ...(existingProfile.appSettings || {}),
-          // ...formData.appSettings, // if appSettings were part of onboarding
         }
     };
     
     saveUserProfile(updatedProfile);
-    setOnboardingComplete(true); // Mark onboarding as complete
+    // Onboarding is not marked complete here in the new flow.
+    // It's marked complete after plan selection and "login/account finalization".
     
     toast({
-      title: 'Onboarding Complete!',
+      title: 'Profile Info Updated!',
       description: "Next, let's choose a plan that's right for you.",
       action: <CheckCircle className="text-green-500" />,
     });
-    router.push('/subscription'); // Redirect to subscription page
+    router.push('/subscription'); 
   };
   
   const handlePlaceholderFeatureClick = (featureName: string) => {
@@ -459,7 +457,7 @@ export default function OnboardingPage() {
                         <div key={allergy.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-muted/50">
                             <Checkbox
                             id={`allergy-onboarding-${allergy.id}`}
-                            name="dietaryRestrictions"
+                            name="dietaryRestrictionsCheckbox" // Changed name here
                             value={allergy.label}
                             checked={formData.dietaryRestrictions.includes(allergy.label)}
                             onCheckedChange={(checked) => {
@@ -559,9 +557,9 @@ export default function OnboardingPage() {
                     </div>
                     {formData.reminderSettings?.mealRemindersEnabled && (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-3 border rounded-md bg-muted/30">
-                             <div> <Label htmlFor="breakfastTimeOnboarding">Breakfast</Label> <Input id="breakfastTimeOnboarding" name="reminderSettings.breakfastTime" type="time" value={formData.reminderSettings?.breakfastTime || '08:00'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, breakfastTime: e.target.value}}))} /> </div>
-                            <div> <Label htmlFor="lunchTimeOnboarding">Lunch</Label> <Input id="lunchTimeOnboarding" name="reminderSettings.lunchTime" type="time" value={formData.reminderSettings?.lunchTime || '12:30'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, lunchTime: e.target.value}}))} /> </div>
-                            <div> <Label htmlFor="dinnerTimeOnboarding">Dinner</Label> <Input id="dinnerTimeOnboarding" name="reminderSettings.dinnerTime" type="time" value={formData.reminderSettings?.dinnerTime || '18:30'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings, dinnerTime: e.target.value}}))} /> </div>
+                             <div> <Label htmlFor="breakfastTimeOnboarding">Breakfast</Label> <Input id="breakfastTimeOnboarding" name="breakfastTime" type="time" value={formData.reminderSettings?.breakfastTime || '08:00'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings!, breakfastTime: e.target.value}}))} /> </div>
+                            <div> <Label htmlFor="lunchTimeOnboarding">Lunch</Label> <Input id="lunchTimeOnboarding" name="lunchTime" type="time" value={formData.reminderSettings?.lunchTime || '12:30'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings!, lunchTime: e.target.value}}))} /> </div>
+                            <div> <Label htmlFor="dinnerTimeOnboarding">Dinner</Label> <Input id="dinnerTimeOnboarding" name="dinnerTime" type="time" value={formData.reminderSettings?.dinnerTime || '18:30'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...prev.reminderSettings!, dinnerTime: e.target.value}}))} /> </div>
                         </div>
                     )}
                      <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
@@ -574,7 +572,7 @@ export default function OnboardingPage() {
                     {formData.reminderSettings?.waterReminderEnabled && (
                          <div className="p-3 border rounded-md bg-muted/30 space-y-2">
                             <Label htmlFor="waterReminderIntervalOnboarding">Remind every:</Label>
-                            <Select name="reminderSettings.waterReminderInterval" value={formData.reminderSettings?.waterReminderInterval?.toString() || '60'} onValueChange={(val) => handleSelectChange('reminderSettings.waterReminderInterval')(Number(val))}>
+                            <Select name="waterReminderInterval" value={formData.reminderSettings?.waterReminderInterval?.toString() || '60'} onValueChange={(val) => handleSelectChange('reminderSettings.waterReminderInterval')(Number(val))}>
                                 <SelectTrigger id="waterReminderIntervalOnboarding"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                 <SelectItem value="30">30 minutes</SelectItem>
