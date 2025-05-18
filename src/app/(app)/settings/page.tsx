@@ -188,15 +188,12 @@ export default function AppSettingsPage() {
           </section>
 
           <section>
-            <h3 className="text-lg font-semibold flex items-center gap-2 mb-3 text-foreground">Account & Support</h3>
-             <Button variant="outline" className="w-full justify-start gap-2" onClick={() => router.push('/profile')}>
-              <Bell className="h-5 w-5"/> Manage Profile & Notification Preferences
-            </Button>
+            <h3 className="text-lg font-semibold flex items-center gap-2 mb-3 text-foreground">Account &amp; Support</h3>
             <Button variant="outline" className="w-full justify-start gap-2 mt-2" onClick={() => router.push('/subscription')}>
               <FileText className="h-5 w-5"/> Manage Subscription
             </Button>
-             <Button variant="outline" className="w-full justify-start gap-2 mt-2" onClick={() => router.push('/app/help-center')}>
-              <HelpCircle className="h-5 w-5"/> Help Center & Support
+             <Button variant="outline" className="w-full justify-start gap-2 mt-2" onClick={() => router.push('/help-center')}>
+              <HelpCircle className="h-5 w-5"/> Help Center &amp; Support
             </Button>
           </section>
         </CardContent>
@@ -210,5 +207,3 @@ export default function AppSettingsPage() {
     </div>
   );
 }
-
-    
