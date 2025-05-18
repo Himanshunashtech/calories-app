@@ -1,5 +1,4 @@
 
-
 export interface DetailedNutrient {
   value: number;
   unit: string;
@@ -60,13 +59,13 @@ export interface AppSettings {
   unitPreferences?: {
     weight: 'kg' | 'lbs';
     height: 'cm' | 'in';
-    volume: 'ml' | 'fl oz'; // Added volume
+    volume: 'ml' | 'fl oz';
   };
   hideNonCompliantRecipes?: boolean;
 }
 
 export interface UserProfile {
-  id?: string; // Simple client-side ID for localStorage
+  id?: string; // Simple client-side ID for localStorage, can be Supabase UUID later
   email?: string;
   name?: string;
   age?: string; // Year of birth as string
@@ -94,9 +93,11 @@ export interface UserProfile {
   selected_plan?: UserPlan;
   reminderSettings?: ReminderSettings;
   appSettings?: AppSettings;
+  // Supabase specific fields (optional for localStorage, but good to define)
+  // created_at?: string;
+  // updated_at?: string;
 }
 
-// OnboardingData is now essentially UserProfile, but with all fields optional initially
 export type OnboardingData = Partial<UserProfile>;
 
 
@@ -107,7 +108,7 @@ export interface WaterIntakeData {
 }
 
 export interface WeightEntry {
-  id?: string;
+  id?: string; // Added optional ID for potential future database use
   date: string; // ISO string
   weight: number;
   unit: 'kg' | 'lbs';
@@ -167,16 +168,10 @@ export interface FlowChatMessage {
 export const ALLERGY_OPTIONS = [
   { id: 'gluten', label: 'Gluten' },
   { id: 'dairy', label: 'Dairy' },
-  { id: 'nuts', label: 'Nuts' }, // General nuts
+  { id: 'nuts', label: 'Nuts' },
   { id: 'peanuts', label: 'Peanuts' },
   { id: 'soy', label: 'Soy' },
   { id: 'shellfish', label: 'Shellfish' },
   { id: 'fish', label: 'Fish' },
   { id: 'eggs', label: 'Eggs' },
-  // { id: 'wheat', label: 'Wheat' }, // Can add more specifics if needed
-  // { id: 'sesame', label: 'Sesame' },
 ];
-
-// export const defaultUserProfileData: UserProfile = { // defined in localStorage.ts to avoid circular deps
-//   // ...
-// };

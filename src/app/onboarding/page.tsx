@@ -19,34 +19,40 @@ import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import type { OnboardingData, UserProfile, ReminderSettings } from '@/types';
 import { ALLERGY_OPTIONS, defaultUserProfileData } from '@/types';
-import { 
-  saveLocalOnboardingData, 
+import {
+  saveLocalOnboardingData,
   clearLocalOnboardingData,
   getLocalOnboardingData,
   saveUserProfile,
   checkEmailExists,
-  isUserLoggedIn, // To check if user is logged in for prefill
-  getUserProfile // To get existing profile data if user is logged in
+  isUserLoggedIn,
+  getUserProfile,
+  setOnboardingComplete
 } from '@/lib/localStorage';
 
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 8; // Adjusted for the added email step potentially in step 1
 
 export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<OnboardingData>(getLocalOnboardingData());
+  const [formData, setFormData] = useState<OnboardingData>(defaultUserProfileData);
   const [isClient, setIsClient] = useState(false);
-  const [emailExistsError, setEmailExistsError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [emailExistsError, setEmailExistsError] = useState(false); // For step 1 email check
+
   const { toast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
     setIsClient(true);
-    // If there's an existing profile (e.g., user re-visits or was partially through),
-    // pre-fill formData from it. getLocalOnboardingData() handles this.
-    setFormData(getLocalOnboardingData());
-  }, []);
+    if (!isUserLoggedIn()) {
+      router.replace('/login'); // If not logged in, cannot start onboarding this way.
+      return;
+    }
+    // Prefill with existing profile data if user is logged in
+    const existingProfile = getUserProfile();
+    setFormData(prev => ({...prev, ...existingProfile, ...getLocalOnboardingData()})); // Merge, with local temp data taking precedence
+  }, [router]);
 
   useEffect(() => {
     if(isClient) {
@@ -57,7 +63,7 @@ export default function OnboardingPage() {
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    
+
     if (type === 'checkbox' && name === 'healthGoalsCheckbox') {
       const { checked } = e.target as HTMLInputElement;
       setFormData((prev) => ({
@@ -90,11 +96,15 @@ export default function OnboardingPage() {
       setFormData(prev => ({ ...prev, reminderSettings: { ...(prev.reminderSettings || defaultUserProfileData.reminderSettings!), mealRemindersEnabled: checked } }));
     } else if (name === 'reminderSettings.waterReminderEnabled') {
       setFormData(prev => ({ ...prev, reminderSettings: { ...(prev.reminderSettings || defaultUserProfileData.reminderSettings!), waterReminderEnabled: checked } }));
+    } else if (name === 'enable_carbon_tracking') {
+      setFormData(prev => ({ ...prev, enable_carbon_tracking: checked }));
+    } else if (name === 'also_track_sustainability') {
+      setFormData(prev => ({ ...prev, also_track_sustainability: checked }));
     } else {
-      setFormData((prev) => ({ ...prev, [name as keyof OnboardingData]: checked }));
+      console.warn("Unhandled switch change in onboarding:", name);
     }
   };
-  
+
   const handleSelectChange = (name: keyof OnboardingData | `reminderSettings.${keyof ReminderSettings['waterReminderInterval']}`) => (value: string | number) => {
     if (name === 'reminderSettings.waterReminderInterval') {
         setFormData((prev) => ({
@@ -103,8 +113,7 @@ export default function OnboardingPage() {
         }));
     } else if (name === 'height_unit' || name === 'weight_unit') {
        setFormData((prev) => ({ ...prev, [name]: value as 'cm' | 'in' | 'kg' | 'lbs' }));
-    }
-    else {
+    } else {
       setFormData((prev) => ({ ...prev, [name as keyof OnboardingData]: value as any }));
     }
   };
@@ -114,23 +123,12 @@ export default function OnboardingPage() {
   };
 
   const handleNext = async () => {
-    if (currentStep === 1) {
-        if (!formData.name || !formData.age || !formData.gender || !formData.email) {
-            toast({ variant: "destructive", title: "Missing fields", description: "Please fill in your email, name, year of birth, and gender." });
-            return;
-        }
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(formData.email)) {
-            toast({ variant: "destructive", title: "Invalid Email", description: "Please enter a valid email address." });
-            return;
-        }
-        if (checkEmailExists(formData.email)) {
-            setEmailExistsError(true);
-            toast({ variant: "destructive", title: "Email Exists", description: "This email is already registered. Please log in." });
-            return;
-        }
-        setEmailExistsError(false);
+    // Field validation for current step
+    if (currentStep === 1 && (!formData.name || !formData.age || !formData.gender)) {
+      toast({ variant: "destructive", title: "Missing fields", description: "Please fill in your name, year of birth, and gender." });
+      return;
     }
+    // Note: Email is now handled by signup directly.
     if (currentStep === 2 && (!formData.height || !formData.weight || !formData.activity_level)) {
       toast({ variant: "destructive", title: "Missing fields", description: "Please provide height, weight, and activity level." });
       return;
@@ -143,10 +141,11 @@ export default function OnboardingPage() {
       toast({ variant: "destructive", title: "Missing fields", description: "Please select your diet type." });
       return;
     }
-    if (currentStep === 6 && (!formData.sleep_hours || !formData.stress_level || !formData.water_goal)) {
+     if (currentStep === 6 && (!formData.sleep_hours || !formData.stress_level || !formData.water_goal)) {
       toast({ variant: "destructive", title: "Missing fields", description: "Please complete all lifestyle fields." });
       return;
     }
+
 
     if (currentStep < TOTAL_STEPS) {
       setCurrentStep((prev) => prev + 1);
@@ -163,22 +162,23 @@ export default function OnboardingPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Save the collected onboarding data into the main userProfile in localStorage
-    // The userProfile structure is used directly as OnboardingData now.
-    const profileToSave: UserProfile = {
-        ...getUserProfile(), // Get existing or default profile
-        ...formData, // Overlay with onboarding data
-        onboarding_complete: false, // Still false, will be set true after login/account finalization
+    let userProfile = getUserProfile(); // Get existing profile created during signup
+    userProfile = {
+      ...userProfile, // Keep existing ID, email, name from signup
+      ...formData,    // Overlay with all onboarding data
+      onboarding_complete: true,
     };
-    saveUserProfile(profileToSave);
+    
+    saveUserProfile(userProfile);
+    setOnboardingComplete(true); // Set the flag in localStorage
     clearLocalOnboardingData(); // Clear the temporary copy
 
     toast({
       title: 'Onboarding Complete!',
-      description: "Next, let's choose a plan and set up your account.",
+      description: "Next, let's choose your plan.",
       action: <CheckCircle className="text-green-500" />,
     });
-    router.push('/subscription'); // Go to plan selection
+    router.push('/subscription');
     
     setIsLoading(false);
   };
@@ -188,8 +188,8 @@ export default function OnboardingPage() {
   };
 
   const progressValue = (currentStep / TOTAL_STEPS) * 100;
-  const currentYear = new Date().getFullYear();
-  
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+
   const calculatedBMI = useMemo(() => {
     if (formData.height && formData.weight && formData.height_unit && formData.weight_unit) {
       const heightInMeters = formData.height_unit === 'cm' ? parseFloat(formData.height) / 100 : parseFloat(formData.height) * 0.0254;
@@ -210,7 +210,7 @@ export default function OnboardingPage() {
     { id: 'improve-energy', label: 'Improve Energy Levels' },
   ];
 
-  if (!isClient) { 
+  if (!isClient) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -245,7 +245,7 @@ export default function OnboardingPage() {
           { currentStep < TOTAL_STEPS && ` (Step ${currentStep}/${TOTAL_STEPS-1})`}
         </CardTitle>
         <CardDescription className="text-center">
-          { currentStep === 1 && "Let's personalize your journey. Start by telling us your email."}
+          { currentStep === 1 && "Let's personalize your journey. Start by telling us about yourself."}
           { currentStep === 2 && "Tell us a bit about yourself for accurate tracking."}
           { currentStep === 3 && "What are you aiming to achieve? You can select multiple goals."}
           { currentStep === 4 && "Customize your diet and food preferences."}
@@ -263,25 +263,17 @@ export default function OnboardingPage() {
             <section className="space-y-4 animate-in fade-in duration-500">
               <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><User className="h-6 w-6" /> Basic Details</h3>
               <div>
-                <Label htmlFor="email">Email Address</Label>
-                <div className="relative">
-                    <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleChange} placeholder="you@example.com" required className="pl-10" />
-                </div>
-                {emailExistsError && <p className="text-sm text-destructive mt-1">This email is already registered. Click "Go to Login" or use a different email.</p>}
+                <Label htmlFor="name-onboarding">Full Name</Label>
+                <Input id="name-onboarding" name="name" value={formData.name || ''} onChange={handleChange} placeholder="E.g., Alex Green" required />
               </div>
               <div>
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" name="name" value={formData.name || ''} onChange={handleChange} placeholder="E.g., Alex Green" required />
+                <Label htmlFor="age-onboarding">Year of Birth</Label>
+                <Input id="age-onboarding" name="age" type="number" value={formData.age || ''} onChange={handleChange} placeholder={`E.g., ${currentYear - 30}`} min="1900" max={(currentYear - 5).toString()} required />
               </div>
               <div>
-                <Label htmlFor="age">Year of Birth</Label>
-                <Input id="age" name="age" type="number" value={formData.age || ''} onChange={handleChange} placeholder={`E.g., ${currentYear - 30}`} min="1900" max={(currentYear - 5).toString()} required />
-              </div>
-              <div>
-                <Label htmlFor="gender">Gender</Label>
+                <Label htmlFor="gender-onboarding">Gender</Label>
                 <Select name="gender" value={formData.gender || ''} onValueChange={handleSelectChange('gender')}>
-                  <SelectTrigger id="gender"><SelectValue placeholder="Select gender" /></SelectTrigger>
+                  <SelectTrigger id="gender-onboarding"><SelectValue placeholder="Select gender" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="male">Male</SelectItem>
                     <SelectItem value="female">Female</SelectItem>
@@ -298,9 +290,9 @@ export default function OnboardingPage() {
                  <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><BarChart3 className="h-6 w-6" /> Your Metrics</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="height">Height</Label>
+                    <Label htmlFor="height-onboarding">Height</Label>
                     <div className="flex gap-2">
-                    <Input id="height" name="height" type="number" value={formData.height || ''} onChange={handleChange} placeholder="E.g., 170" className="flex-grow" required/>
+                    <Input id="height-onboarding" name="height" type="number" value={formData.height || ''} onChange={handleChange} placeholder="E.g., 170" className="flex-grow" required/>
                       <Select name="height_unit" value={formData.height_unit || 'cm'} onValueChange={handleSelectChange('height_unit')}>
                         <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -311,9 +303,9 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="weight">Weight</Label>
+                    <Label htmlFor="weight-onboarding">Weight</Label>
                     <div className="flex gap-2">
-                    <Input id="weight" name="weight" type="number" value={formData.weight || ''} onChange={handleChange} placeholder="E.g., 65" className="flex-grow" required/>
+                    <Input id="weight-onboarding" name="weight" type="number" value={formData.weight || ''} onChange={handleChange} placeholder="E.g., 65" className="flex-grow" required/>
                       <Select name="weight_unit" value={formData.weight_unit || 'kg'} onValueChange={handleSelectChange('weight_unit')}>
                         <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -351,10 +343,10 @@ export default function OnboardingPage() {
                       <div key={goal.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-muted/50">
                         <Checkbox
                           id={`healthGoalsCheckbox-${goal.id}`}
-                          name="healthGoalsCheckbox" // Corrected name
+                          name="healthGoalsCheckbox"
                           value={goal.label}
                           checked={(formData.health_goals || []).includes(goal.label)}
-                          onCheckedChange={(checked) => { // Simplified onCheckedChange
+                          onCheckedChange={(checked) => {
                             const isChecked = !!checked;
                             setFormData((prev) => ({
                               ...prev,
@@ -377,9 +369,9 @@ export default function OnboardingPage() {
                     <Switch id="also_track_sustainabilityOnboarding" name="also_track_sustainability" checked={!!formData.also_track_sustainability} onCheckedChange={handleSwitchChange('also_track_sustainability')} />
                 </div>
                 <div>
-                  <Label htmlFor="exercise_frequency">How many days a week do you typically exercise?</Label>
+                  <Label htmlFor="exercise_frequency-onboarding">How many days a week do you typically exercise?</Label>
                   <Select name="exercise_frequency" value={formData.exercise_frequency || ''} onValueChange={handleSelectChange('exercise_frequency')}>
-                    <SelectTrigger id="exercise_frequency"><SelectValue placeholder="Select frequency" /></SelectTrigger>
+                    <SelectTrigger id="exercise_frequency-onboarding"><SelectValue placeholder="Select frequency" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0">0 days</SelectItem>
                       <SelectItem value="1-2">1-2 days</SelectItem>
@@ -403,9 +395,9 @@ export default function OnboardingPage() {
              <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Salad className="h-6 w-6" /> Diet & Food Preferences</h3>
                  <div>
-                  <Label htmlFor="diet_type">Are you following any specific diet?</Label>
+                  <Label htmlFor="diet_type-onboarding">Are you following any specific diet?</Label>
                   <Select name="diet_type" value={formData.diet_type || ''} onValueChange={handleSelectChange('diet_type')}>
-                    <SelectTrigger id="diet_type"><SelectValue placeholder="Select diet type" /></SelectTrigger>
+                    <SelectTrigger id="diet_type-onboarding"><SelectValue placeholder="Select diet type" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
                       <SelectItem value="vegetarian">Vegetarian</SelectItem>
@@ -426,7 +418,7 @@ export default function OnboardingPage() {
                         <div key={allergy.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-muted/50">
                             <Checkbox
                             id={`dietaryRestrictionsCheckbox-${allergy.id}`}
-                            name="dietaryRestrictionsCheckbox" // Unique name for this group
+                            name="dietaryRestrictionsCheckbox"
                             value={allergy.label}
                             checked={(formData.dietary_restrictions || []).includes(allergy.label)}
                             onCheckedChange={(checked) => {
@@ -444,15 +436,15 @@ export default function OnboardingPage() {
                         ))}
                     </div>
                 </div>
-                <Textarea id="dietaryRestrictionsOtherOnboarding" name="dietary_restrictions_other" placeholder="Other restrictions or allergies not listed (comma-separated)..." className="mt-2" value={(formData.dietary_restrictions_other || '')} onChange={(e) => setFormData(prev => ({...prev, dietary_restrictions_other: e.target.value}))}/>
+                <Textarea id="dietaryRestrictionsOtherOnboarding" name="dietary_restrictions_other" placeholder="Other restrictions or allergies not listed (comma-separated)..." className="mt-2" value={formData.dietary_restrictions_other || ''} onChange={(e) => setFormData(prev => ({...prev, dietary_restrictions_other: e.target.value}))}/>
 
                 <div>
-                  <Label htmlFor="favorite_cuisines">Favorite Cuisines (Optional)</Label>
-                  <Input id="favorite_cuisines" name="favorite_cuisines" value={formData.favorite_cuisines || ''} onChange={handleChange} placeholder="E.g., Italian, Mexican, Indian" />
+                  <Label htmlFor="favorite_cuisines-onboarding">Favorite Cuisines (Optional)</Label>
+                  <Input id="favorite_cuisines-onboarding" name="favorite_cuisines" value={formData.favorite_cuisines || ''} onChange={handleChange} placeholder="E.g., Italian, Mexican, Indian" />
                 </div>
                 <div>
-                  <Label htmlFor="disliked_ingredients">Disliked Ingredients (Optional)</Label>
-                  <Input id="disliked_ingredients" name="disliked_ingredients" value={formData.disliked_ingredients || ''} onChange={handleChange} placeholder="E.g., Cilantro, Olives, Mushrooms" />
+                  <Label htmlFor="disliked_ingredients-onboarding">Disliked Ingredients (Optional)</Label>
+                  <Input id="disliked_ingredients-onboarding" name="disliked_ingredients" value={formData.disliked_ingredients || ''} onChange={handleChange} placeholder="E.g., Cilantro, Olives, Mushrooms" />
                 </div>
                  <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
                   <Label htmlFor="enable_carbon_trackingOnboarding" className="flex flex-col">
@@ -486,9 +478,9 @@ export default function OnboardingPage() {
              <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><HeartHandshake className="h-6 w-6" /> Lifestyle Habits</h3>
                 <div>
-                  <Label htmlFor="sleep_hours">On average, how many hours of sleep do you get per night?</Label>
+                  <Label htmlFor="sleep_hours-onboarding">On average, how many hours of sleep do you get per night?</Label>
                   <Select name="sleep_hours" value={formData.sleep_hours || ''} onValueChange={handleSelectChange('sleep_hours')}>
-                    <SelectTrigger id="sleep_hours"><SelectValue placeholder="Select sleep hours" /></SelectTrigger>
+                    <SelectTrigger id="sleep_hours-onboarding"><SelectValue placeholder="Select sleep hours" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="<5">&lt;5 hours</SelectItem>
                       <SelectItem value="5-6">5-6 hours</SelectItem>
@@ -570,7 +562,6 @@ export default function OnboardingPage() {
             <section className="space-y-4 animate-in fade-in duration-500">
                  <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><CheckCircle className="h-6 w-6" /> Review Your Information</h3>
                 <div className="space-y-2 border p-4 rounded-md bg-muted/30 max-h-96 overflow-y-auto text-sm">
-                  <p><strong>Email:</strong> {formData.email || 'Not set'}</p>
                   <p><strong>Name:</strong> {formData.name || 'Not set'}</p>
                   <p><strong>Year of Birth:</strong> {formData.age || 'Not set'}</p>
                   <p><strong>Gender:</strong> {formData.gender || 'Not set'}</p>
@@ -604,13 +595,8 @@ export default function OnboardingPage() {
               Previous
             </Button>
             {currentStep < TOTAL_STEPS ? (
-              <Button 
-                type="button" 
-                onClick={emailExistsError && currentStep === 1 ? () => router.push(`/login?email=${formData.email}`) : handleNext} 
-                className="ml-auto" 
-                disabled={isLoading}
-              >
-                {emailExistsError && currentStep === 1 ? "Go to Login" : "Next"}
+              <Button type="button" onClick={handleNext} className="ml-auto" disabled={isLoading}>
+                Next
               </Button>
             ) : (
               <Button type="submit" className="ml-auto bg-green-600 hover:bg-green-700" disabled={isLoading}>

@@ -6,9 +6,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { BottomNavigationBar } from '@/components/layout/BottomNavigationBar';
 import { ChatFAB } from '@/components/layout/ChatFAB';
-import { supabase } from '@/lib/supabaseClient'; // Import Supabase client
 import { Loader2 } from 'lucide-react';
-import type { UserProfile } from '@/types'; // Assuming UserProfile type is defined
+import { isUserLoggedIn, isOnboardingComplete, getUserProfile } from '@/lib/localStorage';
+import type { UserProfile } from '@/types';
 
 export default function AppLayout({
   children,
@@ -21,94 +21,35 @@ export default function AppLayout({
   const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth event:', event, 'Session:', session);
-        if (event === 'SIGNED_OUT') {
-          // If already on a public page, no need to redirect from here
-          // Auth pages themselves will handle redirect if user is logged out.
-          // Only redirect if on a protected page.
-          if (!pathname.startsWith('/login') && !pathname.startsWith('/signup') && !pathname.startsWith('/password-reset') && pathname !== '/') {
-            router.replace('/login');
-          }
-          setIsLoading(false);
-          setSessionChecked(true);
-          return;
-        }
-        
-        if (session?.user) {
-          // User is signed in
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('onboarding_complete')
-            .eq('id', session.user.id)
-            .single();
+    const loggedIn = isUserLoggedIn();
+    const onboardingDone = isOnboardingComplete();
 
-          if (error && error.code !== 'PGRST116') { // PGRST116: no rows found, handled below
-            console.error('Error fetching profile for layout:', error);
-            // Potentially redirect to an error page or show a toast
-          }
-          
-          if (profile && profile.onboarding_complete) {
-             // Allow access to app pages
-          } else {
-            // Onboarding not complete or profile doesn't exist yet
-            // (trigger should create profile, but this is a fallback)
-            if (pathname !== '/onboarding' && pathname !== '/subscription') { // Allow access to onboarding and subscription
-              router.replace('/onboarding');
-            }
-          }
-        } else {
-          // No session, user is not logged in
-          const publicPages = ['/login', '/signup', '/password-reset', '/']; // Add landing page
-          if (!publicPages.includes(pathname) && !pathname.startsWith('/auth/callback')) { // Allow callback route
-            router.replace('/login');
-          }
-        }
-        setIsLoading(false);
-        setSessionChecked(true);
+    const publicPages = ['/login', '/signup', '/password-reset', '/'];
+    const isPublicPage = publicPages.includes(pathname) || pathname.startsWith('/auth/callback'); // Assuming /auth/callback for potential future OAuth
+
+    if (loggedIn) {
+      if (!onboardingDone && pathname !== '/onboarding' && pathname !== '/subscription') {
+        router.replace('/onboarding');
+      } else if (onboardingDone && (pathname === '/onboarding' || pathname === '/login' || pathname === '/signup')) {
+        router.replace('/dashboard');
       }
-    );
-    
-    // Initial check for session
-     const checkInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session && !pathname.startsWith('/login') && !pathname.startsWith('/signup') && !pathname.startsWith('/password-reset') && pathname !== '/' && !pathname.startsWith('/auth/callback')) {
+    } else {
+      if (!isPublicPage) {
         router.replace('/login');
-      } else if (session) {
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('onboarding_complete')
-            .eq('id', session.user.id)
-            .single();
-          if (profile && !profile.onboarding_complete && pathname !== '/onboarding' && pathname !== '/subscription') {
-             router.replace('/onboarding');
-          }
       }
-      setIsLoading(false);
-      setSessionChecked(true);
-    };
-
-    if (!sessionChecked) {
-      checkInitialSession();
     }
+    setIsLoading(false);
+    setSessionChecked(true);
+  }, [pathname, router]);
 
-
-    return () => {
-      authListener?.unsubscribe();
-    };
-  }, [pathname, router, sessionChecked]);
 
   const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/password-reset';
   const isOnboardingPage = pathname === '/onboarding';
   const isSubscriptionPage = pathname === '/subscription';
   const isLandingPage = pathname === '/';
 
-
-  // If on specific standalone pages, render children directly without AppLayout UI
   if (isAuthPage || isOnboardingPage || isSubscriptionPage || isLandingPage) {
-    // If loading and not yet checked, show minimal loader
-    if (isLoading && !sessionChecked && (isOnboardingPage || isSubscriptionPage)) {
+    if (isLoading && !sessionChecked && (isOnboardingPage || isSubscriptionPage || isAuthPage)) {
         return (
          <div className="flex flex-col min-h-screen items-center justify-center bg-background">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -117,7 +58,6 @@ export default function AppLayout({
     }
     return <>{children}</>;
   }
-
 
   if (isLoading || !sessionChecked) {
     return (

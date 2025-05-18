@@ -9,10 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { LogIn, Mail, Lock, UserPlus, ExternalLink, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { LogIn, Mail, Lock, UserPlus, ExternalLink, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
 import { fakeLogin, getUserProfile, saveUserProfile, setOnboardingComplete, isUserLoggedIn, isOnboardingComplete } from '@/lib/localStorage';
 import { Skeleton } from '@/components/ui/skeleton';
-
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -30,6 +29,7 @@ export default function LoginPage() {
     if (emailFromQuery) {
       setEmail(emailFromQuery);
     }
+    // Redirect if already logged in and onboarded
     if (isUserLoggedIn() && isOnboardingComplete()) {
       router.replace('/dashboard');
     }
@@ -40,18 +40,10 @@ export default function LoginPage() {
     setIsLoading(true);
 
     // Simulate login with localStorage
-    const profile = fakeLogin(email); // This will set user as logged in
-
-    // This is now the final step of onboarding/signup if coming from that flow
-    if (!profile.onboarding_complete) {
-        profile.onboarding_complete = true;
-        setOnboardingComplete(true); // Set the flag
-        saveUserProfile(profile); // Save the profile with onboarding complete
-    }
-
+    const profile = fakeLogin(email); // This sets user as logged in and onboarding complete
 
     toast({ title: 'Login Successful!', description: `Welcome back, ${profile.name || 'User'}!` });
-    router.push('/dashboard');
+    router.push('/dashboard'); // Directly to dashboard as fakeLogin now handles onboarding complete status
 
     setIsLoading(false);
   };
@@ -131,7 +123,7 @@ export default function LoginPage() {
             </div>
           </div>
           <Button type="submit" className="w-full text-lg py-3" disabled={isLoading}>
-            {isLoading ? 'Finalizing...' : 'Complete Account Setup'}
+            {isLoading ? <Loader2 className="animate-spin mr-2"/> : 'Complete Account Setup'}
           </Button>
         </form>
       </CardContent>

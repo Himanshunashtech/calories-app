@@ -31,6 +31,7 @@ export const defaultUserProfileData: UserProfile = {
   exercise_frequency: '',
   diet_type: '',
   dietary_restrictions: [],
+  dietary_restrictions_other: '',
   favorite_cuisines: '',
   disliked_ingredients: '',
   enable_carbon_tracking: false,
@@ -68,7 +69,6 @@ export function getUserProfile(): UserProfile {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
     if (profileJson) {
       const parsedProfile = JSON.parse(profileJson);
-      // Ensure all default fields exist
       return { ...defaultUserProfileData, ...parsedProfile };
     }
     // If no profile, save a default one
@@ -122,24 +122,16 @@ export function isUserLoggedIn(): boolean {
 
 export function fakeLogin(email: string): UserProfile {
   if (typeof window === 'undefined') return { ...defaultUserProfileData, email };
-  let profile = getUserProfile();
+  let profile = getUserProfile(); // Get existing profile (should contain onboarding data)
   
-  // If current profile's email is different, or no email, update it.
-  // This simulates finding or associating the profile with this email.
-  if (profile.email !== email || !profile.email) {
-    profile.email = email;
-  }
-  // If onboarding was completed with a temp profile (no email),
-  // this login finalizes it with an email.
-  if (!profile.id) { // ensure ID if somehow missing
-      profile.id = Math.random().toString(36).substring(2, 15);
-  }
-
+  profile.email = email; // Ensure email is set on the profile
+  
   saveUserProfile(profile);
   try {
     localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
+    localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true'); // Mark onboarding complete upon login in this flow
   } catch (error) {
-    console.error(`Error writing '${USER_LOGGED_IN_KEY}' to localStorage:`, error);
+    console.error(`Error writing auth keys to localStorage:`, error);
   }
   return profile;
 }
@@ -148,8 +140,6 @@ export function fakeSignup(email: string, name: string): UserProfile {
    if (typeof window === 'undefined') {
     return { ...defaultUserProfileData, email, name, onboarding_complete: false };
   }
-  // For signup, we create a new default profile but set the email and name.
-  // Onboarding is considered incomplete.
   const newProfile: UserProfile = {
     ...defaultUserProfileData,
     id: Math.random().toString(36).substring(2, 15),
@@ -158,7 +148,7 @@ export function fakeSignup(email: string, name: string): UserProfile {
     onboarding_complete: false, // Explicitly false for new signups
   };
   saveUserProfile(newProfile);
-  setOnboardingComplete(false); // Ensure this is also set
+  setOnboardingComplete(false); 
   try {
     localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
   } catch (error) {
@@ -171,24 +161,22 @@ export function fakeLogout(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(USER_LOGGED_IN_KEY);
-    // Optional: Do NOT clear USER_PROFILE_KEY on logout, so data persists if they log back in.
-    // If you want to clear profile on logout: localStorage.removeItem(USER_PROFILE_KEY);
-    // Do NOT clear ONBOARDING_COMPLETE_KEY, as that's tied to the profile data.
+    // Keep profile data and onboarding status for potential re-login.
+    // If you want to clear everything, call clearAllUserData()
   } catch (error) {
     console.error(`Error during logout from localStorage:`, error);
   }
 }
 
-
-// Temporary Onboarding Data (used by onboarding flow before final "login/account setup")
+// Temporary Onboarding Data
 export function getLocalOnboardingData(): OnboardingData {
-  if (typeof window === 'undefined') return { ...defaultUserProfileData }; // Use UserProfile structure as base
+  if (typeof window === 'undefined') return { ...defaultUserProfileData };
   try {
     const data = localStorage.getItem(TEMP_ONBOARDING_DATA_KEY);
     if (data) {
       return { ...defaultUserProfileData, ...JSON.parse(data) };
     }
-    return { ...defaultUserProfileData }; // Ensure all fields from UserProfile are present
+    return { ...defaultUserProfileData };
   } catch (error) {
     console.error(`Error reading '${TEMP_ONBOARDING_DATA_KEY}' from localStorage:`, error);
     return { ...defaultUserProfileData };
@@ -215,10 +203,14 @@ export function clearLocalOnboardingData(): void {
 
 export function checkEmailExists(email: string): boolean {
   if (typeof window === 'undefined') return false;
-  const profile = getUserProfile(); // In localStorage, there's effectively one "main" profile
-  return !!profile.email && profile.email.toLowerCase() === email.toLowerCase();
+  try {
+    const profile = getUserProfile(); // In localStorage, there's effectively one "main" profile
+    return !!profile.email && profile.email.toLowerCase() === email.toLowerCase();
+  } catch (error) {
+    console.error(`Error checking email in localStorage:`, error);
+    return false;
+  }
 }
-
 
 // --- Other app data using localStorage ---
 
@@ -355,7 +347,7 @@ export function canUseAIScan(plan: UserPlan): boolean {
 
 // Water Intake
 const DEFAULT_DAILY_WATER_GOAL_GLASSES = 8;
-export function getWaterIntake(): WaterIntakeData { // Removed profileGoal param as it's on profile
+export function getWaterIntake(): WaterIntakeData {
   const today = new Date().toISOString().split('T')[0];
   const profile = getUserProfile();
   const goal = profile.water_goal || DEFAULT_DAILY_WATER_GOAL_GLASSES;
@@ -384,7 +376,7 @@ export function getWaterIntake(): WaterIntakeData { // Removed profileGoal param
   return intake;
 }
 
-export function addWater(amountInUnits: number = 1): WaterIntakeData { // Removed profileGoal param
+export function addWater(amountInUnits: number = 1): WaterIntakeData {
   const intake = getWaterIntake();
   const safeGoal = intake.goal > 0 ? intake.goal : DEFAULT_DAILY_WATER_GOAL_GLASSES;
   intake.current = Math.max(0, Math.min(intake.current + amountInUnits, safeGoal * 3)); // Allow up to 3x goal

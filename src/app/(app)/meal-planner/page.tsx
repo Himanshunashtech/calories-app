@@ -5,12 +5,11 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { CalendarDays, ShoppingBag, Sparkles, PlusCircle, ArrowLeft, ArrowRight, Printer, Download, Loader2, FileText } from 'lucide-react';
-import { getSelectedPlan, type UserPlan } from '@/lib/localStorage'; // Removed getUserProfile and UserProfile type from here
+import { getSelectedPlan, type UserPlan, getUserProfile } from '@/lib/localStorage';
+import type { UserProfile } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateEcoMealPlan, type GenerateEcoMealPlanOutput } from '@/ai/flows/generate-eco-meal-plan';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabaseClient'; // Import Supabase client
-import type { UserProfile } from '@/types'; // Import UserProfile type
 
 const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -47,33 +46,11 @@ export default function MealPlannerPage() {
 
   useEffect(() => {
     setIsClient(true);
-    setUserPlan(getSelectedPlan()); // Plan can still come from localStorage for now
-
-    const fetchProfile = async () => {
-      setIsLoadingProfile(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profileData, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        if (error) {
-          console.error("Error fetching profile for meal planner:", error);
-          toast({ variant: "destructive", title: "Error", description: "Could not load your profile for meal planning." });
-        } else if (profileData) {
-          setUserProfile(profileData as UserProfile);
-        }
-      } else {
-        // Handle case where user is not logged in, though layout should prevent this
-        toast({ variant: "destructive", title: "Not Authenticated", description: "Please log in to use the meal planner." });
-      }
-      setIsLoadingProfile(false);
-    };
-
-    fetchProfile();
+    setUserPlan(getSelectedPlan());
+    const profile = getUserProfile();
+    setUserProfile(profile);
+    setIsLoadingProfile(false);
     
-    // Load saved plan data from local storage (this can be migrated later)
     const savedPlanJson = localStorage.getItem('ecoAi_mealPlan');
     if (savedPlanJson) {
       try {
@@ -86,7 +63,6 @@ export default function MealPlannerPage() {
         setGeneratedPlanOutput(JSON.parse(savedGeneratedOutputJson));
        } catch (e) { console.error("Error parsing saved generated output", e); localStorage.removeItem('ecoAi_generatedMealPlanOutput');}
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   const handleGenerateAIMealPlan = async () => {
@@ -104,9 +80,9 @@ export default function MealPlannerPage() {
         userProfile: {
           dietType: userProfile.diet_type,
           healthGoals: userProfile.health_goals,
-          dietaryRestrictions: Array.isArray(userProfile.dietary_restrictions) ? userProfile.dietary_restrictions.join(', ') : userProfile.dietary_restrictions as string | undefined,
+          dietaryRestrictions: Array.isArray(userProfile.dietary_restrictions) ? userProfile.dietary_restrictions.join(', ') : userProfile.dietary_restrictions_other,
         },
-        durationDays: 7, // Default to 7 days for a weekly plan
+        durationDays: 7,
       });
       setGeneratedPlanOutput(planOutput);
       localStorage.setItem('ecoAi_generatedMealPlanOutput', JSON.stringify(planOutput));
@@ -122,7 +98,7 @@ export default function MealPlannerPage() {
             const plannerItem: PlannerMealItem = {
                 id: `ai-${meal.name.replace(/\s+/g, '-').toLowerCase()}-${dayName}-${dayIndex}-${mealIndex}`,
                 name: meal.name,
-                category: mealIndex === 0 ? 'Breakfast' : mealIndex === 1 ? 'Lunch' : 'Dinner', // Simple distribution
+                category: mealIndex === 0 ? 'Breakfast' : mealIndex === 1 ? 'Lunch' : 'Dinner',
                 ecoScore: meal.lowCarbonScore.toString(),
                 description: meal.description
             };
@@ -158,7 +134,7 @@ export default function MealPlannerPage() {
       return;
     }
     const csvContent = "data:text/csv;charset=utf-8," 
-      + "Item\n" // Header row
+      + "Item\n"
       + generatedPlanOutput.groceryList.map(item => `"${item.replace(/"/g, '""')}"`).join("\n");
     
     const encodedUri = encodeURI(csvContent);
@@ -181,7 +157,7 @@ export default function MealPlannerPage() {
             <head><title>Grocery List</title>
             <style>
                 body { font-family: sans-serif; margin: 20px; }
-                h1 { text-align: center; color: hsl(var(--primary)); } /* Use CSS var */
+                h1 { text-align: center; color: hsl(var(--primary)); }
                 ul { list-style-type: none; padding: 0; }
                 li { padding: 5px 0; border-bottom: 1px solid #eee; }
                 li:last-child { border-bottom: none; }
@@ -333,6 +309,3 @@ export default function MealPlannerPage() {
     </div>
   );
 }
-    
-
-    
