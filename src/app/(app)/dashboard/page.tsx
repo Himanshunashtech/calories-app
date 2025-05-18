@@ -33,11 +33,11 @@ import { useRouter } from 'next/navigation';
 import { 
   BarChart3, Camera, Leaf, Utensils, ShieldCheck, Zap, Brain, Trees, BarChartBig, Users, MessageSquareHeart, 
   CheckCircle, AlertTriangle, Info, Droplet, Footprints, TrendingUp, PlusCircle, Target as TargetIcon, 
-  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3, Cog, Search, Filter, CalendarDays, Activity, Bike, Weight as WeightIcon, Download, PieChartIcon, User // Added User icon
+  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3, Cog, Search, Filter, CalendarDays, Activity, Bike, Weight as WeightIcon, Download, PieChartIcon, User
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter as ModalFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select as RadixSelect, SelectContent as RadixSelectContent, SelectItem as RadixSelectItem, SelectTrigger as RadixSelectTrigger, SelectValue as RadixSelectValue } from '@/components/ui/select';
@@ -600,30 +600,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="shadow-md hover:shadow-lg transition-shadow"><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="text-primary"/> View Stats</CardTitle><CardDescription>Track progress and nutritional trends.</CardDescription></CardHeader><CardFooter><Link href="/stats" passHref legacyBehavior><Button className="w-full">Go to Stats</Button></Link></CardFooter></Card>
-        <Card className="shadow-md hover:shadow-lg transition-shadow"><CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="text-primary"/> Meal Planner</CardTitle><CardDescription>Plan ahead for a balanced week. AI suggestions for Pro users!</CardDescription></CardHeader><CardFooter><Link href="/meal-planner" passHref legacyBehavior><Button className="w-full" variant="outline">Open Meal Planner</Button></Link></CardFooter></Card>
-      </div>
-
-      {(plan === 'pro' || plan === 'ecopro') && (
-        <Card className="shadow-md">
-          <CardHeader><CardTitle className="flex items-center gap-2"><Brain className="text-primary"/>Nutrient Breakdown</CardTitle><CardDescription>Micronutrient insights from today's meals.</CardDescription></CardHeader>
-          <CardContent>
-            {isLoadingAI.trends ? <div className="flex justify-center items-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div> :
-            <>
-            <div className="flex flex-wrap gap-3 mb-4">
-              {todayMicronutrients.map(nutrient => (
-                <Badge key={nutrient.name} variant={nutrient.low ? "destructive" : "secondary"} className={cn("p-2 text-sm flex items-center gap-1.5 whitespace-normal", nutrient.low && "animate-pulse")}>
-                  <nutrient.icon className={cn("h-4 w-4 shrink-0", nutrient.low ? "text-destructive-foreground" : "text-secondary-foreground")} />
-                  <span>{nutrient.name}: {nutrient.actualValue}{nutrient.unit} ({nutrient.value}% RDA)</span>
-                </Badge>
-              ))}
-            </div>
-             <Alert> <TrendingUp className="h-4 w-4" /> <AlertTitle>AI Nutrient Trend</AlertTitle> <AlertDescription> {nutrientTrend?.trendInsight || "Keep logging meals for detailed nutrient trends."} </AlertDescription> </Alert>
-            </>}
-          </CardContent>
-        </Card>
-      )}
+      {/* Navigation cards removed here */}
       
       <Card className="shadow-md"><CardHeader><CardTitle className="flex items-center gap-2"><Search className="text-primary"/> Explore Recipes</CardTitle></CardHeader><CardContent><Button variant="link" onClick={() => router.push('/recipes')} className="p-0 h-auto">{plan === 'free' ? "Access 5 complimentary eco-friendly recipes." : "Access 50+ premium recipes." }</Button></CardContent></Card>
 
@@ -631,6 +608,25 @@ export default function DashboardPage() {
         <section className="space-y-6">
           <h2 className="text-2xl font-semibold text-primary flex items-center gap-2"><Zap /> Pro Features Active</h2>
           <Card className="shadow-md border-l-4 border-green-500"><CardHeader><CardTitle className="flex items-center gap-2 text-green-700"><Brain className="h-6 w-6"/>Advanced AI Insights</CardTitle></CardHeader><CardContent><ul className="list-disc list-inside space-y-1 text-muted-foreground"><li>Unlimited AI Meal Scans.</li><li>Detailed macro &amp; micro-nutrient breakdowns.</li><li>Meal-by-meal carbon footprint tracking (view in Meal Timeline - enable in Profile).</li></ul>{(plan === 'pro' || plan === 'ecopro') && <Badge variant="default" className="mt-3"><CheckCircle className="mr-1 h-4 w-4"/> Ad-Free Experience</Badge>}</CardContent></Card>
+          
+          <Card className="shadow-md border-l-4 border-purple-500">
+            <CardHeader><CardTitle className="flex items-center gap-2"><Brain className="text-primary"/>Nutrient Breakdown</CardTitle><CardDescription>Micronutrient insights from today's meals.</CardDescription></CardHeader>
+            <CardContent>
+              {isLoadingAI.trends ? <div className="flex justify-center items-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div> :
+              <>
+              <div className="flex flex-wrap gap-3 mb-4">
+                {todayMicronutrients.map(nutrient => (
+                  <Badge key={nutrient.name} variant={nutrient.low ? "destructive" : "secondary"} className={cn("p-2 text-sm flex items-center gap-1.5 whitespace-normal", nutrient.low && "animate-pulse")}>
+                    <nutrient.icon className={cn("h-4 w-4 shrink-0", nutrient.low ? "text-destructive-foreground" : "text-secondary-foreground")} />
+                    <span>{nutrient.name}: {nutrient.actualValue}{nutrient.unit} ({nutrient.value}% RDA)</span>
+                  </Badge>
+                ))}
+              </div>
+              <Alert> <TrendingUp className="h-4 w-4" /> <AlertTitle>AI Nutrient Trend</AlertTitle> <AlertDescription> {nutrientTrend?.trendInsight || "Keep logging meals for detailed nutrient trends."} </AlertDescription> </Alert>
+              </>}
+            </CardContent>
+          </Card>
+
           <Card className="shadow-md border-l-4 border-blue-500"><CardHeader><CardTitle className="flex items-center gap-2 text-blue-700"><MessageSquareHeart className="h-6 w-6"/>Personalized AI Coach</CardTitle></CardHeader>
             <CardContent>
               {isLoadingAI.coach ? <div className="flex justify-center items-center p-4"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/></div> :
@@ -697,10 +693,10 @@ export default function DashboardPage() {
                                         <span className="col-span-1">{weightUnit}</span>
                                     </div>
                                 </div>
-                                <DialogFooter>
+                                <ModalFooter>
                                     <Button type="button" variant="outline" onClick={() => setIsWeightModalOpen(false)}>Cancel</Button>
                                     <Button type="submit" onClick={handleAddWeightMeasurement}>Save Weight</Button>
-                                </DialogFooter>
+                                </ModalFooter>
                             </DialogContent>
                         </Dialog>
                     </TabsContent>
@@ -931,9 +927,9 @@ export default function DashboardPage() {
               </section>
             </div>
           </ScrollArea>
-          <DialogFooter className="mt-auto pt-4">
+          <ModalFooter className="mt-auto pt-4">
             <Button onClick={() => setIsDetailedProgressReportModalOpen(false)}>Close</Button>
-          </DialogFooter>
+          </ModalFooter>
         </DialogContent>
       </Dialog>
     </div>
