@@ -1,14 +1,14 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter as ModalFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CalendarDays, ShoppingBag, Sparkles, PlusCircle, ArrowLeft, ArrowRight, Printer, Download, Loader2, FileText, Edit2, Trash2 } from 'lucide-react';
-import { getSelectedPlan, type UserPlan, getUserProfile } from '@/lib/localStorage'; 
+import { getSelectedPlan, type UserPlan, getUserProfile as getLocalUserProfile } from '@/lib/localStorage'; 
 import type { UserProfile } from '@/types'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateEcoMealPlan, type GenerateEcoMealPlanOutput } from '@/ai/flows/generate-eco-meal-plan';
@@ -74,7 +74,7 @@ export default function MealPlannerPage() {
   useEffect(() => {
     setIsClient(true);
     setUserPlan(getSelectedPlan());
-    const profile = getUserProfile(); // Fetch profile from localStorage
+    const profile = getLocalUserProfile(); 
     setUserProfile(profile);
     setIsLoadingProfile(false);
     
@@ -84,7 +84,7 @@ export default function MealPlannerPage() {
         setGeneratedPlanOutput(JSON.parse(savedGeneratedOutputJson));
        } catch (e) { console.error("Error parsing saved generated output", e); localStorage.removeItem('ecoAi_generatedMealPlanOutput');}
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     if (isClient) {
@@ -107,7 +107,7 @@ export default function MealPlannerPage() {
         userProfile: {
           dietType: userProfile.dietType || undefined,
           healthGoals: userProfile.healthGoals || [],
-          dietaryRestrictions: userProfile.dietaryRestrictions ? (Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietary_restrictions_other) : undefined,
+          dietaryRestrictions: userProfile.dietaryRestrictions ? (Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietaryRestrictionsOther) : undefined,
         },
         durationDays: 7,
       });
@@ -122,10 +122,10 @@ export default function MealPlannerPage() {
         if (!newWeeklyPlan[dayName]) newWeeklyPlan[dayName] = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] };
         
         dayPlan.meals.forEach((meal, mealIndex) => {
-            let category: PlannerMealItem['category'] = 'Snack'; // Default
-            if (mealIndex === 0) category = 'Breakfast';
-            else if (mealIndex === 1) category = 'Lunch';
+            let category: PlannerMealItem['category'] = 'Breakfast'; // Default to breakfast for first meal
+            if (mealIndex === 1) category = 'Lunch';
             else if (mealIndex === 2) category = 'Dinner';
+            else if (mealIndex > 2) category = 'Snack'; // Remaining can be snacks or adjust logic
 
             const plannerItem: PlannerMealItem = {
                 id: `ai-${meal.name.replace(/\s+/g, '-').toLowerCase()}-${dayName}-${dayIndex}-${mealIndex}-${crypto.randomUUID()}`,
@@ -289,12 +289,12 @@ export default function MealPlannerPage() {
     }
   };
   
-  const handlePlaceholderFeatureClick = (featureName: string) => {
+  const handlePlaceholderFeatureClick = useCallback((featureName: string) => {
     toast({
       title: `${featureName} Coming Soon!`,
       description: `This feature will be available in a future update.`,
     });
-  };
+  }, [toast]);
 
 
   if (!isClient || isLoadingProfile) {
@@ -332,12 +332,28 @@ export default function MealPlannerPage() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between mb-4">
-            <Button variant="outline" size="icon" onClick={() => setCurrentWeekOffset(prev => prev - 1)} disabled={isLoadingAI}>
-                <ArrowLeft onClick={() => handlePlaceholderFeatureClick("Previous Week Navigation")}/>
+            <Button variant="outline" size="icon" 
+              onClick={() => {
+                if (currentWeekOffset <= -2) {
+                  handlePlaceholderFeatureClick("Past Week Navigation beyond 2 weeks");
+                } else {
+                  setCurrentWeekOffset(prev => prev - 1);
+                }
+              }} 
+              disabled={isLoadingAI}>
+                <ArrowLeft />
             </Button>
             <h3 className="text-lg font-semibold">{getWeekDisplay()}</h3>
-            <Button variant="outline" size="icon" onClick={() => setCurrentWeekOffset(prev => prev + 1)} disabled={isLoadingAI}>
-                <ArrowRight onClick={() => handlePlaceholderFeatureClick("Next Week Navigation")}/>
+            <Button variant="outline" size="icon" 
+              onClick={() => {
+                if (currentWeekOffset >= 2) {
+                  handlePlaceholderFeatureClick("Future Week Navigation beyond 2 weeks");
+                } else {
+                  setCurrentWeekOffset(prev => prev + 1);
+                }
+              }} 
+              disabled={isLoadingAI}>
+                <ArrowRight />
             </Button>
           </div>
 
@@ -419,8 +435,12 @@ export default function MealPlannerPage() {
           )}
         </CardContent>
         <CardFooter className="gap-2 flex-wrap">
-            <Button variant="outline" onClick={handlePrintGroceryList} disabled={!generatedPlanOutput || generatedPlanOutput.groceryList.length === 0}><Printer className="mr-2 h-4 w-4"/> Print List</Button>
-            <Button variant="outline" onClick={handleExportGroceryList} disabled={!generatedPlanOutput || generatedPlanOutput.groceryList.length === 0}><FileText className="mr-2 h-4 w-4"/> Export as CSV</Button>
+            <Button variant="outline" onClick={handlePrintGroceryList} disabled={!generatedPlanOutput || generatedPlanOutput.groceryList.length === 0}>
+                <Printer className="mr-2 h-4 w-4"/> Print List
+            </Button>
+            <Button variant="outline" onClick={handleExportGroceryList} disabled={!generatedPlanOutput || generatedPlanOutput.groceryList.length === 0}>
+                <FileText className="mr-2 h-4 w-4"/> Export as CSV
+            </Button>
         </CardFooter>
       </Card>
 
