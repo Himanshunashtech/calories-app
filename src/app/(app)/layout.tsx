@@ -1,13 +1,14 @@
 
-'use client'; // Required for useEffect and useRouter
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { BottomNavigationBar } from '@/components/layout/BottomNavigationBar';
 import { ChatFAB } from '@/components/layout/ChatFAB';
-import { isUserLoggedIn, isOnboardingComplete } from '@/lib/localStorage';
+import { supabase } from '@/lib/supabaseClient'; // Import Supabase client
 import { Loader2 } from 'lucide-react';
+import type { UserProfile } from '@/types'; // Assuming UserProfile type is defined
 
 export default function AppLayout({
   children,
@@ -16,42 +17,109 @@ export default function AppLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
-    const userLoggedIn = isUserLoggedIn();
-    const onboardingComplete = isOnboardingComplete();
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event, 'Session:', session);
+        if (event === 'SIGNED_OUT') {
+          // If already on a public page, no need to redirect from here
+          // Auth pages themselves will handle redirect if user is logged out.
+          // Only redirect if on a protected page.
+          if (!pathname.startsWith('/login') && !pathname.startsWith('/signup') && !pathname.startsWith('/password-reset') && pathname !== '/') {
+            router.replace('/login');
+          }
+          setIsLoading(false);
+          setSessionChecked(true);
+          return;
+        }
+        
+        if (session?.user) {
+          // User is signed in
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('onboarding_complete')
+            .eq('id', session.user.id)
+            .single();
 
-    // Pages that have their own layouts and don't need this AppLayout's protection/UI
-    const standalonePages = ['/login', '/signup', '/password-reset', '/onboarding'];
+          if (error && error.code !== 'PGRST116') { // PGRST116: no rows found, handled below
+            console.error('Error fetching profile for layout:', error);
+            // Potentially redirect to an error page or show a toast
+          }
+          
+          if (profile && profile.onboarding_complete) {
+             // Allow access to app pages
+          } else {
+            // Onboarding not complete or profile doesn't exist yet
+            // (trigger should create profile, but this is a fallback)
+            if (pathname !== '/onboarding' && pathname !== '/subscription') { // Allow access to onboarding and subscription
+              router.replace('/onboarding');
+            }
+          }
+        } else {
+          // No session, user is not logged in
+          const publicPages = ['/login', '/signup', '/password-reset', '/']; // Add landing page
+          if (!publicPages.includes(pathname) && !pathname.startsWith('/auth/callback')) { // Allow callback route
+            router.replace('/login');
+          }
+        }
+        setIsLoading(false);
+        setSessionChecked(true);
+      }
+    );
+    
+    // Initial check for session
+     const checkInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session && !pathname.startsWith('/login') && !pathname.startsWith('/signup') && !pathname.startsWith('/password-reset') && pathname !== '/' && !pathname.startsWith('/auth/callback')) {
+        router.replace('/login');
+      } else if (session) {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('onboarding_complete')
+            .eq('id', session.user.id)
+            .single();
+          if (profile && !profile.onboarding_complete && pathname !== '/onboarding' && pathname !== '/subscription') {
+             router.replace('/onboarding');
+          }
+      }
+      setIsLoading(false);
+      setSessionChecked(true);
+    };
 
-    if (standalonePages.includes(pathname)) {
-      // If we're on a page that should have its own layout,
-      // and this AppLayout is somehow still active (e.g. during route transition before specific layout takes over),
-      // we don't want to do auth checks here or show this layout's loader.
-      // The rendering of AppLayout's UI (Header, Nav) is already skipped by the conditional below.
-      setIsCheckingAuth(false); // Stop this layout's loading spinner.
-      return;
+    if (!sessionChecked) {
+      checkInitialSession();
     }
 
-    // If we are on a page that *is* part of the (app) group and needs protection:
-    if (!userLoggedIn) {
-      router.replace('/login');
-    } else if (!onboardingComplete) {
-      router.replace('/onboarding');
-    } else {
-      // User is logged in and onboarding is complete, allow access.
-      setIsCheckingAuth(false);
-    }
-  }, [router, pathname]);
 
-  // Hide layout for auth pages, or pages that have their own distinct layout
-  if (pathname === '/login' || pathname === '/signup' || pathname === '/password-reset' || pathname === '/onboarding') {
+    return () => {
+      authListener?.unsubscribe();
+    };
+  }, [pathname, router, sessionChecked]);
+
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/password-reset';
+  const isOnboardingPage = pathname === '/onboarding';
+  const isSubscriptionPage = pathname === '/subscription';
+  const isLandingPage = pathname === '/';
+
+
+  // If on specific standalone pages, render children directly without AppLayout UI
+  if (isAuthPage || isOnboardingPage || isSubscriptionPage || isLandingPage) {
+    // If loading and not yet checked, show minimal loader
+    if (isLoading && !sessionChecked && (isOnboardingPage || isSubscriptionPage)) {
+        return (
+         <div className="flex flex-col min-h-screen items-center justify-center bg-background">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+         </div>
+        );
+    }
     return <>{children}</>;
   }
 
-  // If we're not on an auth page, and checks are still happening
-  if (isCheckingAuth) {
+
+  if (isLoading || !sessionChecked) {
     return (
       <div className="flex flex-col min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -60,7 +128,6 @@ export default function AppLayout({
     );
   }
 
-  // If not an auth page and auth checks are complete, render the full app layout
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
