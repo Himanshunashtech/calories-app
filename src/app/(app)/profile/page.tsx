@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { UserProfile, ReminderSettings, AppSettings } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
 import { defaultUserProfileData, getUserProfile, saveUserProfile, fakeLogout, clearAllUserData } from '@/lib/localStorage';
-import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, Settings as SettingsIcon, Edit3, Cog, Palette, Droplet, LogOut, PieChartIcon, CalendarDays, Trash2, Sprout, Loader2 } from 'lucide-react';
+import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, SettingsIcon, Edit3, Cog, Palette, Droplet, LogOut, PieChartIcon, CalendarDays, Trash2, Sprout, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -194,7 +194,7 @@ export default function ProfilePage() {
   const handleDeleteAccount = async () => {
     clearAllUserData();
     toast({ title: 'Account Data Cleared', description: 'All your app data on this device has been removed.', variant: 'default', duration: 7000 });
-    router.push('/signup');
+    router.push('/'); // Redirect to home page after deleting account
   };
 
   const handlePlaceholderFeatureClick = (featureName: string) => {

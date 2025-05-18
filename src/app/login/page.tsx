@@ -29,8 +29,9 @@ export default function LoginPage() {
     if (emailFromQuery) {
       setEmail(emailFromQuery);
     }
+    // Check if user is already fully set up and redirect
     if (isUserLoggedIn() && isOnboardingComplete()) {
-      router.replace('/dashboard');
+      router.replace('/log-meal'); // Or /dashboard, depending on desired landing post-login
     }
   }, [router, searchParams]);
 
@@ -46,10 +47,12 @@ export default function LoginPage() {
     }
     setIsLoading(true);
 
+    // This function now effectively finalizes the account with the given email
+    // and marks onboarding as complete.
     const profile = fakeLogin(email); 
 
-    toast({ title: 'Login Successful!', description: `Welcome back, ${profile.name || 'User'}!` });
-    router.push('/dashboard'); 
+    toast({ title: 'Account Setup Successful!', description: `Welcome, ${profile.name || 'User'}!` });
+    router.push('/log-meal'); // Redirect to Log Meal page after setup
 
     setIsLoading(false);
   };
@@ -86,7 +89,7 @@ export default function LoginPage() {
       <CardHeader className="text-center">
         <LogIn className="mx-auto h-10 w-10 text-primary mb-2" />
         <CardTitle className="text-2xl font-bold text-primary">Set Up Your Account</CardTitle>
-        <CardDescription>Enter your email and password to finalize your account.</CardDescription>
+        <CardDescription>Enter your email and password to finalize your account after onboarding and plan selection.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleEmailPasswordSubmit} className="space-y-4">
