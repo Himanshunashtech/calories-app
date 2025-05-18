@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { addMealLog, getSelectedPlan, canUseAIScan, incrementAIScanCount, getAIScanUsage, type UserPlan } from '@/lib/localStorage';
 import type { FoodAnalysisResult, DetailedNutrients, MealCategory } from '@/types'; 
-import { UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle, Info, Camera as CameraIcon, RefreshCcw, ListPlus, ScanBarcode } from 'lucide-react';
+import { UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle, Info, Camera as CameraIcon, RefreshCcw, ListPlus, ScanBarcode, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
 
@@ -231,7 +231,8 @@ export default function LogMealPage() {
 
 
     addMealLog({
-      photoDataUri: photoPreview || undefined,
+      // photoDataUri: photoPreview || undefined, // Redundant if image is already part of `analysisResult` potentially
+      photoDataUri: photoPreview || undefined, // Keep photoPreview for the log entry
       description: description,
       category: mealCategory,
       calories: analysisResult.estimatedCalories,
@@ -334,7 +335,7 @@ export default function LogMealPage() {
           {isCameraMode ? (
             <div className="space-y-4">
               <div className="relative w-full aspect-[4/3] bg-muted rounded-md overflow-hidden border">
-                <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+                <video ref={videoRef} className="w-full h-full object-cover" playsInline />
                  {!photoPreview && hasCameraPermission === null && !videoRef.current?.srcObject && (
                     <div className="absolute inset-0 flex items-center justify-center z-20 bg-background/50"> <Loader2 className="h-8 w-8 animate-spin text-primary"/> </div>
                 )}
@@ -347,9 +348,14 @@ export default function LogMealPage() {
                     </div>
                 )}
               </div>
-              {hasCameraPermission && (
+              {hasCameraPermission && !photoPreview && (
                 <Button onClick={handleCapturePhoto} className="w-full" disabled={isLoading || hasCameraPermission === false}>
                     <CameraIcon className="mr-2 h-5 w-5"/> Capture Photo
+                </Button>
+              )}
+              {photoPreview && (
+                <Button onClick={handleRetakePhoto} variant="outline" className="w-full">
+                  <RefreshCcw className="mr-2 h-5 w-5"/> Retake Photo
                 </Button>
               )}
             </div>
@@ -358,8 +364,9 @@ export default function LogMealPage() {
                 <Image
                     src={photoPreview}
                     alt="Meal preview"
-                    layout="fill"
-                    objectFit="cover"
+                    fill
+                    sizes="(max-width: 640px) 100vw, 256px"
+                    style={{objectFit:"cover"}}
                     className="rounded-md shadow-md"
                 />
                 {showWatermark && (
