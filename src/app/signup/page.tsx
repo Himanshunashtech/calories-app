@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import { UserPlus, Mail, Lock, ExternalLink, LogIn } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fakeSignup, isUserLoggedIn, isOnboardingComplete, getUserProfile, saveUserProfile } from '@/lib/localStorage';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
@@ -24,10 +25,12 @@ export default function SignupPage() {
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
   useEffect(() => {
+    setIsClient(true);
     if (isUserLoggedIn() && isOnboardingComplete()) {
       router.replace('/dashboard');
     }
@@ -135,6 +138,27 @@ export default function SignupPage() {
       setIsGoogleLoading(false);
     }
   };
+  
+  if (!isClient) {
+    return (
+      <Card className="shadow-2xl w-full max-w-md">
+        <CardHeader className="text-center">
+          <Skeleton className="h-10 w-10 mx-auto mb-2 rounded-full" />
+          <Skeleton className="h-7 w-3/4 mx-auto mb-1" />
+          <Skeleton className="h-5 w-1/2 mx-auto" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
+          <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
+          <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
+          <Skeleton className="h-12 w-full mt-2" />
+        </CardContent>
+        <CardFooter className="justify-center">
+          <Skeleton className="h-5 w-3/4" />
+        </CardFooter>
+      </Card>
+    );
+  }
 
   return (
     <Card className="shadow-2xl">
@@ -144,53 +168,57 @@ export default function SignupPage() {
         <CardDescription>Join EcoAI and start your sustainable health journey.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleEmailPasswordSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Full Name</Label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="Alex Green"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
-             <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10"/>
+        {isClient && (
+          <>
+            <form onSubmit={handleEmailPasswordSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Alex Green"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address</Label>
+                <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10"/>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="password" type="password" placeholder="••••••••" value={password} onChange={handlePasswordChange} required className="pl-10"/>
+                </div>
+                <Progress value={passwordStrength} className="h-1 mt-1 [&>div]:bg-primary" />
+                <p className="text-xs text-muted-foreground">Use 8+ characters with a mix of letters, numbers & symbols.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="confirmPassword" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="pl-10"/>
+                </div>
+              </div>
+              <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || isGoogleLoading}>
+                {isLoading ? 'Creating Account...' : 'Sign Up with Email'}
+              </Button>
+            </form>
+            <div className="mt-4 relative">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or sign up with</span></div>
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="password" type="password" placeholder="••••••••" value={password} onChange={handlePasswordChange} required className="pl-10"/>
-            </div>
-            <Progress value={passwordStrength} className="h-1 mt-1 [&>div]:bg-primary" />
-            <p className="text-xs text-muted-foreground">Use 8+ characters with a mix of letters, numbers & symbols.</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-             <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="confirmPassword" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="pl-10"/>
-            </div>
-          </div>
-          <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || isGoogleLoading}>
-            {isLoading ? 'Creating Account...' : 'Sign Up with Email'}
-          </Button>
-        </form>
-         <div className="mt-4 relative">
-          <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-          <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or sign up with</span></div>
-        </div>
-        <Button variant="outline" className="w-full mt-4" onClick={handleGoogleSignUp} disabled={isLoading || isGoogleLoading}>
-            <ExternalLink className="mr-2 h-4 w-4"/> 
-            {isGoogleLoading ? 'Signing up...' : 'Sign up with Google'}
-        </Button>
+            <Button variant="outline" className="w-full mt-4" onClick={handleGoogleSignUp} disabled={isLoading || isGoogleLoading}>
+                <ExternalLink className="mr-2 h-4 w-4"/> 
+                {isGoogleLoading ? 'Signing up...' : 'Sign up with Google'}
+            </Button>
+          </>
+        )}
       </CardContent>
       <CardFooter className="justify-center text-sm">
         <p>Already have an account?&nbsp;</p>
