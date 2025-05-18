@@ -59,13 +59,13 @@ export interface AppSettings {
   unitPreferences?: {
     weight: 'kg' | 'lbs';
     height: 'cm' | 'in';
-    volume?: 'ml' | 'fl oz'; // Added volume
+    volume?: 'ml' | 'fl oz';
   };
-  hideNonCompliantRecipes?: boolean; // For allergy/dietary restriction filtering
+  hideNonCompliantRecipes?: boolean;
 }
 
 export interface OnboardingData {
-  email?: string; // Added email field
+  email?: string;
   name: string;
   age: string;
   gender: string;
@@ -75,37 +75,37 @@ export interface OnboardingData {
   weightUnit: 'kg' | 'lbs';
   activityLevel: string;
   healthGoals: string[];
-  alsoTrackSustainability?: boolean; // New for eco-focus
+  alsoTrackSustainability?: boolean;
   exerciseFrequency: string;
-  // Diet Preferences
   dietType: string;
-  dietaryRestrictions: string[]; // Changed to array for multi-select
+  dietaryRestrictions: string[];
   favoriteCuisines?: string;
   dislikedIngredients?: string;
   enableCarbonTracking?: boolean;
-  // Lifestyle
   sleepHours: string;
   stressLevel: string;
-  waterGoal?: number; // For custom water goal
-  // Placeholders from detailed list
-  macroSplit?: { carbs: number, protein: number, fat: number }; // Placeholder
-  reminderSettings?: ReminderSettings; // Added to onboarding data for initial setup
+  waterGoal?: number;
+  macroSplit?: { carbs: number, protein: number, fat: number };
+  reminderSettings?: ReminderSettings;
 }
 
 export interface UserProfile extends OnboardingData {
-  // email is now part of OnboardingData, but kept here for explicit UserProfile structure
   email?: string;
   phone?: string;
   profileImageUri?: string | null;
-  // reminderSettings are part of OnboardingData
   appSettings?: AppSettings;
-  // selectedPlan?: UserPlan; // This could be part of UserProfile if persisted on a backend
 }
 
 export interface WaterIntakeData {
   current: number;
   goal: number;
   lastUpdatedDate: string; // ISO date string YYYY-MM-DD
+}
+
+export interface WeightEntry {
+  date: string; // ISO string
+  weight: number; // in user's preferred unit from profile (for storage, consider always kg and convert for display)
+  unit: 'kg' | 'lbs';
 }
 
 // AI Flow Output Types
@@ -139,15 +139,25 @@ export interface FoodMoodCorrelation {
   sufficientData: boolean;
 }
 
-// Chatbot types
-export interface ChatMessage {
-  id: string; // For React keys in the UI
-  role: 'user' | 'assistant';
-  text: string;
-  timestamp: string; // ISO string
+export interface RecipeNutritionDetails {
+    estimatedCalories: number;
+    detailedNutrients: DetailedNutrients;
+    generalSummary: string;
+    protein: number;
+    carbs: number;
+    fat: number;
 }
 
-export interface FlowChatMessage { // For passing to/from AI flow
+
+// Chatbot types
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  timestamp: string;
+}
+
+export interface FlowChatMessage {
   role: 'user' | 'model';
   content: string;
 }

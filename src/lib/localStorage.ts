@@ -1,7 +1,7 @@
 
-import type { MealEntry, UserPlan, AIScanUsage, UserProfile, OnboardingData, WaterIntakeData, ReminderSettings, MealCategory, AppSettings } from '@/types';
+import type { MealEntry, UserPlan, AIScanUsage, UserProfile, OnboardingData, WaterIntakeData, ReminderSettings, MealCategory, AppSettings, WeightEntry } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
-import { signOut, type Auth } from 'firebase/auth'; // Import signOut and Auth type
+import { signOut, type Auth } from 'firebase/auth';
 
 const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
 const SELECTED_PLAN_KEY = 'ecoAi_selectedPlan';
@@ -12,6 +12,7 @@ const ONBOARDING_COMPLETE_KEY = 'ecoAi_onboardingComplete';
 const USER_LOGGED_IN_KEY = 'ecoAi_userLoggedIn';
 const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput';
 const MEAL_PLAN_KEY = 'ecoAi_mealPlan';
+const WEIGHT_ENTRIES_KEY = 'ecoAi_weightEntries';
 
 
 // Meal Logs
@@ -252,8 +253,6 @@ export function saveUserProfile(profile: UserProfile): void {
 
 export function checkEmailExists(email: string): boolean {
   if (typeof window === 'undefined' || !email) return false;
-  // In a real app, this would be a backend call.
-  // For localStorage, we assume only one profile is stored.
   const profile = getUserProfile();
   return profile.email?.toLowerCase() === email.toLowerCase();
 }
@@ -313,14 +312,12 @@ export function addWater(amountInUnits: number = 1): WaterIntakeData {
 }
 
 export function getTodaysMealLogs(): MealEntry[] {
-  
   const allLogs = getMealLogs();
   const todayISO = new Date().toISOString().split('T')[0];
   return allLogs.filter(log => log.date.startsWith(todayISO));
 }
 
 export function getRecentMealLogs(days: number = 7): MealEntry[] {
-  
   const allLogs = getMealLogs();
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
@@ -350,14 +347,11 @@ export function fakeLogin(email: string): void {
   if (typeof window === 'undefined') return;
   
   let profile = getUserProfile(); 
-  
-  profile = { ...profile, email: email }; // Ensure email is set from login
-  
+  profile = { ...profile, email: email };
   saveUserProfile(profile); 
 
   try {
       localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-      // In this new flow, login is the final step after onboarding and plan selection
       setOnboardingComplete(true); 
   } catch (error) {
       console.error(`Error writing auth keys to localStorage:`, error);
@@ -367,25 +361,15 @@ export function fakeLogin(email: string): void {
 
 export function fakeSignup(email: string, name: string): void {
     if (typeof window === 'undefined') return;
-
-    // Create a new profile or update if one exists for this email
     const newProfile: UserProfile = { 
-      ...getUserProfile(), // Preserve any partial data (e.g. if user went back and forth)
+      ...defaultUserProfileData, 
       email: email, 
       name: name,
-      // Reset other onboarding specific fields if this is a true "fresh" signup scenario
-      // or rely on the fact that onboarding will fill them.
-      // For this flow, onboarding PRECEDES this effective signup/login
-      // So, the profile from onboarding should be primary.
     };
     saveUserProfile(newProfile); 
 
     try {
         localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-        // For direct signup (if user somehow gets to a signup form not intended in main flow),
-        // onboarding is NOT yet complete.
-        // However, in the new primary flow, this function isn't used.
-        // fakeLogin is used after onboarding & plan selection.
         setOnboardingComplete(false); 
     } catch (error) {
         console.error(`Error writing auth keys to localStorage:`, error);
@@ -397,10 +381,6 @@ export function fakeLogout(firebaseAuthInstance?: Auth): void {
     if (typeof window === 'undefined') return;
     try {
         localStorage.removeItem(USER_LOGGED_IN_KEY);
-        // Consider if other user-specific data should be cleared or kept for re-login.
-        // For a full logout, clearing USER_PROFILE_KEY might be desired, but means user loses all data.
-        // localStorage.removeItem(USER_PROFILE_KEY); // Example: if you want to clear profile on logout
-        // localStorage.removeItem(ONBOARDING_COMPLETE_KEY);
         if (firebaseAuthInstance) {
             signOut(firebaseAuthInstance).catch(err => console.error("Firebase sign out error during local fakeLogout:", err));
         }
@@ -432,6 +412,7 @@ export function clearAllUserData(): void {
     USER_LOGGED_IN_KEY,
     GENERATED_MEAL_PLAN_OUTPUT_KEY,
     MEAL_PLAN_KEY,
+    WEIGHT_ENTRIES_KEY,
   ];
   
   keysToRemove.forEach(key => {
@@ -444,3 +425,41 @@ export function clearAllUserData(): void {
   console.log("Attempted to clear all user data from localStorage.");
 }
 
+// Weight Entries
+export function getWeightEntries(): WeightEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const entriesJson = localStorage.getItem(WEIGHT_ENTRIES_KEY);
+    return entriesJson ? JSON.parse(entriesJson) : [];
+  } catch (error) {
+    console.error(`Error reading '${WEIGHT_ENTRIES_KEY}' from localStorage:`, error);
+    return [];
+  }
+}
+
+export function addWeightEntry(weight: number, unit: 'kg' | 'lbs'): WeightEntry {
+  const newEntry: WeightEntry = {
+    date: new Date().toISOString(),
+    weight,
+    unit,
+  };
+
+  if (typeof window === 'undefined') {
+    console.warn("localStorage not available, weight entry not saved:", newEntry);
+    return newEntry;
+  }
+
+  const entries = getWeightEntries();
+  entries.push(newEntry);
+  // Keep only the last N entries if desired, e.g., last 100
+  // const MAX_WEIGHT_ENTRIES = 100;
+  // if (entries.length > MAX_WEIGHT_ENTRIES) {
+  //   entries.splice(0, entries.length - MAX_WEIGHT_ENTRIES);
+  // }
+  try {
+    localStorage.setItem(WEIGHT_ENTRIES_KEY, JSON.stringify(entries));
+  } catch (error) {
+    console.error(`Error writing '${WEIGHT_ENTRIES_KEY}' to localStorage:`, error);
+  }
+  return newEntry;
+}

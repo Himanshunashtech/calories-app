@@ -7,9 +7,12 @@ import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Leaf, Utensils, CheckSquare, Clock, ListPlus, Share2, Sparkles, BarChartHorizontalBig, Printer } from 'lucide-react';
+import { ArrowLeft, Leaf, Utensils, CheckSquare, Clock, ListPlus, Share2, Sparkles, BarChartHorizontalBig, Printer, Brain, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { addMealLog, type MealEntry, getUserProfile, type UserProfile } from '@/lib/localStorage';
+import { addMealLog, type MealEntry, getUserProfile, type UserProfile, getSelectedPlan, UserPlan } from '@/lib/localStorage';
+import { getRecipeNutritionDetails, type GetRecipeNutritionDetailsOutput, type GetRecipeNutritionDetailsInput } from '@/ai/flows/get-recipe-nutrition-details';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+
 
 // Placeholder recipe data - in a real app, this would come from a database or API
 const placeholderRecipes = [
@@ -31,14 +34,18 @@ export default function RecipeDetailPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [recipe, setRecipe] = useState<typeof placeholderRecipes[0] | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userPlan, setUserPlan] = useState<UserPlan>('free');
   const [isClient, setIsClient] = useState(false);
+  const [isLoadingNutrition, setIsLoadingNutrition] = useState(false);
+  const [nutritionDetails, setNutritionDetails] = useState<GetRecipeNutritionDetailsOutput | null>(null);
+  const [isNutritionModalOpen, setIsNutritionModalOpen] = useState(false);
+
 
   useEffect(() => {
     setIsClient(true);
-    setUserProfile(getUserProfile());
+    setUserPlan(getSelectedPlan());
     if (params.recipeId) {
-      const allRecipes = placeholderRecipes;
+      const allRecipes = placeholderRecipes; // This file uses the full list as placeholderRecipes
       const foundRecipe = allRecipes.find(r => r.id === params.recipeId);
       setRecipe(foundRecipe || null);
     }
@@ -88,11 +95,29 @@ export default function RecipeDetailPage() {
     }
   }
 
-  const handlePlaceholderFeatureClick = (featureName: string) => {
-    toast({
-      title: `${featureName} Coming Soon!`,
-      description: `This feature will be available in a future update.`,
-    });
+  const handleFetchAINutritionDetails = async () => {
+    if (!recipe || (userPlan !== 'pro' && userPlan !== 'ecopro')) {
+        toast({ title: "Feature Unavailable", description: "AI Nutrition Details are a Pro/EcoPro feature.", variant: "default"});
+        return;
+    }
+    setIsLoadingNutrition(true);
+    setNutritionDetails(null);
+    try {
+        const input: GetRecipeNutritionDetailsInput = {
+            recipeName: recipe.name,
+            ingredients: recipe.ingredients,
+            instructions: recipe.instructions,
+            servings: recipe.servings
+        };
+        const details = await getRecipeNutritionDetails(input);
+        setNutritionDetails(details);
+        setIsNutritionModalOpen(true);
+    } catch (error: any) {
+        console.error("Error fetching AI nutrition details:", error);
+        toast({ variant: "destructive", title: "AI Analysis Error", description: error.message || "Could not fetch nutrition details from AI." });
+    } finally {
+        setIsLoadingNutrition(false);
+    }
   };
 
 
@@ -181,12 +206,51 @@ export default function RecipeDetailPage() {
           <Button size="lg" className="w-full sm:flex-1" onClick={handleLogMeal}>
             <ListPlus className="mr-2 h-5 w-5"/> Log This Meal
           </Button>
-           <Button size="lg" variant="outline" className="w-full sm:flex-1" onClick={() => handlePlaceholderFeatureClick('AI Nutrition Details')}>
-            <Sparkles className="mr-2 h-5 w-5"/> AI Nutrition Details (Pro)
-          </Button>
+          <Dialog open={isNutritionModalOpen} onOpenChange={setIsNutritionModalOpen}>
+            <DialogTrigger asChild>
+               <Button 
+                size="lg" 
+                variant="outline" 
+                className="w-full sm:flex-1" 
+                onClick={handleFetchAINutritionDetails}
+                disabled={isLoadingNutrition || (userPlan !== 'pro' && userPlan !== 'ecopro')}
+               >
+                {isLoadingNutrition ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Brain className="mr-2 h-5 w-5"/>}
+                AI Nutrition Details {(userPlan === 'pro' || userPlan === 'ecopro') ? '' : '(Pro/EcoPro)'}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>AI Nutrition Analysis for {recipe.name}</DialogTitle>
+                    <DialogDescription>Estimated nutritional information per serving.</DialogDescription>
+                </DialogHeader>
+                {isLoadingNutrition && <div className="flex justify-center items-center h-32"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>}
+                {nutritionDetails && !isLoadingNutrition && (
+                    <div className="space-y-3 max-h-[60vh] overflow-y-auto text-sm py-2">
+                        <p><strong>Calories:</strong> {nutritionDetails.estimatedCalories.toFixed(0)} kcal</p>
+                        <p><strong>Protein:</strong> {nutritionDetails.protein.toFixed(1)}g</p>
+                        <p><strong>Carbohydrates:</strong> {nutritionDetails.carbs.toFixed(1)}g</p>
+                        <p><strong>Fat:</strong> {nutritionDetails.fat.toFixed(1)}g</p>
+                        <p className="mt-2"><strong>Summary:</strong> {nutritionDetails.generalSummary}</p>
+                        {Object.keys(nutritionDetails.detailedNutrients).length > 0 && (
+                            <>
+                                <h4 className="font-semibold mt-2">Micronutrients:</h4>
+                                <ul className="list-disc list-inside pl-4">
+                                    {Object.entries(nutritionDetails.detailedNutrients).map(([key, nutrient]) => nutrient && (
+                                        <li key={key} className="capitalize">{key}: {nutrient.value.toFixed(1)}{nutrient.unit}
+                                            {nutrient.rdaPercentage && ` (${nutrient.rdaPercentage.toFixed(0)}% RDA)`}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+                    </div>
+                )}
+                 {!nutritionDetails && !isLoadingNutrition && <p className="text-muted-foreground text-center py-4">No details to display. Try analyzing again.</p>}
+            </DialogContent>
+          </Dialog>
         </CardFooter>
       </Card>
     </div>
   );
 }
-

@@ -14,23 +14,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, Users, Search, Sparkles as LucideSparklesIcon, Activity, Edit3, Mail as MailIcon } from 'lucide-react';
+import { User, Target, Salad, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, Users, Search, Activity, Edit3, Mail as MailIcon } from 'lucide-react';
+import { Sparkles as LucideSparklesIcon } from 'lucide-react'; // Renamed to avoid conflict
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import type { OnboardingData, UserProfile, ReminderSettings } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
-import { isUserLoggedIn, getUserProfile, saveUserProfile, setOnboardingComplete as saveOnboardingCompleteStatus, checkEmailExists, defaultUserProfileData } from '@/lib/localStorage';
+import { isUserLoggedIn, getUserProfile, saveUserProfile, checkEmailExists, defaultUserProfileData } from '@/lib/localStorage';
 
 const TOTAL_STEPS = 8; 
 
-const defaultFormData: OnboardingData = {
-  ...defaultUserProfileData, // Use defaults from localStorage which includes reminderSettings
-};
-
-
 export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<OnboardingData>(defaultFormData);
+  const [formData, setFormData] = useState<OnboardingData>(defaultUserProfileData);
   const [isClient, setIsClient] = useState(false);
   const [emailExistsError, setEmailExistsError] = useState(false);
   const { toast } = useToast();
@@ -38,30 +34,25 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     setIsClient(true);
-    // No login check here, as this flow starts before "login"
-    
-    const existingProfile = getUserProfile(); // This now returns defaultUserProfileData if nothing is stored
-    // Pre-fill form with existing profile data if any part of it was saved before
-    // This allows users to come back to onboarding and continue.
+    const existingProfile = getUserProfile();
     setFormData(prev => ({
         ...prev, 
         ...existingProfile,
-        email: existingProfile.email || '', // Ensure email is initialized
+        email: existingProfile.email || '',
         healthGoals: Array.isArray(existingProfile.healthGoals) ? existingProfile.healthGoals : [],
         dietaryRestrictions: Array.isArray(existingProfile.dietaryRestrictions) ? existingProfile.dietaryRestrictions : [],
         reminderSettings: { 
-            ...prev.reminderSettings!, // Uses default from defaultFormData
+            ...prev.reminderSettings!, 
             ...(existingProfile.reminderSettings || {})
         }
     }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     
     if (name === "email") {
-      setEmailExistsError(false); // Reset error when email changes
+      setEmailExistsError(false); 
     }
 
     if (type === 'checkbox' && name === 'healthGoals') { 
@@ -83,7 +74,6 @@ export default function OnboardingPage() {
     } else if (name === "waterGoal") {
       setFormData((prev) => ({ ...prev, waterGoal: parseInt(value, 10) || 0 }));
     }
-    
     else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
@@ -122,7 +112,6 @@ export default function OnboardingPage() {
 
 
   const handleNext = () => {
-    // Step 1: Basic Details (includes email now)
     if (currentStep === 1) {
       if (!formData.email || !formData.name || !formData.age || !formData.gender) {
         toast({ variant: "destructive", title: "Missing fields", description: "Please fill in email, name, year of birth, and gender." });
@@ -138,9 +127,8 @@ export default function OnboardingPage() {
         toast({ variant: "default", title: "Email Already Registered", description: "This email is already in use. Click 'Go to Login' if this is you.", duration: 6000});
         return; 
       }
-      setEmailExistsError(false); // Clear any previous error
+      setEmailExistsError(false);
     }
-    // Other step validations (can be expanded)
     if (currentStep === 2 && (!formData.height || !formData.weight || !formData.activityLevel)) {
         toast({ variant: "destructive", title: "Missing fields", description: "Please provide height, weight, and activity level." });
         return;
@@ -166,32 +154,27 @@ export default function OnboardingPage() {
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep((prev) => prev - 1);
-      setEmailExistsError(false); // Clear email error when going back
+      setEmailExistsError(false); 
     }
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    // Save all collected onboarding data into UserProfile
-    // This will create or update the single userProfile in localStorage
     const profileToSave: UserProfile = {
-      ...defaultUserProfileData, // Start with defaults to ensure all fields are present
-      ...getUserProfile(), // Layer any existing profile data (e.g., from a previous partial session)
-      ...formData, // Layer the latest onboarding form data
-      reminderSettings: { // Ensure reminderSettings are fully formed
+      ...defaultUserProfileData,
+      ...getUserProfile(), 
+      ...formData, 
+      reminderSettings: {
         ...defaultUserProfileData.reminderSettings!,
         ...(getUserProfile().reminderSettings || {}),
         ...(formData.reminderSettings || {}),
       },
-      appSettings: { // Ensure appSettings are fully formed
+      appSettings: { 
         ...defaultUserProfileData.appSettings!,
         ...(getUserProfile().appSettings || {}),
       }
     };
     saveUserProfile(profileToSave);
-    
-    // Onboarding is NOT marked complete here. It's marked complete after login/account finalization.
-    // saveOnboardingCompleteStatus(true); // This line is removed/commented out
     
     toast({
       title: 'Profile Setup Complete!',
@@ -204,7 +187,7 @@ export default function OnboardingPage() {
   const handlePlaceholderFeatureClick = (featureName: string) => {
     toast({
       title: `${featureName} Coming Soon!`,
-      description: `This feature will be available in a future update.`,
+      description: `This feature will be available in a future update. Stay tuned!`,
     });
   };
 
@@ -283,13 +266,16 @@ export default function OnboardingPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            {currentStep === 1 && ( // Welcome & Basic Info
+            {currentStep === 1 && ( 
               <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><User className="h-6 w-6" /> Basic Details</h3>
                 <div>
                   <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleChange} placeholder="you@example.com" required />
-                  {emailExistsError && <p className="text-sm text-destructive mt-1">Email already registered. Click "Go to Login" if this is you.</p>}
+                  <div className="relative">
+                    <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleChange} placeholder="you@example.com" required className="pl-10" />
+                  </div>
+                  {emailExistsError && <p className="text-sm text-destructive mt-1">Email already registered. Please log in.</p>}
                 </div>
                 <div>
                   <Label htmlFor="name">Full Name</Label>
@@ -314,7 +300,7 @@ export default function OnboardingPage() {
               </section>
             )}
 
-            {currentStep === 2 && ( // Physical Metrics & Activity
+            {currentStep === 2 && ( 
               <section className="space-y-4 animate-in fade-in duration-500">
                  <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><BarChart3 className="h-6 w-6" /> Your Metrics</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -345,7 +331,7 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                 </div>
-                {calculatedBMI && <p className="text-sm text-muted-foreground text-center">Calculated BMI: {calculatedBMI}</p>}
+                {calculatedBMI && <p className="text-sm text-muted-foreground text-center">Calculated BMI: {calculatedBMI} (Note: BMI is an estimate)</p>}
                  <div>
                   <Label>Typical Activity Level</Label>
                   <RadioGroup name="activityLevel" value={formData.activityLevel} onValueChange={handleRadioChange('activityLevel')} className="mt-2 space-y-1">
@@ -362,7 +348,7 @@ export default function OnboardingPage() {
               </section>
             )}
 
-            {currentStep === 3 && ( // Health Goals & Focus
+            {currentStep === 3 && ( 
               <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Target className="h-6 w-6" /> Health Goals & Focus</h3>
                 <div>
@@ -372,7 +358,7 @@ export default function OnboardingPage() {
                       <div key={goal.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-muted/50">
                         <Checkbox
                           id={goal.id}
-                          name="healthGoals"
+                          name="healthGoals" 
                           value={goal.label}
                           checked={formData.healthGoals.includes(goal.label)}
                           onCheckedChange={(checked) => {
@@ -419,7 +405,7 @@ export default function OnboardingPage() {
               </section>
             )}
 
-            {currentStep === 4 && ( // Diet & Food Preferences
+            {currentStep === 4 && ( 
               <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Salad className="h-6 w-6" /> Diet & Food Preferences</h3>
                  <div>
@@ -483,7 +469,7 @@ export default function OnboardingPage() {
               </section>
             )}
 
-            {currentStep === 5 && ( // AI Demo & Eco Mission
+            {currentStep === 5 && ( 
               <section className="space-y-6 animate-in fade-in duration-500 text-center">
                  <h3 className="text-xl font-semibold flex items-center justify-center gap-2 text-primary"><LucideSparklesIcon className="h-6 w-6" /> Our Eco Mission & AI</h3>
                  <div className="p-4 border rounded-lg bg-muted/30">
@@ -501,7 +487,7 @@ export default function OnboardingPage() {
               </section>
             )}
             
-            {currentStep === 6 && ( // Lifestyle Habits
+            {currentStep === 6 && ( 
               <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><HeartHandshake className="h-6 w-6" /> Lifestyle Habits</h3>
                 <div>
@@ -534,7 +520,7 @@ export default function OnboardingPage() {
               </section>
             )}
 
-            {currentStep === 7 && ( // Notification Preferences
+            {currentStep === 7 && ( 
                 <section className="space-y-4 animate-in fade-in duration-500">
                     <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><BellRing className="h-6 w-6" /> Notification Preferences</h3>
                      <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
@@ -585,7 +571,7 @@ export default function OnboardingPage() {
                 </section>
             )}
 
-            {currentStep === TOTAL_STEPS && ( // Review Step
+            {currentStep === TOTAL_STEPS && ( 
               <section className="space-y-4 animate-in fade-in duration-500">
                  <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><CheckCircle className="h-6 w-6" /> Review Your Information</h3>
                 <div className="space-y-2 border p-4 rounded-md bg-muted/30 max-h-96 overflow-y-auto text-sm">

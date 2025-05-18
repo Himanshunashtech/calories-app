@@ -10,3 +10,4 @@ import '@/ai/flows/get-carbon-comparison.ts';
 import '@/ai/flows/generate-eco-meal-plan.ts';
 import '@/ai/flows/analyze-food-mood-correlation.ts';
 import '@/ai/flows/chat-with-ai-coach.ts';
+import '@/ai/flows/get-recipe-nutrition-details.ts';

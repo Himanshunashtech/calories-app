@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { getUserProfile, saveUserProfile, fakeLogout, type UserProfile, type ReminderSettings, type AppSettings, clearAllUserData } from '@/lib/localStorage';
-import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, Settings, Edit3, Cog, Palette, Droplet, LogOut, PieChart, CalendarDays, Trash2 } from 'lucide-react';
+import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, Settings, Edit3, Cog, Palette, Droplet, LogOut, PieChart, CalendarDays, Trash2, Sprout } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ALLERGY_OPTIONS } from '@/types';
@@ -28,7 +28,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { auth } from '@/lib/firebase'; // Import Firebase auth
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+
+import { auth } from '@/lib/firebase'; 
 import { signOut } from 'firebase/auth';
 
 
@@ -80,6 +82,9 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
   const [isLoading, setIsLoading] = useState(true);
   const [isClient, setIsClient] = useState(false);
+  const [isMacroModalOpen, setIsMacroModalOpen] = useState(false);
+  const [tempMacroSplit, setTempMacroSplit] = useState(profile.macroSplit || { carbs: 50, protein: 25, fat: 25 });
+
   const { toast } = useToast();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -104,10 +109,13 @@ export default function ProfilePage() {
             ...(loadedProfile.appSettings?.unitPreferences || {}),
           },
         },
+        macroSplit: loadedProfile.macroSplit || defaultProfile.macroSplit,
       };
       setProfile(completeProfile);
+      setTempMacroSplit(completeProfile.macroSplit!);
     } else {
       setProfile(defaultProfile); 
+      setTempMacroSplit(defaultProfile.macroSplit!);
     }
     setIsLoading(false);
   }, []);
@@ -223,19 +231,33 @@ export default function ProfilePage() {
     });
   };
 
+  const handleMacroSplitChange = (macro: 'carbs' | 'protein' | 'fat', value: string) => {
+    const numValue = parseInt(value, 10);
+    if (!isNaN(numValue) && numValue >= 0 && numValue <= 100) {
+      setTempMacroSplit(prev => ({ ...prev, [macro]: numValue }));
+    } else if (value === '') {
+      setTempMacroSplit(prev => ({ ...prev, [macro]: 0 })); // Allow empty to be treated as 0
+    }
+  };
+
+  const saveMacroSplit = () => {
+    const { carbs, protein, fat } = tempMacroSplit;
+    if (carbs + protein + fat !== 100) {
+      toast({ variant: 'destructive', title: 'Invalid Macro Split', description: 'Carbs, Protein, and Fat percentages must sum to 100.' });
+      return;
+    }
+    setProfile(prev => ({ ...prev, macroSplit: { ...tempMacroSplit } }));
+    setIsMacroModalOpen(false);
+    toast({ title: 'Macro Split Updated', description: 'Your new macro targets are saved.' });
+  };
+
   const handleLogout = async () => {
     try {
-      await signOut(auth); // Sign out from Firebase
+      await signOut(auth); 
     } catch (error) {
       console.error("Error signing out from Firebase: ", error);
-      toast({
-        variant: "destructive",
-        title: "Logout Error",
-        description: "Could not sign out from Google. Please try again.",
-      });
-      // Optionally, still proceed with local logout
     }
-    fakeLogout(); // Clears local logged-in flag
+    fakeLogout(); 
     toast({
         title: "Logged Out",
         description: "You have been successfully logged out.",
@@ -245,7 +267,7 @@ export default function ProfilePage() {
 
   const handleDeleteAccount = () => {
     clearAllUserData();
-    signOut(auth).catch(err => console.error("Error signing out Firebase during account deletion:", err)); // Also sign out from Firebase
+    signOut(auth).catch(err => console.error("Error signing out Firebase during account deletion:", err)); 
     toast({
       title: 'Account Deleted',
       description: 'All your data has been removed. We hope to see you again!',
@@ -374,7 +396,37 @@ export default function ProfilePage() {
                   <div className="p-4 border rounded-md text-center bg-muted/50">
                     <PieChart className="h-8 w-8 mx-auto text-muted-foreground mb-2"/>
                     <p className="text-sm text-muted-foreground">C: {profile.macroSplit?.carbs}% | P: {profile.macroSplit?.protein}% | F: {profile.macroSplit?.fat}%</p>
-                    <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('Edit Macro Split')}>Edit Split</Button> or <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('AI Macro Recommendation')}>Use AI Recommendation</Button>
+                    <Dialog open={isMacroModalOpen} onOpenChange={setIsMacroModalOpen}>
+                      <DialogTrigger asChild>
+                        <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => { setTempMacroSplit(profile.macroSplit || {carbs: 50, protein: 25, fat: 25}); setIsMacroModalOpen(true); }}>Edit Split</Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Edit Macro Split</DialogTitle>
+                          <DialogDescription>Adjust your target macronutrient percentages. They must sum to 100%.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="macro-carbs" className="text-right">Carbs (%)</Label>
+                            <Input id="macro-carbs" type="number" value={tempMacroSplit.carbs} onChange={(e) => handleMacroSplitChange('carbs', e.target.value)} className="col-span-3" />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="macro-protein" className="text-right">Protein (%)</Label>
+                            <Input id="macro-protein" type="number" value={tempMacroSplit.protein} onChange={(e) => handleMacroSplitChange('protein', e.target.value)} className="col-span-3" />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="macro-fat" className="text-right">Fat (%)</Label>
+                            <Input id="macro-fat" type="number" value={tempMacroSplit.fat} onChange={(e) => handleMacroSplitChange('fat', e.target.value)} className="col-span-3" />
+                          </div>
+                           <p className="text-sm text-center text-muted-foreground">Total: {tempMacroSplit.carbs + tempMacroSplit.protein + tempMacroSplit.fat}%</p>
+                        </div>
+                        <DialogFooter>
+                          <Button type="button" variant="outline" onClick={() => setIsMacroModalOpen(false)}>Cancel</Button>
+                          <Button type="button" onClick={saveMacroSplit}>Save Split</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                     or <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('AI Macro Recommendation')}>Use AI Recommendation</Button>
                   </div>
                 </div>
                  <div className="p-3 border rounded-md flex items-center justify-between">
@@ -409,7 +461,7 @@ export default function ProfilePage() {
               <div> <Label htmlFor="favoriteCuisines">Favorite Cuisines</Label> <Input id="favoriteCuisines" name="favoriteCuisines" value={profile.favoriteCuisines || ''} onChange={handleChange} placeholder="e.g., Italian, Mexican" /> </div>
               <div> <Label htmlFor="dislikedIngredients">Disliked Ingredients</Label> <Input id="dislikedIngredients" name="dislikedIngredients" value={profile.dislikedIngredients || ''} onChange={handleChange} placeholder="e.g., Cilantro, Olives" /> </div>
               <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
-                <Label htmlFor="enableCarbonTracking" className="flex items-center gap-2"><Leaf className="h-5 w-5"/> Enable Carbon Tracking (EcoPro)</Label>
+                <Label htmlFor="enableCarbonTracking" className="flex items-center gap-2"><Sprout className="h-5 w-5 text-green-600"/> Enable Carbon Tracking (EcoPro)</Label>
                 <Switch id="enableCarbonTracking" checked={!!profile.enableCarbonTracking} onCheckedChange={handleSwitchChange('enableCarbonTracking')} />
               </div>
             </div>
@@ -465,7 +517,7 @@ export default function ProfilePage() {
                       <SelectItem value="15">15 minutes</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground mt-1">Snooze feature coming soon.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Snooze feature placeholder. Full notification system coming soon.</p>
                </div>
               <p className="text-xs text-muted-foreground">Note: Actual notification delivery depends on browser/device settings and app capabilities.</p>
             </div>

@@ -18,7 +18,10 @@ import {
   type WaterIntakeData,
   type MealEntry,
   type UserProfile as UserProfileType,
-  type ReminderSettings
+  type ReminderSettings,
+  addWeightEntry, // New import
+  getWeightEntries, // New import
+  type WeightEntry, // New import
 } from '@/lib/localStorage';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -29,12 +32,19 @@ import { useRouter } from 'next/navigation';
 import { 
   BarChart3, Camera, Leaf, Utensils, ShieldCheck, Zap, Brain, Trees, BarChartBig, Users, MessageSquareHeart, 
   CheckCircle, AlertTriangle, Info, Droplet, Footprints, TrendingUp, PlusCircle, Target as TargetIcon, 
-  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3, Settings, Dumbbell, Cog, Search, Filter, CalendarDays, Activity, Bike
+  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3, Settings, Dumbbell, Cog, Search, Filter, CalendarDays, Activity, Bike, Weight as WeightIcon, Download
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select as RadixSelect, SelectContent as RadixSelectContent, SelectItem as RadixSelectItem, SelectTrigger as RadixSelectTrigger, SelectValue as RadixSelectValue } from '@/components/ui/select';
+
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+
 
 // AI Flow Imports
 import { analyzeNutrientTrends, type AnalyzeNutrientTrendsOutput } from '@/ai/flows/analyze-nutrient-trends';
@@ -65,6 +75,12 @@ export default function DashboardPage() {
   const [isLoadingAI, setIsLoadingAI] = useState({
     trends: false, coach: false, carbon: false, mealPlan: false, mood: false
   });
+
+  const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
+  const [newWeight, setNewWeight] = useState('');
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
+  const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
+
 
   const fetchDashboardData = useCallback(async (currentPlan: UserPlan, profile: UserProfileType | null, meals: MealEntry[]) => {
     if (!profile) return;
@@ -126,6 +142,9 @@ export default function DashboardPage() {
     setPlan(currentPlan);
     const profile = getUserProfile();
     setUserProfile(profile);
+    setWeightUnit(profile?.appSettings?.unitPreferences?.weight || 'kg');
+    setWeightEntries(getWeightEntries());
+
 
     if (currentPlan === 'free') {
       setAiScanUsage(getAIScanUsage());
@@ -154,7 +173,7 @@ export default function DashboardPage() {
     } else if (userProfile?.healthGoals?.includes('Gain Muscle')) {
       goal *= 1.2;
     }
-    return goal;
+    return Math.round(goal);
   }, [userProfile]);
 
   const totalCaloriesToday = useMemo(() => 
@@ -175,7 +194,7 @@ export default function DashboardPage() {
     setWaterIntake(newIntake);
     const volumeUnit = userProfile?.appSettings?.unitPreferences?.volume === 'fl oz' ? 'fl oz' : 'glasses';
     const unitName = volumeUnit === 'glasses' ? (amount === 1 ? 'Glass' : 'Glasses') : volumeUnit;
-    const addedAmountDisplay = volumeUnit === 'glasses' ? amount : amount * 8; // Assuming 1 'serving' is 8 fl oz
+    const addedAmountDisplay = volumeUnit === 'glasses' ? amount : Math.round(amount * 8); 
 
     toast({
       title: `+${addedAmountDisplay} ${unitName} Water Logged`,
@@ -224,7 +243,7 @@ export default function DashboardPage() {
     refreshMealLogs(); 
 
     const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood);
-    if (mealsWithMood.length >= 3 && userProfile && (plan === 'pro' || plan === 'ecopro')) { // Mood analysis tied to plan
+    if (mealsWithMood.length >= 3 && userProfile && (plan === 'pro' || plan === 'ecopro')) { 
       setIsLoadingAI(prev => ({ ...prev, mood: true }));
       analyzeFoodMoodCorrelation({ mealsWithMood: mealsWithMood.map(m => ({...m, date:m.date, mood: m.mood!, calories: m.calories, protein: m.protein, carbs: m.carbs, fat: m.fat})) })
           .then(setFoodMoodInsights)
@@ -237,6 +256,26 @@ export default function DashboardPage() {
         setFoodMoodInsights({ insights: ["Log mood after a few more meals to discover potential patterns with your diet!"], sufficientData: false });
     }
   }, [todaysMealLogs, userProfile, toast, refreshMealLogs, plan]);
+
+  const handleAddWeightMeasurement = () => {
+    if (!newWeight || isNaN(parseFloat(newWeight)) || parseFloat(newWeight) <= 0) {
+      toast({ variant: 'destructive', title: 'Invalid Weight', description: 'Please enter a valid positive number for weight.' });
+      return;
+    }
+    const addedEntry = addWeightEntry(parseFloat(newWeight), weightUnit);
+    setWeightEntries(prev => [...prev, addedEntry].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+    setNewWeight('');
+    setIsWeightModalOpen(false);
+    toast({ title: 'Weight Logged!', description: `${addedEntry.weight} ${addedEntry.unit} recorded.` });
+  };
+  
+  const weightTrendChartData = useMemo(() => {
+    return weightEntries.slice(-30).map(entry => ({ // show last 30 entries
+      date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      // For simplicity, chart shows numbers as is. Ideally, convert all to a consistent unit for charting if mixing kg/lbs.
+      weight: entry.weight 
+    }));
+  }, [weightEntries]);
 
 
   const scansUsedPercentage = useMemo(() => {
@@ -261,7 +300,7 @@ export default function DashboardPage() {
     todaysMealLogs.forEach(log => {
       if (log.detailedNutrients) {
         for (const [key, nutrient] of Object.entries(log.detailedNutrients)) {
-          if (nutrient && typeof nutrient.value === 'number' && nutrient.unit) { // Ensure nutrient structure is valid
+          if (nutrient && typeof nutrient.value === 'number' && nutrient.unit) { 
             if (!aggregatedNutrients[key]) {
               aggregatedNutrients[key] = { totalValue: 0, unit: nutrient.unit, entries: 0, rdaSum: 0 };
             }
@@ -293,19 +332,21 @@ export default function DashboardPage() {
     });
     
     if (calculatedNutrients.length === 0) return nutrientDataPlaceholders;
-    return calculatedNutrients.slice(0,4); // Display up to 4 nutrients
+    return calculatedNutrients.slice(0,4); 
   }, [todaysMealLogs, plan]);
 
   const mockEcoScore = useMemo(() => {
-    if (todaysMealLogs.length === 0) return 'N/A';
-    const avgCarbon = todaysMealLogs.reduce((sum, meal) => sum + (meal.carbonFootprintEstimate || 2.0), 0) / todaysMealLogs.length; // Default to 2.0 if no estimate
+    if (todaysMealLogs.length === 0 || !userProfile?.enableCarbonTracking) return 'N/A';
+    const mealsWithCF = todaysMealLogs.filter(m => m.carbonFootprintEstimate !== undefined);
+    if (mealsWithCF.length === 0) return 'N/A';
+    const avgCarbon = mealsWithCF.reduce((sum, meal) => sum + (meal.carbonFootprintEstimate!), 0) / mealsWithCF.length;
     if (avgCarbon < 0.8) return 'A+';
     if (avgCarbon < 1.2) return 'A';
     if (avgCarbon < 1.8) return 'B+';
     if (avgCarbon < 2.5) return 'B';
     if (avgCarbon < 3.5) return 'C';
     return 'D';
-  }, [todaysMealLogs]);
+  }, [todaysMealLogs, userProfile]);
 
   if (!isClient) {
     return (
@@ -356,7 +397,7 @@ export default function DashboardPage() {
         <CardHeader><CardTitle className="flex items-center gap-2"><TargetIcon className="text-primary"/> Today's Vitals</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="space-y-2 p-3 rounded-lg border bg-card"><div className="flex justify-between items-center text-sm font-medium"><span>Calories</span><span className="text-muted-foreground">{totalCaloriesToday.toFixed(0)} / {actualDailyCalorieGoal.toFixed(0)} kcal</span></div><Progress value={calorieProgressPercentage} className={cn("h-3", getCalorieProgressColor())} /><p className="text-xs text-muted-foreground text-center pt-1">{calorieProgressPercentage >= 100 ? "Goal reached!" : `${(actualDailyCalorieGoal - totalCaloriesToday).toFixed(0)} kcal remaining.`}</p></div>
-          <div className="space-y-2 p-3 rounded-lg border bg-card"><div className="flex justify-between items-center text-sm font-medium"><span className="flex items-center gap-1"><Droplet className="h-4 w-4 text-blue-500"/>Water Intake</span><span className="text-muted-foreground">{waterIntake?.current || 0} / {waterIntake?.goal || 8} {waterVolumeUnit}</span></div><Progress value={waterIntake ? (waterIntake.current / waterIntake.goal) * 100 : 0} className="h-3 [&>div]:bg-blue-500" /><div className="flex gap-2 pt-1"><Button size="sm" variant="outline" onClick={() => handleAddWater(1)} className="flex-1 text-xs whitespace-normal text-center">+1 {waterVolumeUnit === 'glasses' ? 'Glass' : 'Serving'}</Button><Button size="sm" variant="outline" onClick={() => handleAddWater(0.5)} className="flex-1 text-xs whitespace-normal text-center">+{waterVolumeUnit === 'glasses' ? '0.5 Glass' : '0.5 Serving'}</Button></div></div>
+          <div className="space-y-2 p-3 rounded-lg border bg-card"><div className="flex justify-between items-center text-sm font-medium"><span className="flex items-center gap-1"><Droplet className="h-4 w-4 text-blue-500"/>Water Intake</span><span className="text-muted-foreground">{waterIntake?.current || 0} / {waterIntake?.goal || 8} {waterVolumeUnit}</span></div><Progress value={waterIntake ? (waterIntake.current / waterIntake.goal) * 100 : 0} className="h-3 [&>div]:bg-blue-500" /><div className="flex gap-2 pt-1"><Button size="sm" variant="outline" onClick={() => handleAddWater(1)} className="flex-1 text-xs whitespace-normal text-center">+1 {waterVolumeUnit === 'glasses' ? 'Glass' : 'Serving (8oz)'}</Button><Button size="sm" variant="outline" onClick={() => handleAddWater(0.5)} className="flex-1 text-xs whitespace-normal text-center">+{waterVolumeUnit === 'glasses' ? '0.5 Glass' : '0.5 Serving (4oz)'}</Button></div></div>
           <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center"><Footprints className="h-8 w-8 text-primary mb-1"/><p className="text-lg font-semibold">7,532</p><p className="text-xs text-muted-foreground">Steps Today</p><Button size="sm" variant="ghost" className="text-xs mt-1 text-primary hover:underline" onClick={() => handlePlaceholderFeatureClick('Fitness Tracker Sync')}>Sync Health App</Button></div>
           <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center">
             <Leaf className="h-8 w-8 text-green-600 mb-1"/>
@@ -459,12 +500,80 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-md border-l-4 border-indigo-500"><CardHeader><CardTitle className="flex items-center gap-2 text-indigo-700"><TrendingUp className="h-6 w-6" /> Weekly Progress</CardTitle><CardDescription>Track trends and get AI forecasts.</CardDescription></CardHeader>
-            <CardContent><Tabs defaultValue="weight" className="w-full"><TabsList className="grid w-full grid-cols-3"><TabsTrigger value="weight">Weight Trend</TabsTrigger><TabsTrigger value="carbon" disabled={!userProfile?.enableCarbonTracking}>Carbon Savings</TabsTrigger><TabsTrigger value="forecast">AI Forecast</TabsTrigger></TabsList>
-                <TabsContent value="weight"><div className="mt-4 h-48 bg-muted/50 rounded-md flex items-center justify-center p-4 text-center"><p className="text-muted-foreground">Weight trend chart (Placeholder). <Button variant="link" size="sm" onClick={() => handlePlaceholderFeatureClick('Add Weight Measurement')}>Add Measurement</Button></p></div></TabsContent>
-                <TabsContent value="carbon"><div className="mt-4 h-48 bg-muted/50 rounded-md flex items-center justify-center p-4"><p className="text-muted-foreground text-center">{userProfile?.enableCarbonTracking ? "Carbon savings chart vs. last week (Placeholder)." : "Enable carbon tracking in your profile to see this chart."}</p></div></TabsContent>
-                <TabsContent value="forecast"><div className="mt-4 p-4 border rounded-md bg-muted/30"><p className="text-sm font-semibold text-primary">AI Forecast (Example):</p><p className="text-muted-foreground text-sm mt-1">"Keep up current efforts! Projected to lose 0.5kg next week if you maintain this calorie deficit." (Placeholder)</p><Button variant="link" size="sm" className="p-0 h-auto mt-2 text-primary" onClick={() => handlePlaceholderFeatureClick('AI Forecast Details')}>Learn more</Button></div></TabsContent>
-              </Tabs></CardContent><CardFooter><Button className="w-full" variant="outline" onClick={() => handlePlaceholderFeatureClick('Detailed Progress Report')}>Detailed Progress Report</Button></CardFooter>
+          <Card className="shadow-md border-l-4 border-indigo-500">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-indigo-700"><TrendingUp className="h-6 w-6" /> Weekly Progress</CardTitle>
+                <CardDescription>Track trends and get AI forecasts.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Tabs defaultValue="weight" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="weight">Weight Trend</TabsTrigger>
+                        <TabsTrigger value="carbon" disabled={!userProfile?.enableCarbonTracking}>Carbon Savings</TabsTrigger>
+                        <TabsTrigger value="forecast">AI Forecast</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="weight">
+                        <div className="mt-4 h-60 bg-muted/50 rounded-md p-4 text-center">
+                            {weightTrendChartData.length > 1 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={weightTrendChartData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
+                                        <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} domain={['dataMin - 2', 'dataMax + 2']} />
+                                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))'}} />
+                                        <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4, fill: "hsl(var(--primary))" }} activeDot={{ r: 6 }} name={`Weight (${weightUnit})`} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <p className="text-muted-foreground flex flex-col items-center justify-center h-full">
+                                    Log at least two weight measurements to see your trend.
+                                </p>
+                            )}
+                        </div>
+                        <Dialog open={isWeightModalOpen} onOpenChange={setIsWeightModalOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" className="w-full mt-3">
+                                    <WeightIcon className="mr-2 h-4 w-4"/> Add Weight Measurement
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[425px]">
+                                <DialogHeader>
+                                    <DialogTitle>Add New Weight</DialogTitle>
+                                    <DialogDescription>
+                                        Enter your current weight. It will be logged with today's date.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="new-weight" className="text-right">Weight</Label>
+                                        <Input id="new-weight" type="number" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} className="col-span-2" placeholder="e.g., 70" />
+                                        <span className="col-span-1">{weightUnit}</span>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button type="button" variant="outline" onClick={() => setIsWeightModalOpen(false)}>Cancel</Button>
+                                    <Button type="submit" onClick={handleAddWeightMeasurement}>Save Weight</Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    </TabsContent>
+                    <TabsContent value="carbon">
+                        <div className="mt-4 h-48 bg-muted/50 rounded-md flex items-center justify-center p-4">
+                            <p className="text-muted-foreground text-center">{userProfile?.enableCarbonTracking ? "Carbon savings chart vs. last week (Placeholder)." : "Enable carbon tracking in your profile to see this chart."}</p>
+                        </div>
+                    </TabsContent>
+                    <TabsContent value="forecast">
+                        <div className="mt-4 p-4 border rounded-md bg-muted/30">
+                            <p className="text-sm font-semibold text-primary">AI Forecast (Example):</p>
+                            <p className="text-muted-foreground text-sm mt-1">"Keep up current efforts! Projected to lose 0.5kg next week if you maintain this calorie deficit." (Placeholder)</p>
+                            <Button variant="link" size="sm" className="p-0 h-auto mt-2 text-primary" onClick={() => handlePlaceholderFeatureClick('AI Forecast Details')}>Learn more</Button>
+                        </div>
+                    </TabsContent>
+                </Tabs>
+            </CardContent>
+            <CardFooter>
+                <Button className="w-full" variant="outline" onClick={() => handlePlaceholderFeatureClick('Detailed Progress Report')}>Detailed Progress Report</Button>
+            </CardFooter>
           </Card>
         </section>
       )}
