@@ -22,7 +22,7 @@ import {
   addWeightEntry,
   getWeightEntries,
   type WeightEntry,
-  getMealLogs, // Import getMealLogs
+  getMealLogs, 
 } from '@/lib/localStorage';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -42,7 +42,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select as RadixSelect, SelectContent as RadixSelectContent, SelectItem as RadixSelectItem, SelectTrigger as RadixSelectTrigger, SelectValue as RadixSelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart as RechartsBarChart, Bar, PieChart as RechartsPieChart, Pie, Cell } from 'recharts'; // Added RechartsBarChart, Bar, PieChart, Pie, Cell
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart as RechartsBarChart, Bar, PieChart as RechartsPieChart, Pie, Cell } from 'recharts'; 
 
 
 import { cn } from '@/lib/utils';
@@ -64,7 +64,7 @@ export default function DashboardPage() {
   const [aiScanUsage, setAiScanUsage] = useState<AIScanUsageType | null>(null);
   const [waterIntake, setWaterIntake] = useState<WaterIntakeData | null>(null);
   const [todaysMealLogs, setTodaysMealLogs] = useState<MealEntry[]>([]);
-  const [allMealLogs, setAllMealLogs] = useState<MealEntry[]>([]); // For full carbon analytics
+  const [allMealLogs, setAllMealLogs] = useState<MealEntry[]>([]); 
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
@@ -85,12 +85,10 @@ export default function DashboardPage() {
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
 
-  // Effect 1: Set isClient to true once component mounts
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  // Effect 2: Load initial data from localStorage once client is ready
   useEffect(() => {
     if (isClient) {
       const initialPlan = getSelectedPlan();
@@ -103,7 +101,7 @@ export default function DashboardPage() {
       setWaterIntake(getWaterIntake());
       const initialTodaysLogs = getTodaysMealLogs();
       setTodaysMealLogs(initialTodaysLogs);
-      setAllMealLogs(getMealLogs()); // Load all logs for carbon analytics
+      setAllMealLogs(getMealLogs()); 
     }
   }, [isClient]);
   
@@ -119,7 +117,7 @@ export default function DashboardPage() {
 
     if (currentPlan === 'pro' || currentPlan === 'ecopro') {
       setIsLoadingAI(prev => ({ ...prev, trends: true, coach: true }));
-      analyzeNutrientTrends({ recentMeals: recentMealsForTrends.map(m => ({...m, date: m.date, detailedNutrients: m.detailedNutrients || {}})), userHealthGoals: profile.healthGoals })
+      analyzeNutrientTrends({ recentMeals: recentMealsForTrends.map(m => ({...m, date: m.date, detailedNutrients: m.detailedNutrients || {}})), userHealthGoals: profile.health_goals })
         .then(setNutrientTrend).catch(err => {
             console.error("Error fetching nutrient trends:", err);
             toast({variant: 'destructive', title:'AI Error', description:'Could not fetch nutrient trends.'});
@@ -137,7 +135,7 @@ export default function DashboardPage() {
     if (currentPlan === 'ecopro') {
       setIsLoadingAI(prev => ({ ...prev, carbon: true, mood: true }));
       
-      if (profile.enableCarbonTracking) { 
+      if (profile.enable_carbon_tracking) { 
         getCarbonComparison({ userMeals: allMealsForCarbon.filter(m => m.carbonFootprintEstimate !== undefined).map(m => ({...m, date: m.date, carbonFootprintEstimate: m.carbonFootprintEstimate})) })
           .then(setCarbonComparison).catch(err => {
             console.error("Error fetching carbon comparison:", err);
@@ -163,7 +161,6 @@ export default function DashboardPage() {
     }
   }, [isClient, toast]);
 
-  // Effect 3: Fetch AI data once client is ready and essential profile/plan/logs data is loaded
   useEffect(() => {
     if (isClient && userProfile && plan) { 
       fetchDashboardData(plan, userProfile, todaysMealLogs);
@@ -175,7 +172,7 @@ export default function DashboardPage() {
     if (!isClient) return;
     const refreshedTodayLogs = getTodaysMealLogs();
     setTodaysMealLogs(refreshedTodayLogs);
-    setAllMealLogs(getMealLogs()); // Refresh all logs
+    setAllMealLogs(getMealLogs()); 
     if(userProfile && plan) {
         fetchDashboardData(plan, userProfile, refreshedTodayLogs);
     }
@@ -184,9 +181,9 @@ export default function DashboardPage() {
   const actualDailyCalorieGoal = useMemo(() => {
     if (!isClient || !userProfile) return DAILY_CALORIE_GOAL_BASE;
     let goal = DAILY_CALORIE_GOAL_BASE;
-    if (userProfile.healthGoals?.includes('Lose Weight')) {
+    if (userProfile.health_goals?.includes('Lose Weight')) {
       goal *= 0.8;
-    } else if (userProfile.healthGoals?.includes('Gain Muscle')) {
+    } else if (userProfile.health_goals?.includes('Gain Muscle')) {
       goal *= 1.2;
     }
     return Math.round(goal);
@@ -198,7 +195,10 @@ export default function DashboardPage() {
   }, [isClient, todaysMealLogs]
   );
 
-  const calorieProgressPercentage = Math.min((totalCaloriesToday / actualDailyCalorieGoal) * 100, 100);
+  const calorieProgressPercentage = useMemo(() => {
+    if (!isClient || actualDailyCalorieGoal === 0) return 0;
+    return Math.min((totalCaloriesToday / actualDailyCalorieGoal) * 100, 100);
+  }, [isClient, totalCaloriesToday, actualDailyCalorieGoal]);
 
   const getCalorieProgressColor = () => {
     if (calorieProgressPercentage < 75) return 'bg-primary';
@@ -229,9 +229,9 @@ export default function DashboardPage() {
     try {
       const planOutput = await generateEcoMealPlan({
         userProfile: {
-          dietType: userProfile.dietType,
-          healthGoals: userProfile.healthGoals,
-          dietaryRestrictions: Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietaryRestrictionsOther,
+          dietType: userProfile.diet_type,
+          healthGoals: userProfile.health_goals,
+          dietaryRestrictions: Array.isArray(userProfile.dietary_restrictions) ? userProfile.dietary_restrictions.join(', ') : userProfile.dietary_restrictions_other,
         },
         durationDays: 3,
       });
@@ -308,7 +308,7 @@ export default function DashboardPage() {
     return Object.entries(data)
       .map(([date, calories]) => ({ date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), calories }))
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [isClient, todaysMealLogs]);
+  }, [isClient, allMealLogs]); // Changed dependency from todaysMealLogs to allMealLogs
 
 
   const scansUsedPercentage = useMemo(() => {
@@ -368,7 +368,7 @@ export default function DashboardPage() {
 
   const mockEcoScore = useMemo(() => {
     if (!isClient || !userProfile) return 'N/A';
-    if (todaysMealLogs.length === 0 || !userProfile.enableCarbonTracking) return 'N/A';
+    if (todaysMealLogs.length === 0 || !userProfile.enable_carbon_tracking) return 'N/A';
     const mealsWithCF = todaysMealLogs.filter(m => m.carbonFootprintEstimate !== undefined);
     if (mealsWithCF.length === 0) return 'N/A';
     const avgCarbon = mealsWithCF.reduce((sum, meal) => sum + (meal.carbonFootprintEstimate!), 0) / mealsWithCF.length;
@@ -389,9 +389,8 @@ export default function DashboardPage() {
   }, [isClient, toast]);
 
   const dailyCarbonFootprintData = useMemo(() => {
-    if (!isClient || plan !== 'ecopro' || !userProfile?.enableCarbonTracking) return [];
+    if (!isClient || plan !== 'ecopro' || !userProfile?.enable_carbon_tracking) return [];
     const dailyData: { [date: string]: number } = {};
-    // Use allMealLogs for this calculation, not just recent ones for AI
     allMealLogs.forEach(log => {
       if (log.carbonFootprintEstimate !== undefined) {
         const dateKey = log.date.split('T')[0];
@@ -402,13 +401,13 @@ export default function DashboardPage() {
     const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
     const last7DaysCarbonData = sortedDates.slice(-7).map(date => ({
       date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      carbon: parseFloat(dailyData[date].toFixed(2)), // kg CO2e
+      carbon: parseFloat(dailyData[date].toFixed(2)), 
     }));
     return last7DaysCarbonData;
   }, [isClient, plan, userProfile, allMealLogs]);
 
   const averageCarbonFootprints = useMemo(() => {
-    if (!isClient || plan !== 'ecopro' || !userProfile?.enableCarbonTracking || allMealLogs.length === 0) {
+    if (!isClient || plan !== 'ecopro' || !userProfile?.enable_carbon_tracking || allMealLogs.length === 0) {
       return { daily: 0, weekly: 0, count: 0 };
     }
     
@@ -417,13 +416,12 @@ export default function DashboardPage() {
 
     const totalCF = mealsWithCF.reduce((sum, log) => sum + log.carbonFootprintEstimate!, 0);
     
-    // For daily average, find unique days with CF data
     const uniqueDaysWithCF = new Set(mealsWithCF.map(log => log.date.split('T')[0])).size;
     const dailyAvg = uniqueDaysWithCF > 0 ? totalCF / uniqueDaysWithCF : 0;
     
     return {
       daily: parseFloat(dailyAvg.toFixed(2)),
-      weekly: parseFloat((dailyAvg * 7).toFixed(2)), // Simple weekly projection
+      weekly: parseFloat((dailyAvg * 7).toFixed(2)), 
       count: mealsWithCF.length
     };
   }, [isClient, plan, userProfile, allMealLogs]);
@@ -468,15 +466,72 @@ export default function DashboardPage() {
       )}
 
       <Card className="shadow-md">
-        <CardHeader><CardTitle className="flex items-center gap-2"><TargetIcon className="text-primary"/> Today's Vitals</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="space-y-2 p-3 rounded-lg border bg-card"><div className="flex justify-between items-center text-sm font-medium"><span>Calories</span><span className="text-muted-foreground">{totalCaloriesToday.toFixed(0)} / {actualDailyCalorieGoal.toFixed(0)} kcal</span></div><Progress value={calorieProgressPercentage} className={cn("h-3", getCalorieProgressColor())} /><p className="text-xs text-muted-foreground text-center pt-1">{calorieProgressPercentage >= 100 ? "Goal reached!" : `${(actualDailyCalorieGoal - totalCaloriesToday).toFixed(0)} kcal remaining.`}</p></div>
-          <div className="space-y-2 p-3 rounded-lg border bg-card"><div className="flex justify-between items-center text-sm font-medium"><span className="flex items-center gap-1"><Droplet className="h-4 w-4 text-blue-500"/>Water Intake</span><span className="text-muted-foreground">{waterIntake?.current || 0} / {waterIntake?.goal || 8} {waterVolumeUnit}</span></div><Progress value={waterIntake ? (waterIntake.current / waterIntake.goal) * 100 : 0} className="h-3 [&>div]:bg-blue-500" /><div className="flex gap-2 pt-1"><Button size="sm" variant="outline" onClick={() => handleAddWater(1)} className="flex-1 text-xs whitespace-normal text-center">+1 {waterVolumeUnit === 'glasses' ? 'Glass' : 'Serving (8oz)'}</Button><Button size="sm" variant="outline" onClick={() => handleAddWater(0.5)} className="flex-1 text-xs whitespace-normal text-center">+{waterVolumeUnit === 'glasses' ? '0.5 Glass' : '0.5 Serving (4oz)'}</Button></div></div>
-          <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center"><Footprints className="h-8 w-8 text-primary mb-1"/><p className="text-lg font-semibold">7,532</p><p className="text-xs text-muted-foreground">Steps Today</p><Button size="sm" variant="ghost" className="text-xs mt-1 text-primary hover:underline" onClick={() => handlePlaceholderFeatureClick('Fitness Tracker Sync')}>Sync Health App</Button></div>
-          <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center">
-            <Leaf className="h-8 w-8 text-green-600 mb-1"/>
-            <p className="text-lg font-semibold">{mockEcoScore}</p>
-            <p className="text-xs text-muted-foreground">Daily Eco-Score</p>
+        <CardHeader className="pb-2">
+          <div className="flex justify-between items-start">
+            <CardTitle className="flex items-center gap-2"><Utensils className="text-primary"/> Today's Overview</CardTitle>
+             <Button variant="ghost" size="sm" onClick={refreshMealLogs} className="text-xs"><Edit3 className="mr-1 h-3 w-3"/>Refresh Logs</Button>
+          </div>
+          <CardDescription>Your meals, calorie intake, and quick stats for today.</CardDescription>
+          <div className="pt-4 space-y-1">
+            <div className="flex justify-between items-center text-sm font-medium">
+              <span>Calories Consumed</span>
+              <span className="text-muted-foreground">{totalCaloriesToday.toFixed(0)} / {actualDailyCalorieGoal.toFixed(0)} kcal</span>
+            </div>
+            <Progress value={calorieProgressPercentage} className={cn("h-3", getCalorieProgressColor())} />
+            <p className="text-xs text-muted-foreground text-center pt-1">
+              {calorieProgressPercentage >= 100 ? "Goal reached!" : `${(actualDailyCalorieGoal - totalCaloriesToday).toFixed(0)} kcal remaining.`}
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-2 space-y-4">
+          {todaysMealLogs.length > 0 ? (
+            <ScrollArea className="w-full whitespace-nowrap">
+              <div className="flex space-x-4 pb-4">
+                {todaysMealLogs.map(meal => (
+                  <Card key={meal.id} className="min-w-[220px] max-w-[280px] shrink-0">
+                    <CardHeader className="p-3">
+                      {meal.photoDataUri && (<Image src={meal.photoDataUri} alt={meal.description || "Meal"} width={200} height={120} className="rounded-md object-cover w-full aspect-[16/9]" data-ai-hint="food meal"/>)}
+                      <CardTitle className="text-base mt-2 truncate">{meal.category ? `${meal.category}: ` : ''}{meal.description || "Meal Photo"}</CardTitle>
+                      <CardDescription className="text-xs">{new Date(meal.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}{meal.mood && ` - Mood: ${meal.mood.charAt(0).toUpperCase() + meal.mood.slice(1)}`}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-3 text-xs space-y-1">
+                      <p><span className="font-medium">{meal.calories.toFixed(0)} kcal</span></p>
+                      <p className="text-muted-foreground">P: {meal.protein.toFixed(1)}g, C: {meal.carbs.toFixed(1)}g, F: {meal.fat.toFixed(1)}g</p>
+                      {(plan === 'pro' || plan === 'ecopro') && userProfile?.enable_carbon_tracking && meal.carbonFootprintEstimate !== undefined && <p className="text-teal-600 text-xs flex items-center gap-1"><Trees className="h-3 w-3"/>~{meal.carbonFootprintEstimate.toFixed(2)} kg CO₂e</p>}
+                    </CardContent>
+                    <CardFooter className="p-3"><Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => handlePlaceholderFeatureClick('Recreate Meal')}>Recreate Meal</Button></CardFooter>
+                  </Card>
+                ))}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          ) : (
+            <p className="text-muted-foreground text-center py-4">No meals logged today.</p>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+            <div className="space-y-2 p-3 rounded-lg border bg-card">
+              <div className="flex justify-between items-center text-sm font-medium">
+                <span className="flex items-center gap-1"><Droplet className="h-4 w-4 text-blue-500"/>Water Intake</span>
+                <span className="text-muted-foreground">{waterIntake?.current || 0} / {waterIntake?.goal || 8} {waterVolumeUnit}</span>
+              </div>
+              <Progress value={waterIntake ? (waterIntake.current / waterIntake.goal) * 100 : 0} className="h-3 [&>div]:bg-blue-500" />
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" variant="outline" onClick={() => handleAddWater(1)} className="flex-1 text-xs whitespace-normal text-center">+1 {waterVolumeUnit === 'glasses' ? 'Glass' : 'Serving (8oz)'}</Button>
+                <Button size="sm" variant="outline" onClick={() => handleAddWater(0.5)} className="flex-1 text-xs whitespace-normal text-center">+{waterVolumeUnit === 'glasses' ? '0.5 Glass' : '0.5 Serving (4oz)'}</Button>
+              </div>
+            </div>
+            <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center">
+              <Footprints className="h-8 w-8 text-primary mb-1"/>
+              <p className="text-lg font-semibold">7,532</p>
+              <p className="text-xs text-muted-foreground">Steps Today</p>
+              <Button size="sm" variant="ghost" className="text-xs mt-1 text-primary hover:underline" onClick={() => handlePlaceholderFeatureClick('Fitness Tracker Sync')}>Sync Health App</Button>
+            </div>
+            <div className="space-y-2 p-3 rounded-lg border bg-card flex flex-col items-center justify-center">
+              <Leaf className="h-8 w-8 text-green-600 mb-1"/>
+              <p className="text-lg font-semibold">{mockEcoScore}</p>
+              <p className="text-xs text-muted-foreground">Daily Eco-Score</p>
+            </div>
           </div>
         </CardContent>
          <CardFooter className="pt-4 flex flex-col sm:flex-row gap-2">
@@ -518,18 +573,9 @@ export default function DashboardPage() {
         </Card>
       )}
 
-
-      <Card className="shadow-md">
-        <CardHeader><CardTitle className="flex items-center gap-2"><Utensils className="text-primary"/> Today's Meals</CardTitle><CardDescription>Timeline of your meals logged today. <Button variant="ghost" size="sm" onClick={refreshMealLogs} className="text-xs"><Edit3 className="mr-1 h-3 w-3"/>Refresh</Button></CardDescription></CardHeader>
-        <CardContent>
-          {todaysMealLogs.length > 0 ? (<ScrollArea className="w-full whitespace-nowrap"><div className="flex space-x-4 pb-4">{todaysMealLogs.map(meal => (<Card key={meal.id} className="min-w-[220px] max-w-[280px] shrink-0"><CardHeader className="p-3">{meal.photoDataUri && (<Image src={meal.photoDataUri} alt={meal.description || "Meal"} width={200} height={120} className="rounded-md object-cover w-full aspect-[16/9]" data-ai-hint="food meal"/>)}<CardTitle className="text-base mt-2 truncate">{meal.category ? `${meal.category}: ` : ''}{meal.description || "Meal Photo"}</CardTitle><CardDescription className="text-xs">{new Date(meal.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}{meal.mood && ` - Mood: ${meal.mood.charAt(0).toUpperCase() + meal.mood.slice(1)}`}</CardDescription></CardHeader><CardContent className="p-3 text-xs space-y-1"><p><span className="font-medium">{meal.calories.toFixed(0)} kcal</span></p><p className="text-muted-foreground">P: {meal.protein.toFixed(1)}g, C: {meal.carbs.toFixed(1)}g, F: {meal.fat.toFixed(1)}g</p>{(plan === 'pro' || plan === 'ecopro') && userProfile?.enableCarbonTracking && meal.carbonFootprintEstimate !== undefined && <p className="text-teal-600 text-xs flex items-center gap-1"><Trees className="h-3 w-3"/>~{meal.carbonFootprintEstimate.toFixed(2)} kg CO₂e</p>}</CardContent><CardFooter className="p-3"><Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => handlePlaceholderFeatureClick('Recreate Meal')}>Recreate Meal</Button></CardFooter></Card>))}</div><ScrollBar orientation="horizontal" /></ScrollArea>) : (<p className="text-muted-foreground text-center py-4">No meals logged today.</p>)}
-        </CardContent>
-      </Card>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="shadow-md hover:shadow-lg transition-shadow"><CardHeader><CardTitle className="flex items-center gap-2"><Camera className="text-primary"/> Log Meal</CardTitle><CardDescription>Quickly log meals, manually or with AI.</CardDescription></CardHeader><CardFooter><Link href="/log-meal" passHref legacyBehavior><Button className="w-full">Go to Log Meal</Button></Link></CardFooter></Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow"><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="text-primary"/> View Stats</CardTitle><CardDescription>Track progress and nutritional trends.</CardDescription></CardHeader><CardFooter><Link href="/stats" passHref legacyBehavior><Button className="w-full">Go to Stats</Button></Link></CardFooter></Card>
-        <Card className="shadow-md hover:shadow-lg transition-shadow md:col-span-2"><CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="text-primary"/> Meal Planner</CardTitle><CardDescription>Plan your meals for the week.</CardDescription></CardHeader><CardFooter><Link href="/meal-planner" passHref legacyBehavior><Button className="w-full" variant="outline">Open Meal Planner</Button></Link></CardFooter></Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow"><CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="text-primary"/> Meal Planner</CardTitle><CardDescription>Plan ahead for a balanced week. AI suggestions for Pro users!</CardDescription></CardHeader><CardFooter><Link href="/meal-planner" passHref legacyBehavior><Button className="w-full" variant="outline">Open Meal Planner</Button></Link></CardFooter></Card>
       </div>
 
       {(plan === 'pro' || plan === 'ecopro') && (
@@ -583,7 +629,7 @@ export default function DashboardPage() {
                 <Tabs defaultValue="weight" className="w-full">
                     <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="weight">Weight Trend</TabsTrigger>
-                        <TabsTrigger value="carbon" disabled={!userProfile?.enableCarbonTracking}>Carbon Savings</TabsTrigger>
+                        <TabsTrigger value="carbon" disabled={!userProfile?.enable_carbon_tracking}>Carbon Savings</TabsTrigger>
                         <TabsTrigger value="forecast">AI Forecast</TabsTrigger>
                     </TabsList>
                     <TabsContent value="weight">
@@ -633,7 +679,7 @@ export default function DashboardPage() {
                     </TabsContent>
                     <TabsContent value="carbon">
                         <div className="mt-4 h-48 bg-muted/50 rounded-md flex items-center justify-center p-4">
-                            <p className="text-muted-foreground text-center">{userProfile?.enableCarbonTracking ? "Carbon savings chart vs. last week (Placeholder)." : "Enable carbon tracking in your profile to see this chart."}</p>
+                            <p className="text-muted-foreground text-center">{userProfile?.enable_carbon_tracking ? "Carbon savings chart vs. last week (Placeholder)." : "Enable carbon tracking in your profile to see this chart."}</p>
                         </div>
                     </TabsContent>
                     <TabsContent value="forecast">
@@ -659,7 +705,7 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {plan === 'ecopro' && userProfile?.enableCarbonTracking && (
+      {plan === 'ecopro' && userProfile?.enable_carbon_tracking && (
         <section className="space-y-6">
           <h2 className="text-2xl font-semibold text-primary flex items-center gap-2"><Trees /> EcoPro Sustainability Hub</h2>
           <Card className="shadow-md border-l-4 border-teal-500">
@@ -772,7 +818,7 @@ export default function DashboardPage() {
                   </ul>
                 </div>
               )}
-               <Button variant="outline" className="w-full" onClick={() => handlePlaceholderFeatureClick('Full Mood Analysis')}>Full Mood Analysis</Button>
+               <Button variant="outline" className="w-full" onClick={() => router.push('/mood-analysis')}>Full Mood Analysis</Button>
             </CardContent>
           </Card>
 
@@ -785,7 +831,6 @@ export default function DashboardPage() {
       
       {!isClient && plan === 'free' && !aiScanUsage && (<Card><CardHeader><CardTitle className="flex items-center gap-2"><Info className="h-5 w-5"/>Loading Usage...</CardTitle></CardHeader><CardContent><div className="h-10 bg-muted animate-pulse rounded-md"></div></CardContent></Card>)}
       
-      {/* Detailed Progress Report Dialog */}
       <Dialog open={isDetailedProgressReportModalOpen} onOpenChange={setIsDetailedProgressReportModalOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>

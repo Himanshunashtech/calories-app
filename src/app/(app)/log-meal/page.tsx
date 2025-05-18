@@ -39,7 +39,7 @@ interface ExtendedAnalysisResult extends FoodAnalysisResult {
 
 const DAILY_CALORIE_GOAL_BASE = 2000;
 
-export default function LogMealPageEnhanced() {
+export default function LogMealPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [description, setDescription] = useState('');
@@ -74,7 +74,6 @@ export default function LogMealPageEnhanced() {
       setAiScansRemaining(usage.limit - usage.count);
     }
     setTodaysMealLogs(getTodaysMealLogs());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -93,9 +92,6 @@ export default function LogMealPageEnhanced() {
       reader.readAsDataURL(photoFile);
       if (isCameraMode) setIsCameraMode(false);
       setShowWatermark(false);
-    } else {
-      // If photoFile is null (e.g., after clearing), ensure preview is also cleared.
-      // setPhotoPreview(null); // This was causing issues if clearing photo but not intending to remove preview if manually set
     }
   }, [photoFile, isCameraMode]);
 
@@ -167,22 +163,22 @@ export default function LogMealPageEnhanced() {
   }, [isClient, todaysMealLogs]
   );
 
-  const calorieProgressPercentage = useMemo(() =>
-    Math.min((totalCaloriesToday / actualDailyCalorieGoal) * 100, 100),
-    [totalCaloriesToday, actualDailyCalorieGoal]
-  );
+  const calorieProgressPercentage = useMemo(() => {
+    if (actualDailyCalorieGoal === 0) return 0; // Avoid division by zero
+    return Math.min((totalCaloriesToday / actualDailyCalorieGoal) * 100, 100);
+   }, [totalCaloriesToday, actualDailyCalorieGoal]);
 
   const getCalorieProgressColorClass = () => {
     if (calorieProgressPercentage < 75) return 'text-primary';
-    if (calorieProgressPercentage < 100) return 'text-yellow-500'; // Ensure this Tailwind class exists or use an appropriate one.
+    if (calorieProgressPercentage < 100) return 'text-yellow-500'; 
     return 'text-destructive';
   };
 
+  const mealCategories: MealCategory[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Fast Food'];
   const caloriesByMealType = useMemo(() => {
-    const categories: MealCategory[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Fast Food'];
     const totals: Record<MealCategory, number> = { Breakfast: 0, Lunch: 0, Dinner: 0, Snack: 0, 'Fast Food': 0 };
     todaysMealLogs.forEach(log => {
-      if (log.category && categories.includes(log.category)) {
+      if (log.category && mealCategories.includes(log.category)) {
         totals[log.category] += log.calories;
       }
     });
@@ -196,14 +192,13 @@ export default function LogMealPageEnhanced() {
     Snack: Apple,
     'Fast Food': Pizza,
   };
-  const mealCategories: MealCategory[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Fast Food'];
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setPhotoFile(file);
-      setPhotoPreview(null); // Clear previous preview to trigger re-render from file
+      setPhotoPreview(null); 
       setAnalysisResult(null);
       setError(null);
       setIsCameraMode(false);
@@ -228,18 +223,18 @@ export default function LogMealPageEnhanced() {
       if (context) {
         context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const dataUri = canvas.toDataURL('image/jpeg');
-        setPhotoPreview(dataUri); // This will trigger useEffect to read this dataUri for the preview
-        setPhotoFile(null); // Clear any selected file
+        setPhotoPreview(dataUri); 
+        setPhotoFile(null); 
         setAnalysisResult(null);
         setError(null);
         setShowWatermark(false);
-        setIsCameraMode(false); // Exit camera mode
+        setIsCameraMode(false); 
         loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
     } else {
       toast({ variant: "destructive", title: "Camera Not Ready", description: "Wait for camera to initialize." });
     }
-  }, [videoRef, toast]);
+  }, [toast]);
 
   const handleAnalyzeMeal = async () => {
     if (!photoPreview) {
@@ -326,8 +321,8 @@ export default function LogMealPageEnhanced() {
       description: `${mealCategory}: ${analysisResult.estimatedCalories} kcal added.`,
       action: <Leaf className="h-5 w-5 text-green-500" />,
     });
-    setTodaysMealLogs(getTodaysMealLogs()); // Refresh logs for calorie ring etc.
-    resetForm(false); // Keep category selected
+    setTodaysMealLogs(getTodaysMealLogs()); 
+    resetForm(false); 
   };
 
   const resetForm = (resetCategory = true) => {
@@ -373,7 +368,7 @@ export default function LogMealPageEnhanced() {
     setError(null);
     setShowWatermark(false);
     setIsCameraMode(true);
-    setHasCameraPermission(null); // Re-trigger camera permission check
+    setHasCameraPermission(null); 
   };
 
   const handlePlaceholderFeatureClick = (featureName: string) => {
@@ -396,8 +391,7 @@ export default function LogMealPageEnhanced() {
   }
 
   return (
-    <div className="space-y-6 pb-20"> {/* Added padding-bottom for fixed quick-log bar */}
-      {/* Central Calorie Ring */}
+    <div className="space-y-6 pb-20"> 
       <Card className="shadow-xl bg-gradient-to-br from-primary/10 to-background">
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Today's Calories</CardTitle>
@@ -411,6 +405,7 @@ export default function LogMealPageEnhanced() {
                   a 15.9155 15.9155 0 0 1 0 31.831
                   a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
+                stroke="currentColor"
                 strokeWidth="3.5"
               />
               <path
@@ -420,6 +415,7 @@ export default function LogMealPageEnhanced() {
                   a 15.9155 15.9155 0 0 1 0 31.831
                   a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
+                stroke="currentColor"
                 strokeWidth="3.5"
                 strokeLinecap="round"
               />
@@ -429,12 +425,10 @@ export default function LogMealPageEnhanced() {
               <span className="text-sm text-muted-foreground">/ {actualDailyCalorieGoal} kcal</span>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">Tap to see macros/steps (Coming Soon)</p>
           <p className="text-xs text-muted-foreground">Burned calories placeholder: 300 kcal</p>
         </CardContent>
       </Card>
 
-      {/* Meal Time Cards */}
       <section>
         <h2 className="text-lg font-semibold mb-2 text-foreground">Log to Meal</h2>
         <ScrollArea className="w-full whitespace-nowrap rounded-md ">
@@ -469,7 +463,6 @@ export default function LogMealPageEnhanced() {
         </ScrollArea>
       </section>
 
-      {/* Fasting Card */}
       <Card className="shadow-md">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-primary" />Fasting Tracker</CardTitle>
@@ -484,7 +477,6 @@ export default function LogMealPageEnhanced() {
         </CardContent>
       </Card>
 
-      {/* Exercise Card */}
       <Card className="shadow-md">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2"><Bike className="h-5 w-5 text-primary" />Log Your Activity</CardTitle>
@@ -501,8 +493,7 @@ export default function LogMealPageEnhanced() {
         </CardFooter>
       </Card>
 
-      {/* Logging Section (Original UI) */}
-      <div ref={loggingSectionRef} className="pt-6"> {/* Added padding top for scroll target */}
+      <div ref={loggingSectionRef} className="pt-6"> 
         <Card className="shadow-lg">
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -510,7 +501,7 @@ export default function LogMealPageEnhanced() {
                 <Utensils className="h-7 w-7 text-primary" />
                 {mealCategory ? `Log ${mealCategory}` : "Log Your Meal"}
               </CardTitle>
-              <Button variant="outline" onClick={() => handleToggleCameraMode(false)} size="sm"> {/* Set scrollToLogging to false here */}
+              <Button variant="outline" onClick={() => handleToggleCameraMode(false)} size="sm"> 
                 {isCameraMode ? <UploadCloud className="mr-2 h-4 w-4" /> : <CameraIcon className="mr-2 h-4 w-4" />}
                 {isCameraMode ? 'Upload File' : 'Use Camera'}
               </Button>
@@ -568,10 +559,10 @@ export default function LogMealPageEnhanced() {
                   </div>
                 )}
                 <Button variant="ghost" size="icon" className="absolute top-1 right-1 bg-background/50 hover:bg-background/80 z-20 h-8 w-8" onClick={() => { setPhotoFile(null); setPhotoPreview(null); setAnalysisResult(null); if (fileInputRef.current) fileInputRef.current.value = ""; setShowWatermark(false); }}>
-                  <X className="h-4 w-4" />
+                    <X className="h-4 w-4"/>
                 </Button>
-              </div>
-            ) : (
+            </div>
+            ) : ( 
               <div>
                 <Label htmlFor="meal-photo-input" className="text-base sr-only">Meal Photo Upload</Label>
                 <div className="mt-2 flex justify-center rounded-lg border border-dashed border-input px-6 py-10 hover:border-primary transition-colors">
@@ -683,10 +674,9 @@ export default function LogMealPageEnhanced() {
         </Card>
       )}
 
-      {/* Quick Log Buttons - Fixed at bottom */}
       <div className="fixed bottom-16 left-0 right-0 bg-background/90 backdrop-blur-sm border-t p-2 shadow-lg z-30 md:hidden">
         <div className="container mx-auto max-w-md flex justify-around items-center">
-          <Button variant="ghost" className="flex flex-col h-auto p-2 items-center" onClick={() => { setIsCameraMode(false); loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' }); }}>
+          <Button variant="ghost" className="flex flex-col h-auto p-2 items-center" onClick={() => { loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' }); }}>
             <ScanBarcode className="h-6 w-6 text-primary" />
             <span className="text-xs text-primary">Scan Food</span>
           </Button>
