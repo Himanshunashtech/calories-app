@@ -5,10 +5,12 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { CalendarDays, ShoppingBag, Sparkles, PlusCircle, ArrowLeft, ArrowRight, Printer, Download, Loader2, FileText } from 'lucide-react';
-import { getSelectedPlan, type UserPlan, getUserProfile, type UserProfile } from '@/lib/localStorage';
+import { getSelectedPlan, type UserPlan } from '@/lib/localStorage'; // Removed getUserProfile and UserProfile type from here
 import { useToast } from '@/hooks/use-toast';
 import { generateEcoMealPlan, type GenerateEcoMealPlanOutput } from '@/ai/flows/generate-eco-meal-plan';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabaseClient'; // Import Supabase client
+import type { UserProfile } from '@/types'; // Import UserProfile type
 
 const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -38,28 +40,53 @@ export default function MealPlannerPage() {
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlan>({});
   const [generatedPlanOutput, setGeneratedPlanOutput] = useState<GenerateEcoMealPlanOutput | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0); // For future week navigation
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
-    setUserPlan(getSelectedPlan());
-    const profile = getUserProfile();
-    setUserProfile(profile);
+    setUserPlan(getSelectedPlan()); // Plan can still come from localStorage for now
+
+    const fetchProfile = async () => {
+      setIsLoadingProfile(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profileData, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        if (error) {
+          console.error("Error fetching profile for meal planner:", error);
+          toast({ variant: "destructive", title: "Error", description: "Could not load your profile for meal planning." });
+        } else if (profileData) {
+          setUserProfile(profileData as UserProfile);
+        }
+      } else {
+        // Handle case where user is not logged in, though layout should prevent this
+        toast({ variant: "destructive", title: "Not Authenticated", description: "Please log in to use the meal planner." });
+      }
+      setIsLoadingProfile(false);
+    };
+
+    fetchProfile();
     
-    const savedPlanJson = localStorage.getItem('mealPlan');
+    // Load saved plan data from local storage (this can be migrated later)
+    const savedPlanJson = localStorage.getItem('ecoAi_mealPlan');
     if (savedPlanJson) {
       try {
         setWeeklyPlan(JSON.parse(savedPlanJson));
-      } catch (e) { console.error("Error parsing saved meal plan", e); localStorage.removeItem('mealPlan');}
+      } catch (e) { console.error("Error parsing saved meal plan", e); localStorage.removeItem('ecoAi_mealPlan');}
     }
-    const savedGeneratedOutputJson = localStorage.getItem('generatedMealPlanOutput');
+    const savedGeneratedOutputJson = localStorage.getItem('ecoAi_generatedMealPlanOutput');
     if (savedGeneratedOutputJson) {
        try {
         setGeneratedPlanOutput(JSON.parse(savedGeneratedOutputJson));
-       } catch (e) { console.error("Error parsing saved generated output", e); localStorage.removeItem('generatedMealPlanOutput');}
+       } catch (e) { console.error("Error parsing saved generated output", e); localStorage.removeItem('ecoAi_generatedMealPlanOutput');}
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   const handleGenerateAIMealPlan = async () => {
@@ -67,18 +94,22 @@ export default function MealPlannerPage() {
       toast({ variant: "destructive", title: "Feature Unavailable", description: "AI Meal Plan generation is a Pro/EcoPro feature." });
       return;
     }
+    if (isLoadingProfile) {
+      toast({ variant: "default", title: "Please wait", description: "Profile data is still loading." });
+      return;
+    }
     setIsLoadingAI(true);
     try {
       const planOutput = await generateEcoMealPlan({
         userProfile: {
-          dietType: userProfile.dietType,
-          healthGoals: userProfile.healthGoals,
-          dietaryRestrictions: Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietaryRestrictions,
+          dietType: userProfile.diet_type,
+          healthGoals: userProfile.health_goals,
+          dietaryRestrictions: Array.isArray(userProfile.dietary_restrictions) ? userProfile.dietary_restrictions.join(', ') : userProfile.dietary_restrictions as string | undefined,
         },
-        durationDays: 7,
+        durationDays: 7, // Default to 7 days for a weekly plan
       });
       setGeneratedPlanOutput(planOutput);
-      localStorage.setItem('generatedMealPlanOutput', JSON.stringify(planOutput));
+      localStorage.setItem('ecoAi_generatedMealPlanOutput', JSON.stringify(planOutput));
 
       const newWeeklyPlan: WeeklyPlan = {};
       daysOfWeek.forEach(day => newWeeklyPlan[day] = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] }); 
@@ -101,7 +132,7 @@ export default function MealPlannerPage() {
         });
       });
       setWeeklyPlan(newWeeklyPlan);
-      localStorage.setItem('mealPlan', JSON.stringify(newWeeklyPlan));
+      localStorage.setItem('ecoAi_mealPlan', JSON.stringify(newWeeklyPlan));
       toast({ title: "AI Meal Plan Generated!", description: "Your 7-day meal plan has been created." });
     } catch (error) {
       console.error("Error generating AI meal plan:", error);
@@ -150,23 +181,29 @@ export default function MealPlannerPage() {
             <head><title>Grocery List</title>
             <style>
                 body { font-family: sans-serif; margin: 20px; }
-                h1 { text-align: center; color: #3F704F; }
+                h1 { text-align: center; color: hsl(var(--primary)); } /* Use CSS var */
                 ul { list-style-type: none; padding: 0; }
                 li { padding: 5px 0; border-bottom: 1px solid #eee; }
                 li:last-child { border-bottom: none; }
+                @media print {
+                    body { margin: 0.5in; }
+                    h1 { font-size: 18pt; }
+                    li { font-size: 10pt; }
+                    button { display: none; }
+                }
             </style>
             </head>
             <body>
                 <h1>Grocery List - EcoAI Calorie Tracker</h1>
                 <ul>${generatedPlanOutput.groceryList.map(item => `<li>${item}</li>`).join('')}</ul>
+                <script>window.onload = () => { window.print(); window.close(); }</script>
             </body>
         </html>`;
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
     if (printWindow) {
         printWindow.document.open();
         printWindow.document.write(listHtml);
         printWindow.document.close();
-        printWindow.print();
     } else {
         toast({ variant: "destructive", title: "Print Error", description: "Could not open print window. Please check your browser settings." });
     }
@@ -180,9 +217,12 @@ export default function MealPlannerPage() {
   };
 
 
-  if (!isClient) {
+  if (!isClient || isLoadingProfile) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-4">
+        <div className="flex justify-center items-center h-64">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
         <Card className="shadow-xl"><CardHeader><div className="h-8 w-1/2 bg-muted rounded animate-pulse"></div></CardHeader><CardContent><div className="h-64 bg-muted rounded animate-pulse"></div></CardContent></Card>
         <Card className="shadow-xl"><CardHeader><div className="h-6 w-1/3 bg-muted rounded animate-pulse"></div></CardHeader><CardContent><div className="h-20 bg-muted rounded animate-pulse"></div></CardContent></Card>
       </div>
@@ -200,7 +240,7 @@ export default function MealPlannerPage() {
               <CalendarDays /> Meal Planner
             </CardTitle>
             {canUseAIPlanner && (
-              <Button onClick={handleGenerateAIMealPlan} disabled={isLoadingAI}>
+              <Button onClick={handleGenerateAIMealPlan} disabled={isLoadingAI || isLoadingProfile || !userProfile}>
                 {isLoadingAI ? <Loader2 className="animate-spin mr-2 h-4 w-4"/> : <Sparkles className="mr-2 h-4 w-4" />}
                 AI Generate Week Plan
               </Button>
@@ -218,14 +258,14 @@ export default function MealPlannerPage() {
             <Button variant="outline" size="icon" onClick={() => handlePlaceholderFeatureClick('Next Week Navigation')} disabled={isLoadingAI}><ArrowRight/></Button>
           </div>
 
-          {Object.keys(weeklyPlan).length === 0 && !isLoadingAI && (
+          {(Object.keys(weeklyPlan).length === 0 && !generatedPlanOutput) && !isLoadingAI && (
             <div className="text-center py-8 text-muted-foreground">
               <p>Your meal planner is empty for this week.</p>
               {canUseAIPlanner && <p>Try using the "AI Generate Week Plan" button above!</p>}
               {!canUseAIPlanner && <p className="text-xs mt-2">Manual meal adding will be available soon.</p>}
             </div>
           )}
-           {isLoadingAI && Object.keys(weeklyPlan).length === 0 && (
+           {isLoadingAI && (
             <div className="text-center py-8 text-muted-foreground">
               <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-2"/>
               <p>Generating your AI meal plan...</p>
@@ -293,4 +333,6 @@ export default function MealPlannerPage() {
     </div>
   );
 }
+    
+
     
