@@ -52,9 +52,9 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert nutritionist and eco-conscious meal planner.
 Generate a low-carbon meal plan for {{durationDays}} days (provide breakfast, lunch, and dinner for each day).
 The plan should be tailored to the user's profile:
-- Diet Type: {{userProfile.dietType | default:"Omnivore (no specific restriction)"}}
-- Health Goals: {{#if userProfile.healthGoals}} {{#each userProfile.healthGoals}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}} {{else}}General well-being{{/if}}
-- Dietary Restrictions/Allergies: {{userProfile.dietaryRestrictions | default:"None specified"}}
+- Diet Type: {{#if userProfile.dietType}}{{userProfile.dietType}}{{else}}Omnivore (no specific restriction){{/if}}
+- Health Goals: {{#if userProfile.healthGoals}}{{#each userProfile.healthGoals}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}General well-being{{/if}}
+- Dietary Restrictions/Allergies: {{#if userProfile.dietaryRestrictions}}{{userProfile.dietaryRestrictions}}{{else}}None specified{{/if}}
 
 For each meal:
 - Provide a name.
