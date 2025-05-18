@@ -92,3 +92,10 @@ body {
     -webkit-tap-highlight-color: transparent; /* Removes tap highlight on mobile */
   }
 }
+
+@layer utilities {
+  .stroke-primary { stroke: hsl(var(--primary)); }
+  .stroke-warning { stroke: theme('colors.yellow.500'); }
+  .stroke-destructive { stroke: hsl(var(--destructive)); }
+  .stroke-muted-progress-track { stroke: hsl(var(--muted)); opacity: 0.5; }
+}

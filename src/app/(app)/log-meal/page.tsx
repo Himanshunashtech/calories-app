@@ -92,6 +92,8 @@ export default function LogMealPage() {
       reader.readAsDataURL(photoFile);
       if (isCameraMode) setIsCameraMode(false);
       setShowWatermark(false);
+    } else if (!isCameraMode) { // if photoFile becomes null and not in camera mode, clear preview
+        setPhotoPreview(null);
     }
   }, [photoFile, isCameraMode]);
 
@@ -164,14 +166,14 @@ export default function LogMealPage() {
   );
 
   const calorieProgressPercentage = useMemo(() => {
-    if (actualDailyCalorieGoal === 0) return 0; // Avoid division by zero
+    if (actualDailyCalorieGoal === 0) return 0; 
     return Math.min((totalCaloriesToday / actualDailyCalorieGoal) * 100, 100);
    }, [totalCaloriesToday, actualDailyCalorieGoal]);
 
   const getCalorieProgressColorClass = () => {
-    if (calorieProgressPercentage < 75) return 'text-primary';
-    if (calorieProgressPercentage < 100) return 'text-yellow-500'; 
-    return 'text-destructive';
+    if (calorieProgressPercentage < 75) return 'stroke-primary';
+    if (calorieProgressPercentage < 100) return 'stroke-warning'; 
+    return 'stroke-destructive';
   };
 
   const mealCategories: MealCategory[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Fast Food'];
@@ -198,7 +200,7 @@ export default function LogMealPage() {
     const file = event.target.files?.[0];
     if (file) {
       setPhotoFile(file);
-      setPhotoPreview(null); 
+      // setPhotoPreview(null); // photoPreview will be set by useEffect on photoFile change
       setAnalysisResult(null);
       setError(null);
       setIsCameraMode(false);
@@ -224,7 +226,7 @@ export default function LogMealPage() {
         context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const dataUri = canvas.toDataURL('image/jpeg');
         setPhotoPreview(dataUri); 
-        setPhotoFile(null); 
+        setPhotoFile(null); // Clear file if photo captured
         setAnalysisResult(null);
         setError(null);
         setShowWatermark(false);
@@ -322,7 +324,7 @@ export default function LogMealPage() {
       action: <Leaf className="h-5 w-5 text-green-500" />,
     });
     setTodaysMealLogs(getTodaysMealLogs()); 
-    resetForm(false); 
+    resetForm(false); // Keep category selected for potentially logging more items of same type
   };
 
   const resetForm = (resetCategory = true) => {
@@ -345,7 +347,7 @@ export default function LogMealPage() {
       const newMode = !prev;
       if (newMode) {
         setPhotoFile(null);
-        setPhotoPreview(null);
+        setPhotoPreview(null); // Important to clear preview when switching to camera
         setHasCameraPermission(null);
         if (scrollToLogging) loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
       } else {
@@ -400,13 +402,12 @@ export default function LogMealPage() {
           <div className="relative w-48 h-48">
             <svg className="w-full h-full" viewBox="0 0 36 36" transform="rotate(-90 18 18)">
               <path
-                className="text-muted/30"
+                className="stroke-muted-progress-track"
                 d="M18 2.0845
                   a 15.9155 15.9155 0 0 1 0 31.831
                   a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
-                stroke="currentColor"
-                strokeWidth="3.5"
+                strokeWidth="4"
               />
               <path
                 className={cn(getCalorieProgressColorClass())}
@@ -415,8 +416,7 @@ export default function LogMealPage() {
                   a 15.9155 15.9155 0 0 1 0 31.831
                   a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
-                stroke="currentColor"
-                strokeWidth="3.5"
+                strokeWidth="4"
                 strokeLinecap="round"
               />
             </svg>
@@ -477,7 +477,7 @@ export default function LogMealPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-md">
+       <Card className="shadow-md">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2"><Bike className="h-5 w-5 text-primary" />Log Your Activity</CardTitle>
         </CardHeader>
@@ -578,7 +578,7 @@ export default function LogMealPage() {
                     <p className="text-xs leading-5 text-muted-foreground">PNG, JPG, GIF up to 10MB</p>
                   </div>
                 </div>
-                <div className="mt-4 text-center">
+                 <div className="mt-4 text-center">
                   <Button variant="outline" onClick={() => handlePlaceholderFeatureClick('Scan Barcode')} className="text-sm">
                     <ScanBarcode className="mr-2 h-4 w-4" /> Scan Barcode
                   </Button>
