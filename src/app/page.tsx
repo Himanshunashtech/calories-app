@@ -13,14 +13,14 @@ export default function LandingPage() {
       </header>
 
       <main className="flex flex-col items-center">
-        <div className="w-full max-w-md h-auto mb-8 rounded-lg overflow-hidden shadow-xl">
+        <div className="w-full max-w-2xl h-auto mb-8 rounded-lg overflow-hidden shadow-xl"> {/* Increased max-w for a larger hero image */}
           <Image
-            src="https://placehold.co/600x400.png"
-            alt="EcoAI Calorie Tracker App Hero Image"
-            width={600}
-            height={400}
-            className="object-cover"
-            data-ai-hint="healthy food app"
+            src="https://placehold.co/1200x600.png" 
+            alt="EcoAI Calorie Tracker App Hero Image - Healthy Lifestyle"
+            width={1200}
+            height={600}
+            className="object-cover w-full" // Ensure image scales within its container
+            data-ai-hint="healthy lifestyle fitness"
             priority
           />
         </div>
