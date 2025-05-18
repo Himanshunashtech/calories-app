@@ -65,6 +65,7 @@ export interface AppSettings {
 }
 
 export interface OnboardingData {
+  email?: string; // Added email field
   name: string;
   age: string;
   gender: string;
@@ -88,14 +89,17 @@ export interface OnboardingData {
   waterGoal?: number; // For custom water goal
   // Placeholders from detailed list
   macroSplit?: { carbs: number, protein: number, fat: number }; // Placeholder
+  reminderSettings?: ReminderSettings; // Added to onboarding data for initial setup
 }
 
 export interface UserProfile extends OnboardingData {
+  // email is now part of OnboardingData, but kept here for explicit UserProfile structure
   email?: string;
   phone?: string;
   profileImageUri?: string | null;
-  reminderSettings?: ReminderSettings;
+  // reminderSettings are part of OnboardingData
   appSettings?: AppSettings;
+  // selectedPlan?: UserPlan; // This could be part of UserProfile if persisted on a backend
 }
 
 export interface WaterIntakeData {

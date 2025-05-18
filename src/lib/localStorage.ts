@@ -176,7 +176,8 @@ const defaultAppSettings: AppSettings = {
   hideNonCompliantRecipes: false,
 };
 
-const defaultUserProfile: UserProfile = {
+export const defaultUserProfileData: UserProfile = {
+  email: '',
   name: '',
   age: '',
   gender: '',
@@ -197,7 +198,6 @@ const defaultUserProfile: UserProfile = {
   stressLevel: '',
   waterGoal: 8,
   macroSplit: { carbs: 50, protein: 25, fat: 25},
-  email: '',
   phone: '',
   profileImageUri: null,
   reminderSettings: { ...defaultReminderSettings },
@@ -207,16 +207,17 @@ const defaultUserProfile: UserProfile = {
   },
 };
 
-export function getUserProfile(): UserProfile | null {
-  if (typeof window === 'undefined') return null;
+export function getUserProfile(): UserProfile {
+  if (typeof window === 'undefined') return {...defaultUserProfileData};
   try {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
     if (profileJson) {
       const parsedProfile = JSON.parse(profileJson) as Partial<UserProfile>;
       
       const completeProfile: UserProfile = {
-        ...defaultUserProfile,
+        ...defaultUserProfileData,
         ...parsedProfile,
+        healthGoals: Array.isArray(parsedProfile.healthGoals) ? parsedProfile.healthGoals : [],
         dietaryRestrictions: Array.isArray(parsedProfile.dietaryRestrictions) ? parsedProfile.dietaryRestrictions : (parsedProfile.dietaryRestrictions ? [String(parsedProfile.dietaryRestrictions)] : []),
         reminderSettings: {
           ...defaultReminderSettings,
@@ -233,10 +234,10 @@ export function getUserProfile(): UserProfile | null {
       };
       return completeProfile;
     }
-    return null; 
+    return {...defaultUserProfileData}; 
   } catch (error) {
     console.error(`Error reading '${USER_PROFILE_KEY}' from localStorage:`, error);
-    return null; 
+    return {...defaultUserProfileData}; 
   }
 }
 
@@ -248,6 +249,15 @@ export function saveUserProfile(profile: UserProfile): void {
     console.error(`Error writing '${USER_PROFILE_KEY}' to localStorage:`, error);
   }
 }
+
+export function checkEmailExists(email: string): boolean {
+  if (typeof window === 'undefined' || !email) return false;
+  // In a real app, this would be a backend call.
+  // For localStorage, we assume only one profile is stored.
+  const profile = getUserProfile();
+  return profile.email?.toLowerCase() === email.toLowerCase();
+}
+
 
 // Water Intake
 const DEFAULT_DAILY_WATER_GOAL_GLASSES = 8; 
@@ -341,22 +351,13 @@ export function fakeLogin(email: string): void {
   
   let profile = getUserProfile(); 
   
-  if (profile) {
-      profile = { ...profile, email: email };
-  } else {
-      // If no profile exists (e.g., user skipped onboarding and went straight to login)
-      // create a new minimal profile.
-      profile = { 
-          ...defaultUserProfile,
-          email: email, 
-          name: email.split('@')[0] || 'User', // Use part of email as name if no name yet
-      };
-  }
+  profile = { ...profile, email: email }; // Ensure email is set from login
+  
   saveUserProfile(profile); 
 
   try {
       localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-      // Set onboardingComplete to true because, in this flow, login is the final step.
+      // In this new flow, login is the final step after onboarding and plan selection
       setOnboardingComplete(true); 
   } catch (error) {
       console.error(`Error writing auth keys to localStorage:`, error);
@@ -367,21 +368,25 @@ export function fakeLogin(email: string): void {
 export function fakeSignup(email: string, name: string): void {
     if (typeof window === 'undefined') return;
 
-    // Create a new profile or update if one exists for this email (though signup implies new)
+    // Create a new profile or update if one exists for this email
     const newProfile: UserProfile = { 
-      ...(getUserProfile() || defaultUserProfile), // Preserve any partial data if exists
+      ...getUserProfile(), // Preserve any partial data (e.g. if user went back and forth)
       email: email, 
       name: name,
+      // Reset other onboarding specific fields if this is a true "fresh" signup scenario
+      // or rely on the fact that onboarding will fill them.
+      // For this flow, onboarding PRECEDES this effective signup/login
+      // So, the profile from onboarding should be primary.
     };
-    // Ensure other fields that should be fresh for a new signup are defaulted
-    // This depends on how much `getUserProfile` might return if a partial profile exists
-    // For simplicity, we can assume newProfile structure from defaultUserProfile is sufficient
-    // or explicitly reset fields here.
     saveUserProfile(newProfile); 
 
     try {
         localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-        setOnboardingComplete(false); // For direct signup, onboarding is NOT yet complete.
+        // For direct signup (if user somehow gets to a signup form not intended in main flow),
+        // onboarding is NOT yet complete.
+        // However, in the new primary flow, this function isn't used.
+        // fakeLogin is used after onboarding & plan selection.
+        setOnboardingComplete(false); 
     } catch (error) {
         console.error(`Error writing auth keys to localStorage:`, error);
     }
@@ -392,9 +397,10 @@ export function fakeLogout(firebaseAuthInstance?: Auth): void {
     if (typeof window === 'undefined') return;
     try {
         localStorage.removeItem(USER_LOGGED_IN_KEY);
-        // Do NOT remove USER_PROFILE_KEY here, user might log back in
-        // Do NOT remove ONBOARDING_COMPLETE_KEY, user has completed it
-        // Do NOT remove SELECTED_PLAN_KEY, user might log back in
+        // Consider if other user-specific data should be cleared or kept for re-login.
+        // For a full logout, clearing USER_PROFILE_KEY might be desired, but means user loses all data.
+        // localStorage.removeItem(USER_PROFILE_KEY); // Example: if you want to clear profile on logout
+        // localStorage.removeItem(ONBOARDING_COMPLETE_KEY);
         if (firebaseAuthInstance) {
             signOut(firebaseAuthInstance).catch(err => console.error("Firebase sign out error during local fakeLogout:", err));
         }
@@ -437,3 +443,4 @@ export function clearAllUserData(): void {
   });
   console.log("Attempted to clear all user data from localStorage.");
 }
+

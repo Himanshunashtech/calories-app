@@ -3,7 +3,7 @@
 
 import { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,7 @@ export default function LoginPage() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -30,13 +31,20 @@ export default function LoginPage() {
     if (isUserLoggedIn() && isOnboardingComplete()) {
       router.replace('/dashboard');
     }
-  }, [router]);
+    const emailFromQuery = searchParams.get('email');
+    if (emailFromQuery) {
+      setEmail(emailFromQuery);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, searchParams]);
 
   const handleEmailPasswordSubmit = (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     if (email && password) {
+      // In this flow, fakeLogin will associate the email with existing onboarding data
+      // (from localStorage) and mark onboarding as complete.
       fakeLogin(email); 
 
       toast({
@@ -61,47 +69,19 @@ export default function LoginPage() {
       const user = result.user;
 
       if (user && user.email) {
+        // Retrieve any existing onboarding data
         let userProfile = getUserProfile(); 
         
-        if (!userProfile || userProfile.email !== user.email) { 
-            const googleName = user.displayName || user.email.split('@')[0] || 'User';
-            userProfile = {
-                ...(userProfile || {}), 
-                name: googleName,
-                email: user.email,
-                profileImageUri: user.photoURL || null,
-                age: userProfile?.age || '', 
-                gender: userProfile?.gender || '',
-                height: userProfile?.height || '',
-                heightUnit: userProfile?.heightUnit || 'cm',
-                weight: userProfile?.weight || '',
-                weightUnit: userProfile?.weightUnit || 'kg',
-                activityLevel: userProfile?.activityLevel || '',
-                healthGoals: userProfile?.healthGoals || [],
-                alsoTrackSustainability: userProfile?.alsoTrackSustainability || false,
-                exerciseFrequency: userProfile?.exerciseFrequency || '',
-                dietType: userProfile?.dietType || '',
-                dietaryRestrictions: userProfile?.dietaryRestrictions || [],
-                favoriteCuisines: userProfile?.favoriteCuisines || '',
-                dislikedIngredients: userProfile?.dislikedIngredients || '',
-                enableCarbonTracking: userProfile?.enableCarbonTracking || false,
-                sleepHours: userProfile?.sleepHours || '',
-                stressLevel: userProfile?.stressLevel || '',
-                waterGoal: userProfile?.waterGoal || 8,
-                macroSplit: userProfile?.macroSplit || { carbs: 50, protein: 25, fat: 25 },
-                reminderSettings: userProfile?.reminderSettings || { mealRemindersEnabled: true, breakfastTime: '08:00', lunchTime: '12:30', dinnerTime: '18:30', waterReminderEnabled: false, waterReminderInterval: 60, snoozeDuration: 5 },
-                appSettings: userProfile?.appSettings || { darkModeEnabled: false, unitPreferences: { weight: 'kg', height: 'cm', volume: 'ml' }, hideNonCompliantRecipes: false },
-            } as UserProfile;
-        } else { 
-             userProfile = {
-                ...userProfile,
-                name: user.displayName || userProfile.name || 'User',
-                profileImageUri: user.photoURL || userProfile.profileImageUri,
-            };
-        }
+        // Update profile with Google info, preserving onboarding data
+        userProfile = {
+            ...userProfile, // This carries over onboarding data
+            name: user.displayName || userProfile.name || user.email.split('@')[0] || 'User',
+            email: user.email, // This is the key identifier
+            profileImageUri: user.photoURL || userProfile.profileImageUri,
+        };
         
         saveUserProfile(userProfile);
-        fakeLogin(user.email); 
+        fakeLogin(user.email); // This sets loggedIn and onboardingComplete to true
 
         toast({
           title: 'Signed in with Google!',
@@ -156,7 +136,7 @@ export default function LoginPage() {
       <CardHeader className="text-center">
         <LogIn className="mx-auto h-10 w-10 text-primary mb-2" />
         <CardTitle className="text-2xl font-bold text-primary">Set Up Your Account</CardTitle>
-        <CardDescription>Finalize your account with an email and password, or sign in with Google.</CardDescription>
+        <CardDescription>Finalize your account with an email and password, or sign in with Google. Your preferences from onboarding will be linked.</CardDescription>
       </CardHeader>
       <CardContent>
         {isClient && (
@@ -165,7 +145,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
                     type="email"
@@ -202,15 +182,15 @@ export default function LoginPage() {
             </div>
             <Button variant="outline" className="w-full mt-4" onClick={handleGoogleSignIn} disabled={isLoading || isGoogleLoading}>
               <ExternalLink className="mr-2 h-4 w-4"/> 
-              {isGoogleLoading ? 'Signing in...' : 'Sign in with Google'}
+              {isGoogleLoading ? 'Signing in...' : 'Continue with Google'}
             </Button>
           </>
         )}
       </CardContent>
-      <CardFooter className="justify-center text-sm">
-        <p>Want to sign up with email/password separately?&nbsp;</p>
-        <Link href="/signup" passHref>
-          <Button variant="link" className="p-0 h-auto"><UserPlus className="mr-1 h-4 w-4"/>Sign Up Separately</Button>
+      <CardFooter className="flex-col text-center text-sm">
+        <p className="text-muted-foreground">By completing setup, you agree to our Terms & Conditions (placeholder).</p>
+        <Link href="/password-reset" passHref>
+            <Button variant="link" className="p-0 h-auto mt-2 text-xs">Forgot Password?</Button>
         </Link>
       </CardFooter>
     </Card>
