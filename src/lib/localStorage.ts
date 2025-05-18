@@ -1,16 +1,17 @@
 
 import type { MealEntry, UserPlan, AIScanUsage, UserProfile, WaterIntakeData, ReminderSettings, MealCategory, AppSettings, WeightEntry, OnboardingData } from '@/types';
+import type { GenerateEcoMealPlanOutput } from '@/ai/flows/generate-eco-meal-plan'; // Added import
 
 const USER_PROFILE_KEY = 'ecoAi_userProfile';
 const ONBOARDING_COMPLETE_KEY = 'ecoAi_onboardingComplete';
 const USER_LOGGED_IN_KEY = 'ecoAi_userLoggedIn';
 
 const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
-const SELECTED_PLAN_KEY = 'ecoAi_selectedPlan'; // Still useful for persisting plan choice before account finalization
+const SELECTED_PLAN_KEY = 'ecoAi_selectedPlan';
 const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage';
 const WATER_INTAKE_KEY = 'ecoAi_waterIntake';
 const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput';
-const MEAL_PLAN_KEY = 'ecoAi_mealPlan';
+const MEAL_PLAN_KEY = 'ecoAi_mealPlan'; // Key for the manually edited weekly plan
 const WEIGHT_ENTRIES_KEY = 'ecoAi_weightEntries';
 const TEMP_ONBOARDING_DATA_KEY = 'ecoAi_onboardingTempData';
 
@@ -69,8 +70,9 @@ export function getUserProfile(): UserProfile {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
     if (profileJson) {
       const parsedProfile = JSON.parse(profileJson);
-      return { 
-        ...defaultUserProfileData, 
+      // Deep merge for nested objects like reminderSettings and appSettings
+      return {
+        ...defaultUserProfileData,
         ...parsedProfile,
         reminderSettings: {
             ...(defaultUserProfileData.reminderSettings || {}),
@@ -90,7 +92,10 @@ export function getUserProfile(): UserProfile {
         }
       };
     }
-    return { ...defaultUserProfileData }; // Return default if no profile, onboarding will create it
+    // If no profile exists, save and return the default one.
+    // This ensures that subsequent calls to getUserProfile will find a profile.
+    saveUserProfile(defaultUserProfileData);
+    return { ...defaultUserProfileData };
   } catch (error) {
     console.error(`Error reading '${USER_PROFILE_KEY}' from localStorage:`, error);
     return { ...defaultUserProfileData };
@@ -126,6 +131,7 @@ export function setOnboardingComplete(status: boolean): void {
   }
 }
 
+
 // Login Status
 export function isUserLoggedIn(): boolean {
   if (typeof window === 'undefined') return false;
@@ -139,11 +145,10 @@ export function isUserLoggedIn(): boolean {
 
 export function fakeLogin(email: string): UserProfile {
   if (typeof window === 'undefined') return { ...defaultUserProfileData };
-  if (!email || !email.trim()) {
+   if (!email || !email.trim()) {
     console.error("fakeLogin: Attempted to login with an empty email.");
     return { ...defaultUserProfileData }; 
   }
-
   let profile = getUserProfile(); // Get current profile (should have onboarding data)
   
   profile.email = email; // Ensure email is set/updated on the profile
@@ -158,8 +163,6 @@ export function fakeLogin(email: string): UserProfile {
   return profile;
 }
 
-// Signup is now effectively handled by the onboarding flow + login/setup account.
-// This function is a fallback if user hits /signup directly.
 export function fakeSignup(email: string, name: string): UserProfile {
    if (typeof window === 'undefined') {
     return { ...defaultUserProfileData, email, name, onboarding_complete: false };
@@ -185,8 +188,8 @@ export function fakeLogout(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(USER_LOGGED_IN_KEY);
-    localStorage.removeItem(ONBOARDING_COMPLETE_KEY); // User will have to re-onboard if they "log out" in this model
-    // To truly clear for a new user, clearAllUserData() would be better, but this simulates a simple logout.
+    // localStorage.removeItem(ONBOARDING_COMPLETE_KEY); // Do not remove onboarding complete status on logout
+    // We keep the userProfile so their data is still there if they log back in.
   } catch (error) {
     console.error(`Error during logout from localStorage:`, error);
   }
@@ -196,8 +199,6 @@ export function checkEmailExists(email: string): boolean {
   if (typeof window === 'undefined') return false;
   try {
     const profile = getUserProfile(); 
-    // Check if profile has an email and if it matches (case-insensitive)
-    // Only return true if an email exists on the profile AND it matches
     return !!profile.email && profile.email.toLowerCase() === email.toLowerCase();
   } catch (error) {
     console.error(`Error checking email in localStorage:`, error);
@@ -205,7 +206,7 @@ export function checkEmailExists(email: string): boolean {
   }
 }
 
-// Temporary Onboarding Data (still useful for multi-step form persistence before final save)
+// Temporary Onboarding Data
 export function getLocalOnboardingData(): Partial<UserProfile> {
   if (typeof window === 'undefined') return {};
   try {
@@ -301,17 +302,10 @@ export function clearMealLogs(): void {
 export function getSelectedPlan(): UserPlan {
   if (typeof window === 'undefined') return 'free';
   try {
-    // Prioritize plan from TEMP_ONBOARDING_DATA_KEY if user is mid-onboarding flow
-    const tempOnboardingData = getLocalOnboardingData();
-    if (tempOnboardingData.selected_plan) {
-        return tempOnboardingData.selected_plan;
-    }
-    // Then try from full profile
     const profile = getUserProfile();
     if (profile.selected_plan) {
         return profile.selected_plan;
     }
-    // Fallback to old SELECTED_PLAN_KEY if necessary (e.g., for users who selected plan before profile update)
     const planFromOldKey = localStorage.getItem(SELECTED_PLAN_KEY) as UserPlan | null;
     return planFromOldKey || 'free';
   } catch (error) {
@@ -323,16 +317,9 @@ export function getSelectedPlan(): UserPlan {
 export function setSelectedPlan(plan: UserPlan): void {
   if (typeof window === 'undefined') return;
   try {
-    // Save to temp onboarding data, will be merged into full profile later
-    const tempOnboardingData = getLocalOnboardingData();
-    saveLocalOnboardingData({ ...tempOnboardingData, selected_plan: plan });
-    
-    // Also update the main profile immediately if it exists
     const profile = getUserProfile();
     profile.selected_plan = plan;
     saveUserProfile(profile);
-
-    // Still set the old key for compatibility or if subscription page reads it directly
     localStorage.setItem(SELECTED_PLAN_KEY, plan);
   } catch (error) {
     console.error(`Error writing '${SELECTED_PLAN_KEY}' or updating profile in localStorage:`, error);
@@ -412,6 +399,7 @@ export function getWaterIntake(): WaterIntakeData {
 }
 
 export function addWater(amountInUnits: number = 1): WaterIntakeData {
+  if (typeof window === 'undefined') return { current: 0, goal: DEFAULT_DAILY_WATER_GOAL_GLASSES, lastUpdatedDate: new Date().toISOString().split('T')[0] }; // sensible default for SSR/initial
   const intake = getWaterIntake();
   const safeGoal = intake.goal > 0 ? intake.goal : DEFAULT_DAILY_WATER_GOAL_GLASSES;
   intake.current = Math.max(0, Math.min(intake.current + amountInUnits, safeGoal * 3)); 
@@ -425,12 +413,14 @@ export function addWater(amountInUnits: number = 1): WaterIntakeData {
 
 // Utility getters
 export function getTodaysMealLogs(): MealEntry[] {
+  if (typeof window === 'undefined') return [];
   const allLogs = getMealLogs();
   const todayISO = new Date().toISOString().split('T')[0];
   return allLogs.filter(log => log.date && log.date.startsWith(todayISO));
 }
 
 export function getRecentMealLogs(days: number = 7): MealEntry[] {
+  if (typeof window === 'undefined') return [];
   const allLogs = getMealLogs();
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
@@ -494,4 +484,47 @@ export function clearAllUserData(): void {
     }
   });
   console.log("Cleared all app-specific localStorage data.");
+}
+
+
+// For saving and retrieving the AI-generated meal plan output specifically
+export function saveGeneratedMealPlanOutput(output: GenerateEcoMealPlanOutput): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(GENERATED_MEAL_PLAN_OUTPUT_KEY, JSON.stringify(output));
+  } catch (error) {
+    console.error(`Error writing '${GENERATED_MEAL_PLAN_OUTPUT_KEY}' to localStorage:`, error);
+  }
+}
+
+export function getGeneratedMealPlanOutput(): GenerateEcoMealPlanOutput | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const outputJson = localStorage.getItem(GENERATED_MEAL_PLAN_OUTPUT_KEY);
+    return outputJson ? JSON.parse(outputJson) : null;
+  } catch (error) {
+    console.error(`Error reading '${GENERATED_MEAL_PLAN_OUTPUT_KEY}' from localStorage:`, error);
+    return null;
+  }
+}
+
+// For saving and retrieving the user's manually edited weekly meal plan
+export function saveWeeklyMealPlan(plan: any): void { // Consider defining a proper type for 'plan'
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(MEAL_PLAN_KEY, JSON.stringify(plan));
+  } catch (error) {
+    console.error(`Error writing '${MEAL_PLAN_KEY}' to localStorage:`, error);
+  }
+}
+
+export function getWeeklyMealPlan(): any | null { // Consider defining a proper type for the return value
+  if (typeof window === 'undefined') return null;
+  try {
+    const planJson = localStorage.getItem(MEAL_PLAN_KEY);
+    return planJson ? JSON.parse(planJson) : null;
+  } catch (error) {
+    console.error(`Error reading '${MEAL_PLAN_KEY}' from localStorage:`, error);
+    return null;
+  }
 }
