@@ -37,8 +37,8 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select as RadixSelect, SelectContent as RadixSelectContent, SelectItem as RadixSelectItem, SelectTrigger as RadixSelectTrigger, SelectValue as RadixSelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -65,8 +65,8 @@ export default function DashboardPage() {
   const [waterIntake, setWaterIntake] = useState<WaterIntakeData | null>(null);
   const [todaysMealLogs, setTodaysMealLogs] = useState<MealEntry[]>([]);
   const [isClient, setIsClient] = useState(false);
-  const router = useRouter();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [nutrientTrend, setNutrientTrend] = useState<AnalyzeNutrientTrendsOutput | null>(null);
   const [coachRecommendations, setCoachRecommendations] = useState<GetAICoachRecommendationsOutput | null>(null);
@@ -84,13 +84,36 @@ export default function DashboardPage() {
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
 
+  // Effect 1: Set isClient to true once component mounts
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
-  const fetchDashboardData = useCallback(async (currentPlan: UserPlan, profile: UserProfileType | null, meals: MealEntry[]) => {
-    if (!profile) return;
+  // Effect 2: Load initial data from localStorage once client is ready
+  useEffect(() => {
+    if (isClient) {
+      const initialPlan = getSelectedPlan();
+      setPlan(initialPlan);
+      const initialProfile = getUserProfile();
+      setUserProfile(initialProfile);
+      setWeightUnit(initialProfile?.appSettings?.unitPreferences?.weight || 'kg');
+      setWeightEntries(getWeightEntries());
+      setAiScanUsage(getAIScanUsage());
+      setWaterIntake(getWaterIntake());
+      const initialTodaysLogs = getTodaysMealLogs(); // Fetch once
+      setTodaysMealLogs(initialTodaysLogs);
+    }
+  }, [isClient]);
+  
+  const fetchDashboardData = useCallback(async (currentPlan: UserPlan, profile: UserProfileType | null, mealsForAI: MealEntry[]) => {
+    if (!profile || !isClient) {
+      setIsLoadingAI({ trends: false, coach: false, carbon: false, mealPlan: false, mood: false });
+      return;
+    }
 
-    const recentMealsForTrends = getRecentMealLogs(7); 
-    const allMealsForCarbon = getRecentMealLogs(30); 
-    const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood);
+    const recentMealsForTrends = mealsForAI; // Use already fetched logs for today
+    const allMealsForCarbon = getRecentMealLogs(30); // Get logs for carbon from localStorage
+    const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood); // Get logs for mood from localStorage
 
     if (currentPlan === 'pro' || currentPlan === 'ecopro') {
       setIsLoadingAI(prev => ({ ...prev, trends: true, coach: true }));
@@ -101,7 +124,7 @@ export default function DashboardPage() {
         })
         .finally(() => setIsLoadingAI(prev => ({ ...prev, trends: false })));
       
-      getAICoachRecommendations({ userProfile: profile, recentMeals: meals.slice(0, 10) }) 
+      getAICoachRecommendations({ userProfile: profile, recentMeals: mealsForAI.slice(0, 10) }) 
         .then(setCoachRecommendations).catch(err => {
             console.error("Error fetching coach recommendations:", err);
             toast({variant: 'destructive', title:'AI Error', description:'Could not fetch coach recommendations.'});
@@ -136,48 +159,35 @@ export default function DashboardPage() {
          setIsLoadingAI(prev => ({ ...prev, mood: false }));
       }
     }
-  }, [toast]);
+  }, [toast, isClient]); // isClient is a dependency here
 
-
+  // Effect 3: Fetch AI data once client is ready and essential profile/plan/logs data is loaded
   useEffect(() => {
-    setIsClient(true);
-    const currentPlan = getSelectedPlan();
-    setPlan(currentPlan);
-    const profile = getUserProfile();
-    setUserProfile(profile);
-    setWeightUnit(profile?.appSettings?.unitPreferences?.weight || 'kg');
-    setWeightEntries(getWeightEntries());
-
-
-    if (currentPlan === 'free') {
-      setAiScanUsage(getAIScanUsage());
+    if (isClient && userProfile && plan) { 
+      fetchDashboardData(plan, userProfile, todaysMealLogs);
     }
-    setWaterIntake(getWaterIntake()); 
-    const todayLogs = getTodaysMealLogs();
-    setTodaysMealLogs(todayLogs);
+  }, [isClient, userProfile, plan, todaysMealLogs, fetchDashboardData]);
 
-    if (profile) {
-        fetchDashboardData(currentPlan, profile, todayLogs);
-    }
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
 
   const refreshMealLogs = useCallback(() => {
-    const todayLogs = getTodaysMealLogs();
-    setTodaysMealLogs(todayLogs);
-    if(userProfile && plan) fetchDashboardData(plan, userProfile, todayLogs);
-  }, [userProfile, plan, fetchDashboardData]);
+    if (!isClient) return;
+    const refreshedTodayLogs = getTodaysMealLogs();
+    setTodaysMealLogs(refreshedTodayLogs);
+    if(userProfile && plan) {
+        fetchDashboardData(plan, userProfile, refreshedTodayLogs);
+    }
+  }, [userProfile, plan, fetchDashboardData, isClient]);
   
   const actualDailyCalorieGoal = useMemo(() => {
+    if (!isClient || !userProfile) return DAILY_CALORIE_GOAL_BASE;
     let goal = DAILY_CALORIE_GOAL_BASE;
-    if (userProfile?.healthGoals?.includes('Lose Weight')) {
+    if (userProfile.healthGoals?.includes('Lose Weight')) {
       goal *= 0.8;
-    } else if (userProfile?.healthGoals?.includes('Gain Muscle')) {
+    } else if (userProfile.healthGoals?.includes('Gain Muscle')) {
       goal *= 1.2;
     }
     return Math.round(goal);
-  }, [userProfile]);
+  }, [isClient, userProfile]);
 
   const totalCaloriesToday = useMemo(() => 
     todaysMealLogs.reduce((sum, log) => sum + log.calories, 0),
@@ -193,6 +203,7 @@ export default function DashboardPage() {
   };
 
   const handleAddWater = (amount: number) => {
+    if (!isClient) return;
     const newIntake = addWater(amount);
     setWaterIntake(newIntake);
     const volumeUnit = userProfile?.appSettings?.unitPreferences?.volume === 'fl oz' ? 'fl oz' : 'glasses';
@@ -206,7 +217,7 @@ export default function DashboardPage() {
   };
 
   const handleGenerateMealPlan = useCallback(async () => {
-    if (!userProfile) {
+    if (!isClient || !userProfile) {
       toast({ variant: "destructive", title: "Profile needed", description: "Please complete your profile first."});
       return;
     }
@@ -228,9 +239,10 @@ export default function DashboardPage() {
     } finally {
       setIsLoadingAI(prev => ({ ...prev, mealPlan: false }));
     }
-  }, [userProfile, toast]);
+  }, [userProfile, toast, isClient]);
 
   const handleLogMood = useCallback(async (mood: 'happy' | 'neutral' | 'sad') => {
+    if (!isClient) return;
     if (todaysMealLogs.length === 0) {
         toast({title: "Log a Meal First", description: "Log your latest meal before recording mood for best insights.", variant: "default"});
     }
@@ -258,9 +270,10 @@ export default function DashboardPage() {
     } else if (userProfile && (plan === 'pro' || plan === 'ecopro')) { 
         setFoodMoodInsights({ insights: ["Log mood after a few more meals to discover potential patterns with your diet!"], sufficientData: false });
     }
-  }, [todaysMealLogs, userProfile, toast, refreshMealLogs, plan]);
+  }, [todaysMealLogs, userProfile, toast, refreshMealLogs, plan, isClient]);
 
   const handleAddWeightMeasurement = () => {
+    if (!isClient) return;
     if (!newWeight || isNaN(parseFloat(newWeight)) || parseFloat(newWeight) <= 0) {
       toast({ variant: 'destructive', title: 'Invalid Weight', description: 'Please enter a valid positive number for weight.' });
       return;
@@ -273,30 +286,32 @@ export default function DashboardPage() {
   };
   
   const weightTrendChartData = useMemo(() => {
+    if (!isClient) return [];
     return weightEntries.slice(-30).map(entry => ({ 
       date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       weight: entry.weight 
     }));
-  }, [weightEntries]);
+  }, [isClient, weightEntries]);
 
   const dailyCalorieData = useMemo(() => {
+    if (!isClient) return [];
     const data: { [date: string]: number } = {};
-    getRecentMealLogs(30).forEach(log => {
+    // Use todaysMealLogs for today, and getRecentMealLogs for past days to avoid double counting or missing data
+    const recentLogs = getRecentMealLogs(30); 
+    recentLogs.forEach(log => {
       const dateKey = log.date.split('T')[0];
       data[dateKey] = (data[dateKey] || 0) + log.calories;
     });
     return Object.entries(data)
       .map(([date, calories]) => ({ date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), calories }))
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [todaysMealLogs]);
+  }, [isClient, todaysMealLogs]); // todaysMealLogs ensures re-calc when today's logs change.
 
 
   const scansUsedPercentage = useMemo(() => {
-    if (aiScanUsage && aiScanUsage.limit > 0) {
-      return Math.min((aiScanUsage.count / aiScanUsage.limit) * 100, 100);
-    }
-    return 0;
-  }, [aiScanUsage]);
+    if (!isClient || !aiScanUsage || aiScanUsage.limit <= 0) return 0;
+    return Math.min((aiScanUsage.count / aiScanUsage.limit) * 100, 100);
+  }, [isClient, aiScanUsage]);
   
   const nutrientDataPlaceholders = [
     { name: 'Iron', value: 0, actualValue: 0, low: true, icon: Shell, tip: "Analyze meals to see Iron levels.", unit: "mg" },
@@ -306,7 +321,7 @@ export default function DashboardPage() {
   ];
 
   const todayMicronutrients = useMemo(() => {
-    if (plan === 'free' || !todaysMealLogs || todaysMealLogs.length === 0) return nutrientDataPlaceholders;
+    if (!isClient || plan === 'free' || !todaysMealLogs || todaysMealLogs.length === 0) return nutrientDataPlaceholders;
 
     const aggregatedNutrients: { [key: string]: { totalValue: number, unit: string, entries: number, rdaSum?: number } } = {};
 
@@ -346,10 +361,11 @@ export default function DashboardPage() {
     
     if (calculatedNutrients.length === 0) return nutrientDataPlaceholders;
     return calculatedNutrients.slice(0,4); 
-  }, [todaysMealLogs, plan]);
+  }, [isClient, todaysMealLogs, plan, nutrientDataPlaceholders]); // Added nutrientDataPlaceholders to dependency array
 
   const mockEcoScore = useMemo(() => {
-    if (todaysMealLogs.length === 0 || !userProfile?.enableCarbonTracking) return 'N/A';
+    if (!isClient || !userProfile) return 'N/A';
+    if (todaysMealLogs.length === 0 || !userProfile.enableCarbonTracking) return 'N/A';
     const mealsWithCF = todaysMealLogs.filter(m => m.carbonFootprintEstimate !== undefined);
     if (mealsWithCF.length === 0) return 'N/A';
     const avgCarbon = mealsWithCF.reduce((sum, meal) => sum + (meal.carbonFootprintEstimate!), 0) / mealsWithCF.length;
@@ -359,7 +375,14 @@ export default function DashboardPage() {
     if (avgCarbon < 2.5) return 'B';
     if (avgCarbon < 3.5) return 'C';
     return 'D';
-  }, [todaysMealLogs, userProfile]);
+  }, [isClient, todaysMealLogs, userProfile]);
+
+  const handlePlaceholderFeatureClick = useCallback((featureName: string) => {
+    toast({
+      title: `${featureName} Coming Soon!`,
+      description: `This feature will be available in a future update.`,
+    });
+  }, [toast]);
 
   if (!isClient) {
     return (
@@ -371,13 +394,6 @@ export default function DashboardPage() {
 
   const reminderSettings = userProfile?.reminderSettings;
   const waterVolumeUnit = userProfile?.appSettings?.unitPreferences?.volume === 'fl oz' ? 'fl oz' : 'glasses';
-
-  const handlePlaceholderFeatureClick = useCallback((featureName: string) => {
-    toast({
-      title: `${featureName} Coming Soon!`,
-      description: `This feature will be available in a future update.`,
-    });
-  }, [toast]);
 
 
   return (
@@ -475,7 +491,7 @@ export default function DashboardPage() {
         <Card className="shadow-md">
           <CardHeader><CardTitle className="flex items-center gap-2"><Brain className="text-primary"/>Nutrient Breakdown</CardTitle><CardDescription>Micronutrient insights from today's meals.</CardDescription></CardHeader>
           <CardContent>
-            {isLoadingAI.trends ? <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/> :
+            {isLoadingAI.trends ? <div className="flex justify-center items-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div> :
             <>
             <div className="flex flex-wrap gap-3 mb-4">
               {todayMicronutrients.map(nutrient => (
@@ -499,7 +515,7 @@ export default function DashboardPage() {
           <Card className="shadow-md border-l-4 border-green-500"><CardHeader><CardTitle className="flex items-center gap-2 text-green-700"><Brain className="h-6 w-6"/>Advanced AI Insights</CardTitle></CardHeader><CardContent><ul className="list-disc list-inside space-y-1 text-muted-foreground"><li>Unlimited AI Meal Scans.</li><li>Detailed macro &amp; micro-nutrient breakdowns.</li><li>Meal-by-meal carbon footprint tracking (view in Meal Timeline - enable in Profile).</li></ul>{(plan === 'pro' || plan === 'ecopro') && <Badge variant="default" className="mt-3"><CheckCircle className="mr-1 h-4 w-4"/> Ad-Free Experience</Badge>}</CardContent></Card>
           <Card className="shadow-md border-l-4 border-blue-500"><CardHeader><CardTitle className="flex items-center gap-2 text-blue-700"><MessageSquareHeart className="h-6 w-6"/>Personalized AI Coach</CardTitle></CardHeader>
             <CardContent>
-              {isLoadingAI.coach ? <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/> :
+              {isLoadingAI.coach ? <div className="flex justify-center items-center p-4"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/></div> :
               coachRecommendations ? (
                 <>
                   <p className="text-muted-foreground font-semibold">Goal Adjustments:</p>
@@ -589,7 +605,7 @@ export default function DashboardPage() {
                   className="w-full" 
                   variant="outline" 
                   onClick={() => setIsDetailedProgressReportModalOpen(true)}
-                  disabled={weightEntries.length < 2 && dailyCalorieData.length === 0}
+                  disabled={weightEntries.length < 2 && dailyCalorieData.length === 0 && !isClient}
                 >
                   Detailed Progress Report
                 </Button>
@@ -603,7 +619,7 @@ export default function DashboardPage() {
           <h2 className="text-2xl font-semibold text-primary flex items-center gap-2"><Trees /> EcoPro Sustainability Hub</h2>
           <Card className="shadow-md border-l-4 border-teal-500"><CardHeader><CardTitle className="flex items-center gap-2 text-teal-700"><BarChartBig className="h-6 w-6" />Carbon Footprint Analytics</CardTitle></CardHeader>
             <CardContent>
-              {isLoadingAI.carbon ? <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/> :
+              {isLoadingAI.carbon ? <div className="flex justify-center items-center p-4"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/></div> :
               (userProfile?.enableCarbonTracking && carbonComparison) ? (
                 <>
                   <p className="text-muted-foreground">{carbonComparison.comparisonText}</p>
@@ -617,7 +633,7 @@ export default function DashboardPage() {
           
           <Card className="shadow-md border-l-4 border-emerald-500"><CardHeader><CardTitle className="flex items-center gap-2 text-emerald-700"><Leaf className="h-6 w-6"/>AI-Generated Meal Plans</CardTitle></CardHeader>
             <CardContent>
-              {isLoadingAI.mealPlan ? <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/> :
+              {isLoadingAI.mealPlan ? <div className="flex justify-center items-center p-4"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/></div> :
               ecoMealPlan ? (
                 <div className="space-y-3">
                   <h4 className="font-semibold text-lg">{ecoMealPlan.planTitle || "Your Eco Meal Plan"}</h4>
@@ -651,7 +667,7 @@ export default function DashboardPage() {
                 <Button variant="ghost" size="icon" className="h-14 w-14 hover:bg-yellow-100 rounded-full" aria-label="Neutral" onClick={() => handleLogMood('neutral')}><Meh className="h-8 w-8 text-yellow-500" /></Button>
                 <Button variant="ghost" size="icon" className="h-14 w-14 hover:bg-red-100 rounded-full" aria-label="Sad" onClick={() => handleLogMood('sad')}><Frown className="h-8 w-8 text-red-500" /></Button>
               </div>
-              {isLoadingAI.mood ? <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/> :
+              {isLoadingAI.mood ? <div className="flex justify-center items-center p-4"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/></div> :
               foodMoodInsights && foodMoodInsights.insights.length > 0 && (
                 <div className="mt-3 p-3 bg-muted/50 rounded-md">
                   <p className="text-sm font-semibold text-primary">AI Insights:</p>
@@ -757,3 +773,5 @@ export default function DashboardPage() {
   );
 }
 
+
+    
