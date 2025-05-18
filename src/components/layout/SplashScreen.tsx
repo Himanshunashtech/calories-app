@@ -1,5 +1,5 @@
 
-'use client';
+"use client";
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 interface SplashScreenProps {
   onFinished: () => void;
-  isQuickFallback?: boolean; // Optional prop to indicate if this is just a quick fallback
+  isQuickFallback?: boolean; 
 }
 
 const motivationalQuotes = [
@@ -28,7 +28,8 @@ export function SplashScreen({ onFinished, isQuickFallback = false }: SplashScre
 
   useEffect(() => {
     if (isQuickFallback) {
-      // For Suspense fallback, we don't want to run the timer or complex logic
+      // For Suspense fallback or very initial render, we don't run the timer or complex logic.
+      // onFinished should not be called by the quick fallback.
       return;
     }
 
@@ -38,18 +39,18 @@ export function SplashScreen({ onFinished, isQuickFallback = false }: SplashScre
       setProgress((prevProgress) => {
         if (prevProgress >= 100) {
           clearInterval(timer);
-          onFinished();
+          onFinished(); // Call the passed onFinished callback
           return 100;
         }
         return prevProgress + 20; // Speed up progress for demo
       });
     }, 400); // Update progress every 0.4 seconds
 
-    return () => clearInterval(timer);
-  }, [onFinished, isQuickFallback]);
+    return () => clearInterval(timer); // Cleanup interval on component unmount
+  }, [onFinished, isQuickFallback]); // isQuickFallback ensures effect re-runs if prop changes
 
   if (isQuickFallback) {
-    // Render a very minimal loader if this is just for Suspense
+    // Render a very minimal loader if this is just for Suspense or pre-client mount
     return (
       <div className="splash-screen-fallback">
         <Leaf className="h-16 w-16 text-primary animate-ping" />
@@ -61,7 +62,7 @@ export function SplashScreen({ onFinished, isQuickFallback = false }: SplashScre
     <div className="splash-screen">
       <div className="splash-image-container">
         <Image
-          src="https://placehold.co/1200x800.png?text=EcoAI+Splash" // Replace with your actual splash image
+          src="https://placehold.co/1200x800.png?text=EcoAI+Splash"
           alt="EcoAI Calorie Tracker Loading"
           layout="fill"
           objectFit="cover"

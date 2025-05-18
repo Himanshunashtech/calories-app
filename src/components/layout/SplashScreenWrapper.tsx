@@ -1,33 +1,41 @@
 
-"use client"; // Must be the very first line
+"use client";
 
 import React, { useState, useEffect } from 'react';
 import { SplashScreen } from '@/components/layout/SplashScreen';
 
 export function SplashScreenWrapper({ children }: { children: React.ReactNode }) {
   const [showSplash, setShowSplash] = useState(true);
-  const [isMounted, setIsMounted] = useState(false);
+  const [isClientRendered, setIsClientRendered] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
-    // Simulate loading or initial setup
-    const timer = setTimeout(() => {
-      if (isMounted) { // Check if still mounted
+    // This effect runs once after the component mounts on the client
+    setIsClientRendered(true);
+  }, []);
+
+  const handleSplashFinished = () => {
+    // Defer the state update to ensure it happens after the current render/effect cycle
+    setTimeout(() => {
+      // Check if the component is still considered "client rendered" / mounted
+      // This is a good check though in this specific flow, 
+      // if handleSplashFinished is called, isClientRendered should be true.
+      if (isClientRendered) { 
         setShowSplash(false);
       }
-    }, 2500); // Duration of the splash screen
+    }, 0);
+  };
 
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [isMounted]);
+  if (!isClientRendered) {
+    // During SSR or initial client render before useEffect runs,
+    // render nothing or a very minimal static placeholder.
+    // The Suspense fallback in RootLayout will provide the initial visual.
+    return null; 
+  }
 
-
-  if (!isMounted || showSplash) {
-    // Pass onFinished to the actual SplashScreen component
-    // It will call this when its internal logic (e.g., animation) completes.
-    // For this wrapper, we primarily use a timeout.
-    return <SplashScreen onFinished={() => setShowSplash(false)} />;
+  if (showSplash) {
+    // Pass the callback to SplashScreen.
+    // Also ensure isQuickFallback is false so the full splash screen animation runs.
+    return <SplashScreen onFinished={handleSplashFinished} isQuickFallback={false} />;
   }
 
   return <>{children}</>;
