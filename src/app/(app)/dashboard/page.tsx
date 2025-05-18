@@ -19,9 +19,9 @@ import {
   type MealEntry,
   type UserProfile as UserProfileType,
   type ReminderSettings,
-  addWeightEntry, // New import
-  getWeightEntries, // New import
-  type WeightEntry, // New import
+  addWeightEntry,
+  getWeightEntries,
+  type WeightEntry,
 } from '@/lib/localStorage';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -40,6 +40,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select as RadixSelect, SelectContent as RadixSelectContent, SelectItem as RadixSelectItem, SelectTrigger as RadixSelectTrigger, SelectValue as RadixSelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -77,6 +79,7 @@ export default function DashboardPage() {
   });
 
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
+  const [isDetailedProgressReportModalOpen, setIsDetailedProgressReportModalOpen] = useState(false);
   const [newWeight, setNewWeight] = useState('');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
@@ -213,7 +216,7 @@ export default function DashboardPage() {
         userProfile: {
           dietType: userProfile.dietType,
           healthGoals: userProfile.healthGoals,
-          dietaryRestrictions: Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietaryRestrictions,
+          dietaryRestrictions: Array.isArray(userProfile.dietaryRestrictions) ? userProfile.dietaryRestrictions.join(', ') : userProfile.dietaryRestrictionsOther,
         },
         durationDays: 3,
       });
@@ -270,12 +273,22 @@ export default function DashboardPage() {
   };
   
   const weightTrendChartData = useMemo(() => {
-    return weightEntries.slice(-30).map(entry => ({ // show last 30 entries
+    return weightEntries.slice(-30).map(entry => ({ 
       date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      // For simplicity, chart shows numbers as is. Ideally, convert all to a consistent unit for charting if mixing kg/lbs.
       weight: entry.weight 
     }));
   }, [weightEntries]);
+
+  const dailyCalorieData = useMemo(() => {
+    const data: { [date: string]: number } = {};
+    getRecentMealLogs(30).forEach(log => {
+      const dateKey = log.date.split('T')[0];
+      data[dateKey] = (data[dateKey] || 0) + log.calories;
+    });
+    return Object.entries(data)
+      .map(([date, calories]) => ({ date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), calories }))
+      .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [todaysMealLogs]);
 
 
   const scansUsedPercentage = useMemo(() => {
@@ -359,12 +372,12 @@ export default function DashboardPage() {
   const reminderSettings = userProfile?.reminderSettings;
   const waterVolumeUnit = userProfile?.appSettings?.unitPreferences?.volume === 'fl oz' ? 'fl oz' : 'glasses';
 
-  const handlePlaceholderFeatureClick = (featureName: string) => {
+  const handlePlaceholderFeatureClick = useCallback((featureName: string) => {
     toast({
       title: `${featureName} Coming Soon!`,
       description: `This feature will be available in a future update.`,
     });
-  };
+  }, [toast]);
 
 
   return (
@@ -572,7 +585,14 @@ export default function DashboardPage() {
                 </Tabs>
             </CardContent>
             <CardFooter>
-                <Button className="w-full" variant="outline" onClick={() => handlePlaceholderFeatureClick('Detailed Progress Report')}>Detailed Progress Report</Button>
+                <Button 
+                  className="w-full" 
+                  variant="outline" 
+                  onClick={() => setIsDetailedProgressReportModalOpen(true)}
+                  disabled={weightEntries.length < 2 && dailyCalorieData.length === 0}
+                >
+                  Detailed Progress Report
+                </Button>
             </CardFooter>
           </Card>
         </section>
@@ -653,6 +673,87 @@ export default function DashboardPage() {
       )}
       
       {!isClient && plan === 'free' && !aiScanUsage && (<Card><CardHeader><CardTitle className="flex items-center gap-2"><Info className="h-5 w-5"/>Loading Usage...</CardTitle></CardHeader><CardContent><div className="h-10 bg-muted animate-pulse rounded-md"></div></CardContent></Card>)}
+      
+      {/* Detailed Progress Report Dialog */}
+      <Dialog open={isDetailedProgressReportModalOpen} onOpenChange={setIsDetailedProgressReportModalOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Detailed Progress Report</DialogTitle>
+            <DialogDescription>Your weight trends and calorie intake over time.</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="flex-grow">
+            <div className="space-y-6 p-1">
+              <section>
+                <h3 className="text-lg font-semibold mb-2">Weight Trend</h3>
+                {weightTrendChartData.length > 1 ? (
+                  <div className="h-64 sm:h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={weightTrendChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
+                        <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} domain={['auto', 'auto']} />
+                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))' }} />
+                        <Legend />
+                        <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} name={`Weight (${weightUnit})`} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">Log at least two weight measurements to see your trend.</p>
+                )}
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold mb-2">Recent Weight Entries</h3>
+                {weightEntries.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Weight</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {weightEntries.slice(-10).reverse().map((entry) => (
+                        <TableRow key={entry.id}>
+                          <TableCell>{new Date(entry.date).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">{entry.weight.toFixed(1)} {entry.unit}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">No weight entries logged yet.</p>
+                )}
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold mb-2">Recent Daily Calories</h3>
+                {dailyCalorieData.length > 0 ? (
+                   <div className="h-64 sm:h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={dailyCalorieData.slice(-14)} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
+                        <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} domain={['auto', 'auto']}/>
+                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))' }} />
+                        <Legend />
+                        <Line type="monotone" dataKey="calories" name="Calories" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">No calorie data logged yet.</p>
+                )}
+              </section>
+            </div>
+          </ScrollArea>
+          <DialogFooter className="mt-auto pt-4">
+            <Button onClick={() => setIsDetailedProgressReportModalOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
