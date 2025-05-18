@@ -26,7 +26,7 @@ import {
 import type { FoodAnalysisResult, DetailedNutrients, MealCategory, MealEntry } from '@/types'; 
 import { 
   UploadCloud, Sparkles, Utensils, Loader2, Leaf, AlertCircle, Info, Camera as CameraIcon, RefreshCcw, 
-  ListPlus, ScanBarcode, X, CalendarClock, Zap, Activity, Clock, UserCircle, Apple, Drumstick, Wheat, MinusCircle, PlusCircle, Pizza, EggFried, Salad, GlassWater
+  ListPlus, ScanBarcode, X, CalendarClock, Zap, Activity, Clock, UserCircle, Apple, Drumstick, Wheat, MinusCircle, PlusCircle, Pizza, EggFried, Salad, GlassWater, Bike
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
@@ -160,17 +160,18 @@ export default function LogMealPageEnhanced() {
   const totalCaloriesToday = useMemo(() => {
     if (!isClient) return 0;
     return todaysMealLogs.reduce((sum, log) => sum + log.calories, 0);
-  }, [isClient, todaysMealLogs]);
+  }, [isClient, todaysMealLogs]
+  );
 
   const calorieProgressPercentage = useMemo(() => 
     Math.min((totalCaloriesToday / actualDailyCalorieGoal) * 100, 100),
     [totalCaloriesToday, actualDailyCalorieGoal]
   );
 
-  const getCalorieProgressColor = () => {
-    if (calorieProgressPercentage < 75) return 'bg-primary'; // Green
-    if (calorieProgressPercentage < 100) return 'bg-yellow-500'; // Yellow
-    return 'bg-destructive'; // Red
+  const getCalorieProgressColorClass = () => {
+    if (calorieProgressPercentage < 75) return 'text-primary';
+    if (calorieProgressPercentage < 100) return 'text-yellow-500';
+    return 'text-destructive';
   };
 
   const caloriesByMealType = useMemo(() => {
@@ -406,10 +407,7 @@ export default function LogMealPageEnhanced() {
                 strokeWidth="3"
               />
               <path
-                className={cn(
-                  calorieProgressPercentage < 75 ? 'text-primary' : 
-                  calorieProgressPercentage < 100 ? 'text-yellow-500' : 'text-destructive'
-                )}
+                className={cn(getCalorieProgressColorClass())}
                 strokeDasharray={`${calorieProgressPercentage}, 100`}
                 d="M18 2.0845
                   a 15.9155 15.9155 0 0 1 0 31.831
@@ -439,7 +437,7 @@ export default function LogMealPageEnhanced() {
               return (
                 <Card 
                   key={cat} 
-                  className="min-w-[130px] max-w-[150px] shrink-0 hover:shadow-md transition-shadow cursor-pointer border-2 border-transparent hover:border-primary/50"
+                  className="min-w-[130px] max-w-[150px] shrink-0 hover:shadow-md transition-shadow cursor-pointer border-2 border-transparent hover:border-primary/50 relative group"
                   onClick={() => handleMealCardClick(cat)}
                 >
                   <CardContent className="p-3 text-center space-y-1">
@@ -447,6 +445,15 @@ export default function LogMealPageEnhanced() {
                     <p className="font-medium text-sm">{cat}</p>
                     <p className="text-xs text-muted-foreground">{caloriesByMealType[cat].toFixed(0)} kcal</p>
                   </CardContent>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity bg-card/70 hover:bg-muted/80"
+                    onClick={(e) => { e.stopPropagation(); handleMealCardClick(cat); }}
+                    aria-label={`Add to ${cat}`}
+                  >
+                    <PlusCircle className="h-4 w-4 text-primary"/>
+                  </Button>
                 </Card>
               );
             })}
@@ -468,6 +475,23 @@ export default function LogMealPageEnhanced() {
             Start 16:8 Fast
           </Button>
         </CardContent>
+      </Card>
+
+      {/* Exercise Card */}
+      <Card className="shadow-md">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2"><Bike className="h-5 w-5 text-primary"/>Log Your Activity</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground text-center">Track your workouts, steps, and active minutes to see how they contribute to your daily energy balance.
+          <br/> Placeholder for total active calories: 250 kcal.
+          </p>
+        </CardContent>
+        <CardFooter>
+            <Button variant="outline" className="w-full" onClick={() => handlePlaceholderFeatureClick('Add Exercise')}>
+              <PlusCircle className="mr-2 h-4 w-4"/> Add Exercise
+            </Button>
+        </CardFooter>
       </Card>
 
       {/* Logging Section (Original UI) */}
@@ -555,6 +579,11 @@ export default function LogMealPageEnhanced() {
                     </div>
                     <p className="text-xs leading-5 text-muted-foreground">PNG, JPG, GIF up to 10MB</p>
                   </div>
+                </div>
+                <div className="mt-4 text-center">
+                    <Button variant="outline" onClick={() => handlePlaceholderFeatureClick('Scan Barcode')} className="text-sm">
+                        <ScanBarcode className="mr-2 h-4 w-4"/> Scan Barcode
+                    </Button>
                 </div>
               </div>
             )}
@@ -663,3 +692,4 @@ export default function LogMealPageEnhanced() {
     </div>
   );
 }
+
