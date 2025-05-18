@@ -22,6 +22,7 @@ import {
   addWeightEntry,
   getWeightEntries,
   type WeightEntry,
+  getMealLogs, // Import getMealLogs
 } from '@/lib/localStorage';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -32,7 +33,7 @@ import { useRouter } from 'next/navigation';
 import { 
   BarChart3, Camera, Leaf, Utensils, ShieldCheck, Zap, Brain, Trees, BarChartBig, Users, MessageSquareHeart, 
   CheckCircle, AlertTriangle, Info, Droplet, Footprints, TrendingUp, PlusCircle, Target as TargetIcon, 
-  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3, Settings, Dumbbell, Cog, Search, Filter, CalendarDays, Activity, Bike, Weight as WeightIcon, Download
+  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3, Cog, Search, Filter, CalendarDays, Activity, Bike, Weight as WeightIcon, Download, PieChartIcon
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,12 +42,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select as RadixSelect, SelectContent as RadixSelectContent, SelectItem as RadixSelectItem, SelectTrigger as RadixSelectTrigger, SelectValue as RadixSelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart as RechartsBarChart, Bar, PieChart as RechartsPieChart, Pie, Cell } from 'recharts'; // Added RechartsBarChart, Bar, PieChart, Pie, Cell
 
 
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-
 
 // AI Flow Imports
 import { analyzeNutrientTrends, type AnalyzeNutrientTrendsOutput } from '@/ai/flows/analyze-nutrient-trends';
@@ -64,6 +64,7 @@ export default function DashboardPage() {
   const [aiScanUsage, setAiScanUsage] = useState<AIScanUsageType | null>(null);
   const [waterIntake, setWaterIntake] = useState<WaterIntakeData | null>(null);
   const [todaysMealLogs, setTodaysMealLogs] = useState<MealEntry[]>([]);
+  const [allMealLogs, setAllMealLogs] = useState<MealEntry[]>([]); // For full carbon analytics
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
@@ -100,20 +101,21 @@ export default function DashboardPage() {
       setWeightEntries(getWeightEntries());
       setAiScanUsage(getAIScanUsage());
       setWaterIntake(getWaterIntake());
-      const initialTodaysLogs = getTodaysMealLogs(); // Fetch once
+      const initialTodaysLogs = getTodaysMealLogs();
       setTodaysMealLogs(initialTodaysLogs);
+      setAllMealLogs(getMealLogs()); // Load all logs for carbon analytics
     }
   }, [isClient]);
   
   const fetchDashboardData = useCallback(async (currentPlan: UserPlan, profile: UserProfileType | null, mealsForAI: MealEntry[]) => {
-    if (!profile || !isClient) {
+    if (!isClient || !profile) {
       setIsLoadingAI({ trends: false, coach: false, carbon: false, mealPlan: false, mood: false });
       return;
     }
 
-    const recentMealsForTrends = mealsForAI; // Use already fetched logs for today
-    const allMealsForCarbon = getRecentMealLogs(30); // Get logs for carbon from localStorage
-    const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood); // Get logs for mood from localStorage
+    const recentMealsForTrends = mealsForAI; 
+    const allMealsForCarbon = getRecentMealLogs(30); 
+    const mealsWithMood = getRecentMealLogs(14).filter(m => m.mood);
 
     if (currentPlan === 'pro' || currentPlan === 'ecopro') {
       setIsLoadingAI(prev => ({ ...prev, trends: true, coach: true }));
@@ -159,7 +161,7 @@ export default function DashboardPage() {
          setIsLoadingAI(prev => ({ ...prev, mood: false }));
       }
     }
-  }, [toast, isClient]); // isClient is a dependency here
+  }, [isClient, toast]);
 
   // Effect 3: Fetch AI data once client is ready and essential profile/plan/logs data is loaded
   useEffect(() => {
@@ -173,10 +175,11 @@ export default function DashboardPage() {
     if (!isClient) return;
     const refreshedTodayLogs = getTodaysMealLogs();
     setTodaysMealLogs(refreshedTodayLogs);
+    setAllMealLogs(getMealLogs()); // Refresh all logs
     if(userProfile && plan) {
         fetchDashboardData(plan, userProfile, refreshedTodayLogs);
     }
-  }, [userProfile, plan, fetchDashboardData, isClient]);
+  }, [isClient, userProfile, plan, fetchDashboardData]);
   
   const actualDailyCalorieGoal = useMemo(() => {
     if (!isClient || !userProfile) return DAILY_CALORIE_GOAL_BASE;
@@ -189,9 +192,10 @@ export default function DashboardPage() {
     return Math.round(goal);
   }, [isClient, userProfile]);
 
-  const totalCaloriesToday = useMemo(() => 
-    todaysMealLogs.reduce((sum, log) => sum + log.calories, 0),
-    [todaysMealLogs]
+  const totalCaloriesToday = useMemo(() => {
+    if (!isClient) return 0;
+    return todaysMealLogs.reduce((sum, log) => sum + log.calories, 0);
+  }, [isClient, todaysMealLogs]
   );
 
   const calorieProgressPercentage = Math.min((totalCaloriesToday / actualDailyCalorieGoal) * 100, 100);
@@ -202,7 +206,7 @@ export default function DashboardPage() {
     return 'bg-destructive';
   };
 
-  const handleAddWater = (amount: number) => {
+  const handleAddWater = useCallback((amount: number) => {
     if (!isClient) return;
     const newIntake = addWater(amount);
     setWaterIntake(newIntake);
@@ -214,7 +218,7 @@ export default function DashboardPage() {
       title: `+${addedAmountDisplay} ${unitName} Water Logged`,
       description: `Current: ${newIntake.current}/${newIntake.goal} ${volumeUnit}. Keep it up!`,
     });
-  };
+  }, [isClient, userProfile, toast]);
 
   const handleGenerateMealPlan = useCallback(async () => {
     if (!isClient || !userProfile) {
@@ -239,7 +243,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoadingAI(prev => ({ ...prev, mealPlan: false }));
     }
-  }, [userProfile, toast, isClient]);
+  }, [isClient, userProfile, toast]);
 
   const handleLogMood = useCallback(async (mood: 'happy' | 'neutral' | 'sad') => {
     if (!isClient) return;
@@ -270,7 +274,7 @@ export default function DashboardPage() {
     } else if (userProfile && (plan === 'pro' || plan === 'ecopro')) { 
         setFoodMoodInsights({ insights: ["Log mood after a few more meals to discover potential patterns with your diet!"], sufficientData: false });
     }
-  }, [todaysMealLogs, userProfile, toast, refreshMealLogs, plan, isClient]);
+  }, [isClient, todaysMealLogs, userProfile, toast, refreshMealLogs, plan]);
 
   const handleAddWeightMeasurement = () => {
     if (!isClient) return;
@@ -296,7 +300,6 @@ export default function DashboardPage() {
   const dailyCalorieData = useMemo(() => {
     if (!isClient) return [];
     const data: { [date: string]: number } = {};
-    // Use todaysMealLogs for today, and getRecentMealLogs for past days to avoid double counting or missing data
     const recentLogs = getRecentMealLogs(30); 
     recentLogs.forEach(log => {
       const dateKey = log.date.split('T')[0];
@@ -305,7 +308,7 @@ export default function DashboardPage() {
     return Object.entries(data)
       .map(([date, calories]) => ({ date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), calories }))
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [isClient, todaysMealLogs]); // todaysMealLogs ensures re-calc when today's logs change.
+  }, [isClient, todaysMealLogs]);
 
 
   const scansUsedPercentage = useMemo(() => {
@@ -313,12 +316,12 @@ export default function DashboardPage() {
     return Math.min((aiScanUsage.count / aiScanUsage.limit) * 100, 100);
   }, [isClient, aiScanUsage]);
   
-  const nutrientDataPlaceholders = [
+  const nutrientDataPlaceholders = useMemo(() => [
     { name: 'Iron', value: 0, actualValue: 0, low: true, icon: Shell, tip: "Analyze meals to see Iron levels.", unit: "mg" },
     { name: 'Vitamin D', value: 0, actualValue: 0, low: true, icon: Fish, tip: "Analyze meals for Vitamin D insights.", unit: "mcg" },
     { name: 'Fiber', value: 0, actualValue: 0, low: true, icon: Grape, tip: "Track fiber through meal analysis.", unit: "g" },
     { name: 'Calcium', value: 0, actualValue: 0, low: true, icon: Maximize2, tip: "Calcium data appears after meal analysis.", unit: "mg" },
-  ];
+  ],[]);
 
   const todayMicronutrients = useMemo(() => {
     if (!isClient || plan === 'free' || !todaysMealLogs || todaysMealLogs.length === 0) return nutrientDataPlaceholders;
@@ -361,7 +364,7 @@ export default function DashboardPage() {
     
     if (calculatedNutrients.length === 0) return nutrientDataPlaceholders;
     return calculatedNutrients.slice(0,4); 
-  }, [isClient, todaysMealLogs, plan, nutrientDataPlaceholders]); // Added nutrientDataPlaceholders to dependency array
+  }, [isClient, todaysMealLogs, plan, nutrientDataPlaceholders]); 
 
   const mockEcoScore = useMemo(() => {
     if (!isClient || !userProfile) return 'N/A';
@@ -378,11 +381,53 @@ export default function DashboardPage() {
   }, [isClient, todaysMealLogs, userProfile]);
 
   const handlePlaceholderFeatureClick = useCallback((featureName: string) => {
+    if (!isClient) return;
     toast({
       title: `${featureName} Coming Soon!`,
       description: `This feature will be available in a future update.`,
     });
-  }, [toast]);
+  }, [isClient, toast]);
+
+  const dailyCarbonFootprintData = useMemo(() => {
+    if (!isClient || plan !== 'ecopro' || !userProfile?.enableCarbonTracking) return [];
+    const dailyData: { [date: string]: number } = {};
+    // Use allMealLogs for this calculation, not just recent ones for AI
+    allMealLogs.forEach(log => {
+      if (log.carbonFootprintEstimate !== undefined) {
+        const dateKey = log.date.split('T')[0];
+        dailyData[dateKey] = (dailyData[dateKey] || 0) + log.carbonFootprintEstimate;
+      }
+    });
+    
+    const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    const last7DaysCarbonData = sortedDates.slice(-7).map(date => ({
+      date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      carbon: parseFloat(dailyData[date].toFixed(2)), // kg CO2e
+    }));
+    return last7DaysCarbonData;
+  }, [isClient, plan, userProfile, allMealLogs]);
+
+  const averageCarbonFootprints = useMemo(() => {
+    if (!isClient || plan !== 'ecopro' || !userProfile?.enableCarbonTracking || allMealLogs.length === 0) {
+      return { daily: 0, weekly: 0, count: 0 };
+    }
+    
+    const mealsWithCF = allMealLogs.filter(log => log.carbonFootprintEstimate !== undefined);
+    if (mealsWithCF.length === 0) return { daily: 0, weekly: 0, count: 0 };
+
+    const totalCF = mealsWithCF.reduce((sum, log) => sum + log.carbonFootprintEstimate!, 0);
+    
+    // For daily average, find unique days with CF data
+    const uniqueDaysWithCF = new Set(mealsWithCF.map(log => log.date.split('T')[0])).size;
+    const dailyAvg = uniqueDaysWithCF > 0 ? totalCF / uniqueDaysWithCF : 0;
+    
+    return {
+      daily: parseFloat(dailyAvg.toFixed(2)),
+      weekly: parseFloat((dailyAvg * 7).toFixed(2)), // Simple weekly projection
+      count: mealsWithCF.length
+    };
+  }, [isClient, plan, userProfile, allMealLogs]);
+
 
   if (!isClient) {
     return (
@@ -605,7 +650,7 @@ export default function DashboardPage() {
                   className="w-full" 
                   variant="outline" 
                   onClick={() => setIsDetailedProgressReportModalOpen(true)}
-                  disabled={weightEntries.length < 2 && dailyCalorieData.length === 0 && !isClient}
+                  disabled={!isClient || (weightEntries.length < 2 && dailyCalorieData.length === 0)}
                 >
                   Detailed Progress Report
                 </Button>
@@ -614,21 +659,71 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {plan === 'ecopro' && (
+      {plan === 'ecopro' && userProfile?.enableCarbonTracking && (
         <section className="space-y-6">
           <h2 className="text-2xl font-semibold text-primary flex items-center gap-2"><Trees /> EcoPro Sustainability Hub</h2>
-          <Card className="shadow-md border-l-4 border-teal-500"><CardHeader><CardTitle className="flex items-center gap-2 text-teal-700"><BarChartBig className="h-6 w-6" />Carbon Footprint Analytics</CardTitle></CardHeader>
-            <CardContent>
-              {isLoadingAI.carbon ? <div className="flex justify-center items-center p-4"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/></div> :
-              (userProfile?.enableCarbonTracking && carbonComparison) ? (
-                <>
-                  <p className="text-muted-foreground">{carbonComparison.comparisonText}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Your avg: {carbonComparison.userAverageDailyCF.toFixed(2)} kg CO₂e/day. General avg: {carbonComparison.generalAverageDailyCF.toFixed(2)} kg CO₂e/day.</p>
-                </>
-              ) : (<p className="text-muted-foreground">{userProfile?.enableCarbonTracking ? "Carbon comparison data will appear here after logging meals." : "Carbon tracking is disabled. Enable it in your Profile."}</p>)}
-              <Button variant="outline" className="mt-4" onClick={() => handlePlaceholderFeatureClick('Full Carbon Analytics')}>Full Analytics</Button>
+          <Card className="shadow-md border-l-4 border-teal-500">
+            <CardHeader><CardTitle className="flex items-center gap-2 text-teal-700"><BarChartBig className="h-6 w-6" />Carbon Footprint Analytics</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {isLoadingAI.carbon && <div className="flex justify-center items-center p-4"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary"/></div>}
+              {!isLoadingAI.carbon && carbonComparison && (
+                <Alert>
+                    <Globe2 className="h-4 w-4" />
+                    <AlertTitle>AI Footprint Comparison</AlertTitle>
+                    <AlertDescription>
+                        {carbonComparison.comparisonText}
+                        <span className="block text-xs mt-1">Your avg: {carbonComparison.userAverageDailyCF.toFixed(2)} kg CO₂e/day. General avg: {carbonComparison.generalAverageDailyCF.toFixed(2)} kg CO₂e/day.</span>
+                    </AlertDescription>
+                </Alert>
+              )}
+              {!isLoadingAI.carbon && !carbonComparison && (
+                <p className="text-muted-foreground">Carbon comparison data will appear here after logging meals with carbon estimates.</p>
+              )}
+
+              <div className="mt-4">
+                <h4 className="text-md font-semibold mb-2">Daily Carbon Footprint (Last 7 Logged Days)</h4>
+                {dailyCarbonFootprintData.length > 0 ? (
+                  <div className="h-60 bg-muted/30 rounded-md p-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsBarChart data={dailyCarbonFootprintData} margin={{ top: 5, right: 20, left: -25, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))"/>
+                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
+                        <YAxis unit="kg" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} domain={[0, 'dataMax + 0.5']}/>
+                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))'}} formatter={(value) => [`${value} kg CO₂e`, "Carbon Footprint"]}/>
+                        <Bar dataKey="carbon" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} name="Carbon Footprint" />
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-3">Log meals with carbon estimates to see your daily trend.</p>
+                )}
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div className="p-3 border rounded-md bg-card">
+                    <p className="font-medium">Average Daily Carbon:</p>
+                    <p className="text-lg text-primary">{averageCarbonFootprints.daily.toFixed(2)} kg CO₂e</p>
+                    <p className="text-xs text-muted-foreground">(Based on {averageCarbonFootprints.count} meals with CF data)</p>
+                </div>
+                <div className="p-3 border rounded-md bg-card">
+                    <p className="font-medium">Projected Weekly Carbon:</p>
+                    <p className="text-lg text-primary">{averageCarbonFootprints.weekly.toFixed(2)} kg CO₂e</p>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-3 border rounded-md bg-muted/30">
+                <h4 className="text-md font-semibold mb-1">Top Carbon Contributors (Conceptual)</h4>
+                <p className="text-xs text-muted-foreground">Red meat dishes: ~35% of your weekly carbon footprint.</p>
+                <p className="text-xs text-muted-foreground">Imported fruits in winter: ~15%.</p>
+              </div>
+               <div className="mt-4 p-3 border rounded-md bg-muted/30">
+                <h4 className="text-md font-semibold mb-1">Historical Trends (Conceptual)</h4>
+                <p className="text-xs text-muted-foreground">Your average daily footprint is down 10% from last month!</p>
+              </div>
+
             </CardContent>
           </Card>
+
           <Card className="shadow-md border-l-4 border-lime-500"><CardHeader><CardTitle className="flex items-center gap-2 text-lime-700"><Users className="h-6 w-6"/>Eco-Score Leaderboards</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Compete with friends on sustainability scores! (Placeholder)</p><Button variant="outline" className="mt-4" onClick={() => handlePlaceholderFeatureClick('Eco-Score Leaderboards')}>View Leaderboards</Button></CardContent></Card>
           
           <Card className="shadow-md border-l-4 border-emerald-500"><CardHeader><CardTitle className="flex items-center gap-2 text-emerald-700"><Leaf className="h-6 w-6"/>AI-Generated Meal Plans</CardTitle></CardHeader>
@@ -772,6 +867,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-
-    
