@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, ChangeEvent, FormEvent, useEffect } from 'react';
+import { useState, ChangeEvent, FormEvent, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, Utensils, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, CloudLightning, Users, Search, Sparkles as LucideSparklesIcon, Activity } from 'lucide-react';
+import { User, Target, Salad, Utensils, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChart, Droplet, ShieldAlert, BellRing, Smile, CloudLightning, Users, Search, Sparkles as LucideSparklesIcon, Activity, Edit3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import type { OnboardingData, UserProfile } from '@/types';
@@ -68,15 +68,19 @@ export default function OnboardingPage() {
         router.replace('/login');
         return;
     }
-    if (isUserLoggedIn() && isOnboardingComplete()) {
-        router.replace('/dashboard');
-        return;
-    }
+    // Commenting out direct redirect if onboarding is complete to allow re-onboarding for now
+    // if (isUserLoggedIn() && isOnboardingComplete()) {
+    //     router.replace('/dashboard');
+    //     return;
+    // }
     const existingProfile = getUserProfile();
     if (existingProfile) {
         setFormData(prev => ({
             ...prev, 
-            ...existingProfile, 
+            ...existingProfile,
+            // Ensure healthGoals and dietaryRestrictions are always arrays
+            healthGoals: Array.isArray(existingProfile.healthGoals) ? existingProfile.healthGoals : [],
+            dietaryRestrictions: Array.isArray(existingProfile.dietaryRestrictions) ? existingProfile.dietaryRestrictions : [],
             reminderSettings: { 
                 ...prev.reminderSettings,
                 ...(existingProfile.reminderSettings || {})
@@ -159,11 +163,11 @@ export default function OnboardingPage() {
         toast({ variant: "destructive", title: "Missing fields", description: "Please select at least one health goal." });
         return;
       }
-      if (currentStep === 4 && !formData.dietType) { // Step 4 is now Diet & Food Prefs
+      if (currentStep === 4 && !formData.dietType) {
         toast({ variant: "destructive", title: "Missing fields", description: "Please select your diet type." });
         return;
       }
-       if (currentStep === 6 && (!formData.sleepHours || !formData.stressLevel || !formData.waterGoal)) { // Step 6 is Lifestyle
+       if (currentStep === 6 && (!formData.sleepHours || !formData.stressLevel || !formData.waterGoal)) { 
         toast({ variant: "destructive", title: "Missing fields", description: "Please complete all lifestyle fields." });
         return;
       }
@@ -179,32 +183,40 @@ export default function OnboardingPage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const existingProfile = getUserProfile();
+    const existingProfile = getUserProfile(); // Get the profile created during signup/login
     if (!existingProfile) {
-        toast({title: "Error", description: "User profile not found. Please log in again.", variant: "destructive"});
-        router.push('/login');
+        toast({title: "Error", description: "User profile not found. Please ensure you are logged in.", variant: "destructive"});
+        router.push('/login'); // Or appropriate error handling/redirect
         return;
     }
-    const profileToSave: UserProfile = {
-        ...existingProfile, 
-        ...formData, // Onboarding data overwrites existing profile fields where they overlap
-        reminderSettings: {
-            ...(existingProfile.reminderSettings || defaultFormData.reminderSettings),
-            ...formData.reminderSettings,
+
+    // Merge onboarding data into the existing profile
+    const updatedProfile: UserProfile = {
+        ...existingProfile,
+        ...formData, // formData will overwrite overlapping fields from existingProfile
+        name: formData.name || existingProfile.name, // Ensure name from onboarding is used
+        email: existingProfile.email, // Preserve email from login/signup
+        profileImageUri: existingProfile.profileImageUri, // Preserve existing image
+        reminderSettings: { // Deep merge for reminderSettings
+          ...defaultFormData.reminderSettings, // Start with defaults
+          ...(existingProfile.reminderSettings || {}), // Apply existing settings from profile
+          ...formData.reminderSettings, // Apply onboarding reminder settings
         },
-        appSettings: {
-            ...(existingProfile.appSettings || {}),
+        appSettings: { // Deep merge for appSettings
+          ...(existingProfile.appSettings || {}),
+          // ...formData.appSettings, // if appSettings were part of onboarding
         }
     };
-    saveUserProfile(profileToSave);
-    setOnboardingComplete(true);
+    
+    saveUserProfile(updatedProfile);
+    setOnboardingComplete(true); // Mark onboarding as complete
     
     toast({
       title: 'Onboarding Complete!',
       description: "Next, let's choose a plan that's right for you.",
       action: <CheckCircle className="text-green-500" />,
     });
-    router.push('/subscription');
+    router.push('/subscription'); // Redirect to subscription page
   };
   
   const handlePlaceholderFeatureClick = (featureName: string) => {
@@ -289,7 +301,7 @@ export default function OnboardingPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            {currentStep === 1 && (
+            {currentStep === 1 && ( // Welcome & Basic Info
               <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><User className="h-6 w-6" /> Basic Details</h3>
                 <div>
@@ -315,7 +327,7 @@ export default function OnboardingPage() {
               </section>
             )}
 
-            {currentStep === 2 && (
+            {currentStep === 2 && ( // Physical Metrics & Activity
               <section className="space-y-4 animate-in fade-in duration-500">
                  <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><BarChart3 className="h-6 w-6" /> Your Metrics</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -363,7 +375,7 @@ export default function OnboardingPage() {
               </section>
             )}
 
-            {currentStep === 3 && ( // Health Goals
+            {currentStep === 3 && ( // Health Goals & Focus
               <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Target className="h-6 w-6" /> Health Goals & Focus</h3>
                 <div>
