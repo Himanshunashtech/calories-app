@@ -43,9 +43,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     if (email && password) {
-      // In this flow, fakeLogin will associate the email with existing onboarding data
-      // (from localStorage) and mark onboarding as complete.
-      fakeLogin(email); 
+      fakeLogin(email); // This now also handles setting onboarding complete
 
       toast({
         title: 'Account Finalized!',
@@ -69,19 +67,7 @@ export default function LoginPage() {
       const user = result.user;
 
       if (user && user.email) {
-        // Retrieve any existing onboarding data
-        let userProfile = getUserProfile(); 
-        
-        // Update profile with Google info, preserving onboarding data
-        userProfile = {
-            ...userProfile, // This carries over onboarding data
-            name: user.displayName || userProfile.name || user.email.split('@')[0] || 'User',
-            email: user.email, // This is the key identifier
-            profileImageUri: user.photoURL || userProfile.profileImageUri,
-        };
-        
-        saveUserProfile(userProfile);
-        fakeLogin(user.email); // This sets loggedIn and onboardingComplete to true
+        fakeLogin(user.email); // fakeLogin handles profile creation/update and onboarding status
 
         toast({
           title: 'Signed in with Google!',
@@ -123,6 +109,7 @@ export default function LoginPage() {
             <Skeleton className="h-10 w-full" />
           </div>
           <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-10 w-full mt-4" /> 
         </CardContent>
         <CardFooter className="justify-center">
           <Skeleton className="h-5 w-3/4" />
@@ -136,7 +123,7 @@ export default function LoginPage() {
       <CardHeader className="text-center">
         <LogIn className="mx-auto h-10 w-10 text-primary mb-2" />
         <CardTitle className="text-2xl font-bold text-primary">Set Up Your Account</CardTitle>
-        <CardDescription>Finalize your account with an email and password, or sign in with Google. Your preferences from onboarding will be linked.</CardDescription>
+        <CardDescription>Finalize your account by setting an email and password, or use Google. Your preferences from onboarding will be linked.</CardDescription>
       </CardHeader>
       <CardContent>
         {isClient && (
@@ -145,7 +132,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <div className="relative">
-                  <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
                     type="email"
