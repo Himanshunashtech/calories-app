@@ -13,8 +13,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile, ReminderSettings, AppSettings } from '@/types';
-import { ALLERGY_OPTIONS, defaultUserProfileData } from '@/types';
-import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, Settings, Edit3, Cog, Palette, Droplet, LogOut, PieChartIcon, CalendarDays, Trash2, Sprout, Loader2 } from 'lucide-react';
+import { ALLERGY_OPTIONS } from '@/types'; // ALLERGY_OPTIONS is from here
+import { defaultUserProfileData, getUserProfile, saveUserProfile, fakeLogout, clearAllUserData } from '@/lib/localStorage'; // defaultUserProfileData is from here
+import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, Settings as SettingsIcon, Edit3, Cog, Palette, Droplet, LogOut, PieChartIcon, CalendarDays, Trash2, Sprout, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -29,7 +30,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter as ModalFooter, DialogTrigger as ModalTrigger } from "@/components/ui/dialog";
-import { getUserProfile, saveUserProfile, fakeLogout, clearAllUserData } from '@/lib/localStorage';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile>(defaultUserProfileData);
@@ -77,7 +77,7 @@ export default function ProfilePage() {
     }));
   };
 
-  const handleSwitchChange = (name: keyof UserProfile | `reminderSettings.${keyof ReminderSettings}` | `appSettings.${keyof AppSettings}`) => (checked: boolean) => {
+  const handleSwitchChange = (name: keyof UserProfile | `reminderSettings.${keyof ReminderSettings}` | `appSettings.${keyof AppSettings}` | 'enable_carbon_tracking' | 'also_track_sustainability') => (checked: boolean) => {
     if (name === 'enable_carbon_tracking') {
       setProfile((prev) => ({ ...prev, enable_carbon_tracking: checked }));
     } else if (name === 'also_track_sustainability') {
@@ -93,6 +93,8 @@ export default function ProfilePage() {
       }
     } else if (name === 'appSettings.hideNonCompliantRecipes') {
       setProfile(prev => ({ ...prev, appSettings: { ...(prev.appSettings || defaultUserProfileData.appSettings!), hideNonCompliantRecipes: checked } }));
+    } else if (typeof name === 'string' && name in profile) {
+      setProfile((prev) => ({ ...prev, [name as keyof UserProfile]: checked as any }));
     } else {
       console.warn("Unhandled switch change on profile page:", name);
     }
@@ -296,7 +298,7 @@ export default function ProfilePage() {
               </div>
               <div className="p-3 border rounded-md flex items-center justify-between">
                 <Label htmlFor="fitnessSyncProfile" className="text-sm">Sync fitness tracker?</Label>
-                <Button size="sm" variant="outline" onClick={() => handlePlaceholderFeatureClick('Fitness Tracker Sync')}>Connect Health App</Button>
+                <Button size="sm" variant="outline" type="button" onClick={() => handlePlaceholderFeatureClick('Fitness Tracker Sync')}>Connect Health App</Button>
               </div>
             </div>
           </section>
@@ -383,6 +385,8 @@ export default function ProfilePage() {
             {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5" />}
             Save Profile & Preferences
           </Button>
+          <Button variant="outline" className="w-full" onClick={() => router.push('/settings')}><SettingsIcon className="mr-2 h-5 w-5"/>App Settings</Button>
+          <Button variant="outline" className="w-full" onClick={() => router.push('/meal-planner')}><CalendarDays className="mr-2 h-5 w-5"/>Go to Meal Planner</Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" className="w-full" disabled={isSaving}> <LogOut className="mr-2 h-5 w-5" /> Log Out </Button>
