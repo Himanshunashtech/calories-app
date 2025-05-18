@@ -18,7 +18,7 @@ import { User, Target, Salad, CheckCircle, Leaf, HeartHandshake, BarChart3, PieC
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import type { OnboardingData, UserProfile, ReminderSettings } from '@/types';
-import { ALLERGY_OPTIONS, defaultUserProfileData } from '@/types';
+import { ALLERGY_OPTIONS } from '@/types';
 import {
   saveLocalOnboardingData,
   clearLocalOnboardingData,
@@ -27,18 +27,19 @@ import {
   checkEmailExists,
   isUserLoggedIn,
   getUserProfile,
-  setOnboardingComplete
+  setOnboardingComplete,
+  defaultUserProfileData // Corrected: Import from localStorage
 } from '@/lib/localStorage';
 
 
-const TOTAL_STEPS = 8; // Adjusted for the added email step potentially in step 1
+const TOTAL_STEPS = 8; 
 
 export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<OnboardingData>(defaultUserProfileData);
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [emailExistsError, setEmailExistsError] = useState(false); // For step 1 email check
+  const [emailExistsError, setEmailExistsError] = useState(false);
 
   const { toast } = useToast();
   const router = useRouter();
@@ -46,19 +47,45 @@ export default function OnboardingPage() {
   useEffect(() => {
     setIsClient(true);
     if (!isUserLoggedIn()) {
-      router.replace('/login'); // If not logged in, cannot start onboarding this way.
+      router.replace('/login'); 
       return;
     }
-    // Prefill with existing profile data if user is logged in
-    const existingProfile = getUserProfile();
-    setFormData(prev => ({...prev, ...existingProfile, ...getLocalOnboardingData()})); // Merge, with local temp data taking precedence
+    const existingProfile = getUserProfile(); // This now returns default if nothing is there.
+    const localData = getLocalOnboardingData(); // Get any temporarily saved onboarding progress
+
+    // Merge priorities: existing profile > local onboarding data > defaults
+    setFormData(prev => ({
+      ...defaultUserProfileData, // Start with defaults
+      ...existingProfile,       // Overlay with existing profile
+      ...localData,             // Overlay with any temp local data
+      reminderSettings: {       // Ensure reminderSettings is fully initialized
+        ...(defaultUserProfileData.reminderSettings || {}),
+        ...(existingProfile.reminderSettings || {}),
+        ...(localData.reminderSettings || {}),
+      },
+      appSettings: {            // Ensure appSettings is fully initialized
+        ...(defaultUserProfileData.appSettings || {}),
+        ...(existingProfile.appSettings || {}),
+        ...(localData.appSettings || {}),
+        unitPreferences: {
+            ...(defaultUserProfileData.appSettings?.unitPreferences || {}),
+            ...(existingProfile.appSettings?.unitPreferences || {}),
+            ...(localData.appSettings?.unitPreferences || {}),
+        }
+      },
+       macroSplit: { // Ensure macroSplit is initialized
+        ...(defaultUserProfileData.macroSplit || { carbs: 50, protein: 25, fat: 25 }),
+        ...(existingProfile.macroSplit || {}),
+        ...(localData.macroSplit || {}),
+      }
+    }));
   }, [router]);
 
   useEffect(() => {
-    if(isClient) {
+    if(isClient && currentStep < TOTAL_STEPS) { // Don't save on final review step until submit
       saveLocalOnboardingData(formData);
     }
-  }, [formData, isClient]);
+  }, [formData, isClient, currentStep]);
 
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -91,7 +118,7 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleSwitchChange = (name: keyof OnboardingData | `reminderSettings.${keyof ReminderSettings['mealRemindersEnabled']}` | `reminderSettings.${keyof ReminderSettings['waterReminderEnabled']}`) => (checked: boolean) => {
+  const handleSwitchChange = (name: keyof OnboardingData | 'reminderSettings.mealRemindersEnabled' | 'reminderSettings.waterReminderEnabled' | 'enable_carbon_tracking' | 'also_track_sustainability') => (checked: boolean) => {
     if (name === 'reminderSettings.mealRemindersEnabled') {
       setFormData(prev => ({ ...prev, reminderSettings: { ...(prev.reminderSettings || defaultUserProfileData.reminderSettings!), mealRemindersEnabled: checked } }));
     } else if (name === 'reminderSettings.waterReminderEnabled') {
@@ -101,11 +128,13 @@ export default function OnboardingPage() {
     } else if (name === 'also_track_sustainability') {
       setFormData(prev => ({ ...prev, also_track_sustainability: checked }));
     } else {
-      console.warn("Unhandled switch change in onboarding:", name);
+      // This case might not be strictly necessary if 'name' is correctly typed
+      // and all cases are handled above.
+      setFormData(prev => ({ ...prev, [name as keyof OnboardingData]: checked as any }));
     }
   };
 
-  const handleSelectChange = (name: keyof OnboardingData | `reminderSettings.${keyof ReminderSettings['waterReminderInterval']}`) => (value: string | number) => {
+  const handleSelectChange = (name: keyof OnboardingData | 'reminderSettings.waterReminderInterval' | 'height_unit' | 'weight_unit') => (value: string | number) => {
     if (name === 'reminderSettings.waterReminderInterval') {
         setFormData((prev) => ({
             ...prev,
@@ -124,11 +153,23 @@ export default function OnboardingPage() {
 
   const handleNext = async () => {
     // Field validation for current step
-    if (currentStep === 1 && (!formData.name || !formData.age || !formData.gender)) {
-      toast({ variant: "destructive", title: "Missing fields", description: "Please fill in your name, year of birth, and gender." });
-      return;
+    if (currentStep === 1) {
+        if (!formData.name || !formData.age || !formData.email) {
+            toast({ variant: "destructive", title: "Missing fields", description: "Please fill in your name, year of birth, and email." });
+            return;
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+            toast({ variant: "destructive", title: "Invalid Email", description: "Please enter a valid email address." });
+            return;
+        }
+        if (checkEmailExists(formData.email)) {
+            setEmailExistsError(true);
+            toast({ variant: "destructive", title: "Email Exists", description: "This email is already registered. Please log in." });
+            return; // Stay on this step, button text will change
+        }
+        setEmailExistsError(false);
     }
-    // Note: Email is now handled by signup directly.
     if (currentStep === 2 && (!formData.height || !formData.weight || !formData.activity_level)) {
       toast({ variant: "destructive", title: "Missing fields", description: "Please provide height, weight, and activity level." });
       return;
@@ -137,7 +178,7 @@ export default function OnboardingPage() {
       toast({ variant: "destructive", title: "Missing fields", description: "Please select at least one health goal." });
       return;
     }
-    if (currentStep === 4 && (!formData.diet_type)) {
+     if (currentStep === 4 && (!formData.diet_type)) {
       toast({ variant: "destructive", title: "Missing fields", description: "Please select your diet type." });
       return;
     }
@@ -162,19 +203,19 @@ export default function OnboardingPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    let userProfile = getUserProfile(); // Get existing profile created during signup
+    let userProfile = getUserProfile(); 
     userProfile = {
-      ...userProfile, // Keep existing ID, email, name from signup
-      ...formData,    // Overlay with all onboarding data
-      onboarding_complete: true,
+      ...userProfile, 
+      ...formData,   
     };
     
-    saveUserProfile(userProfile);
-    setOnboardingComplete(true); // Set the flag in localStorage
-    clearLocalOnboardingData(); // Clear the temporary copy
+    saveUserProfile(userProfile); // Save all collected data including email
+    // Onboarding complete will be set at login/account finalization stage
+    // setOnboardingComplete(false); 
+    clearLocalOnboardingData(); // Clear temp onboarding data
 
     toast({
-      title: 'Onboarding Complete!',
+      title: 'Preferences Saved!',
       description: "Next, let's choose your plan.",
       action: <CheckCircle className="text-green-500" />,
     });
@@ -188,12 +229,18 @@ export default function OnboardingPage() {
   };
 
   const progressValue = (currentStep / TOTAL_STEPS) * 100;
+  
   const currentYear = useMemo(() => new Date().getFullYear(), []);
 
   const calculatedBMI = useMemo(() => {
     if (formData.height && formData.weight && formData.height_unit && formData.weight_unit) {
-      const heightInMeters = formData.height_unit === 'cm' ? parseFloat(formData.height) / 100 : parseFloat(formData.height) * 0.0254;
-      const weightInKg = formData.weight_unit === 'kg' ? parseFloat(formData.weight) : parseFloat(formData.weight) * 0.453592;
+      const heightNum = parseFloat(formData.height);
+      const weightNum = parseFloat(formData.weight);
+      if (isNaN(heightNum) || isNaN(weightNum) || heightNum <=0 || weightNum <=0) return null;
+
+      const heightInMeters = formData.height_unit === 'cm' ? heightNum / 100 : heightNum * 0.0254;
+      const weightInKg = formData.weight_unit === 'kg' ? weightNum : weightNum * 0.453592;
+      
       if (heightInMeters > 0 && weightInKg > 0) {
         const bmi = weightInKg / (heightInMeters * heightInMeters);
         return bmi.toFixed(1);
@@ -265,6 +312,14 @@ export default function OnboardingPage() {
               <div>
                 <Label htmlFor="name-onboarding">Full Name</Label>
                 <Input id="name-onboarding" name="name" value={formData.name || ''} onChange={handleChange} placeholder="E.g., Alex Green" required />
+              </div>
+               <div>
+                <Label htmlFor="email-onboarding">Email Address</Label>
+                 <div className="relative">
+                   <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                   <Input id="email-onboarding" name="email" type="email" value={formData.email || ''} onChange={handleChange} placeholder="you@example.com" required className="pl-10" />
+                 </div>
+                {emailExistsError && <p className="text-sm text-destructive mt-1">This email is already registered. Click "Go to Login" or use a different email.</p>}
               </div>
               <div>
                 <Label htmlFor="age-onboarding">Year of Birth</Label>
@@ -343,17 +398,19 @@ export default function OnboardingPage() {
                       <div key={goal.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-muted/50">
                         <Checkbox
                           id={`healthGoalsCheckbox-${goal.id}`}
-                          name="healthGoalsCheckbox"
+                          name="healthGoalsCheckbox" // Keep a consistent name for this group of checkboxes
                           value={goal.label}
                           checked={(formData.health_goals || []).includes(goal.label)}
                           onCheckedChange={(checked) => {
-                            const isChecked = !!checked;
-                            setFormData((prev) => ({
-                              ...prev,
-                              health_goals: isChecked
-                                ? [...(prev.health_goals || []), goal.label]
-                                : (prev.health_goals || []).filter((g) => g !== goal.label),
-                            }));
+                            const isChecked = !!checked; // Ensure boolean
+                            handleChange({ // Simulate event for unified handling
+                              target: {
+                                name: "healthGoalsCheckbox",
+                                value: goal.label,
+                                type: "checkbox",
+                                checked: isChecked,
+                              }
+                            } as ChangeEvent<HTMLInputElement>);
                           }}
                         />
                         <Label htmlFor={`healthGoalsCheckbox-${goal.id}`} className="font-normal cursor-pointer">{goal.label}</Label>
@@ -422,13 +479,15 @@ export default function OnboardingPage() {
                             value={allergy.label}
                             checked={(formData.dietary_restrictions || []).includes(allergy.label)}
                             onCheckedChange={(checked) => {
-                                const isChecked = !!checked;
-                                setFormData((prev) => ({
-                                ...prev,
-                                dietary_restrictions: isChecked
-                                    ? [...(prev.dietary_restrictions || []), allergy.label]
-                                    : (prev.dietary_restrictions || []).filter((r) => r !== allergy.label),
-                                }));
+                               const isChecked = !!checked;
+                                handleChange({
+                                  target: {
+                                    name: "dietaryRestrictionsCheckbox",
+                                    value: allergy.label,
+                                    type: "checkbox",
+                                    checked: isChecked,
+                                  }
+                                } as ChangeEvent<HTMLInputElement>);
                             }}
                             />
                             <Label htmlFor={`dietaryRestrictionsCheckbox-${allergy.id}`} className="font-normal cursor-pointer">{allergy.label}</Label>
@@ -563,6 +622,7 @@ export default function OnboardingPage() {
                  <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><CheckCircle className="h-6 w-6" /> Review Your Information</h3>
                 <div className="space-y-2 border p-4 rounded-md bg-muted/30 max-h-96 overflow-y-auto text-sm">
                   <p><strong>Name:</strong> {formData.name || 'Not set'}</p>
+                  <p><strong>Email:</strong> {formData.email || 'Not set'}</p>
                   <p><strong>Year of Birth:</strong> {formData.age || 'Not set'}</p>
                   <p><strong>Gender:</strong> {formData.gender || 'Not set'}</p>
                   <p><strong>Height:</strong> {formData.height || 'Not set'} {formData.height_unit || 'cm'}</p>
@@ -595,8 +655,19 @@ export default function OnboardingPage() {
               Previous
             </Button>
             {currentStep < TOTAL_STEPS ? (
-              <Button type="button" onClick={handleNext} className="ml-auto" disabled={isLoading}>
-                Next
+              <Button 
+                type="button" 
+                onClick={() => {
+                  if (currentStep === 1 && emailExistsError) {
+                    router.push(`/login?email=${encodeURIComponent(formData.email || '')}`);
+                  } else {
+                    handleNext();
+                  }
+                }}
+                className="ml-auto" 
+                disabled={isLoading}
+              >
+                {currentStep === 1 && emailExistsError ? "Go to Login" : "Next"}
               </Button>
             ) : (
               <Button type="submit" className="ml-auto bg-green-600 hover:bg-green-700" disabled={isLoading}>
