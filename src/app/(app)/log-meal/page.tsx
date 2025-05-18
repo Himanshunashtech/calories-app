@@ -170,10 +170,10 @@ export default function LogMealPage() {
     return Math.min((totalCaloriesToday / actualDailyCalorieGoal) * 100, 100);
    }, [totalCaloriesToday, actualDailyCalorieGoal]);
 
-  const getCalorieProgressColorClass = () => {
-    if (calorieProgressPercentage < 75) return 'stroke-primary';
-    if (calorieProgressPercentage < 100) return 'stroke-warning'; 
-    return 'stroke-destructive';
+  const getCalorieProgressColorClass = (): string => {
+    if (calorieProgressPercentage >= 100) return 'stroke-destructive';
+    if (calorieProgressPercentage >= 75) return 'stroke-warning';
+    return 'stroke-primary';
   };
 
   const mealCategories: MealCategory[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Fast Food'];
@@ -200,7 +200,6 @@ export default function LogMealPage() {
     const file = event.target.files?.[0];
     if (file) {
       setPhotoFile(file);
-      // setPhotoPreview(null); // photoPreview will be set by useEffect on photoFile change
       setAnalysisResult(null);
       setError(null);
       setIsCameraMode(false);
@@ -226,7 +225,7 @@ export default function LogMealPage() {
         context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const dataUri = canvas.toDataURL('image/jpeg');
         setPhotoPreview(dataUri); 
-        setPhotoFile(null); // Clear file if photo captured
+        setPhotoFile(null); 
         setAnalysisResult(null);
         setError(null);
         setShowWatermark(false);
@@ -324,7 +323,7 @@ export default function LogMealPage() {
       action: <Leaf className="h-5 w-5 text-green-500" />,
     });
     setTodaysMealLogs(getTodaysMealLogs()); 
-    resetForm(false); // Keep category selected for potentially logging more items of same type
+    resetForm(false); 
   };
 
   const resetForm = (resetCategory = true) => {
@@ -347,7 +346,7 @@ export default function LogMealPage() {
       const newMode = !prev;
       if (newMode) {
         setPhotoFile(null);
-        setPhotoPreview(null); // Important to clear preview when switching to camera
+        setPhotoPreview(null); 
         setHasCameraPermission(null);
         if (scrollToLogging) loggingSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
       } else {
@@ -425,7 +424,7 @@ export default function LogMealPage() {
               <span className="text-sm text-muted-foreground">/ {actualDailyCalorieGoal} kcal</span>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">Burned calories placeholder: 300 kcal</p>
+          <p className="text-xs text-muted-foreground mt-2">Burned calories placeholder: 300 kcal</p>
         </CardContent>
       </Card>
 
@@ -701,3 +700,4 @@ export default function LogMealPage() {
     </div>
   );
 }
+
