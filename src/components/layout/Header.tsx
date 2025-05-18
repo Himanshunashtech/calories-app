@@ -2,7 +2,7 @@
 import { AppLogo } from '@/components/AppLogo';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Settings, User } from 'lucide-react';
+import { LayoutDashboard } from 'lucide-react'; // Removed Settings, User. Added LayoutDashboard
 
 interface HeaderProps {
   title?: string;
@@ -19,16 +19,13 @@ export function Header({ title }: HeaderProps) {
           {title && <h1 className="text-xl font-semibold text-foreground">{title}</h1>}
         </div>
         <div className="flex items-center gap-1 ml-auto">
-          <Link href="/profile" passHref>
-            <Button variant="ghost" size="icon" aria-label="User Profile">
-              <User className="h-5 w-5" />
+          <Link href="/dashboard" passHref>
+            <Button variant="ghost" size="icon" aria-label="Dashboard">
+              <LayoutDashboard className="h-5 w-5" />
             </Button>
           </Link>
-          <Link href="/settings" passHref> 
-            <Button variant="ghost" size="icon" aria-label="App Settings">
-              <Settings className="h-5 w-5" />
-            </Button>
-          </Link>
+          {/* Settings icon removed */}
+          {/* Profile icon removed, will be added to dashboard welcome card */}
         </div>
       </div>
     </header>

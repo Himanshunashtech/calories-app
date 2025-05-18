@@ -33,7 +33,7 @@ import { useRouter } from 'next/navigation';
 import { 
   BarChart3, Camera, Leaf, Utensils, ShieldCheck, Zap, Brain, Trees, BarChartBig, Users, MessageSquareHeart, 
   CheckCircle, AlertTriangle, Info, Droplet, Footprints, TrendingUp, PlusCircle, Target as TargetIcon, 
-  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3, Cog, Search, Filter, CalendarDays, Activity, Bike, Weight as WeightIcon, Download, PieChartIcon
+  Maximize2, Grape, Fish, Shell, SmilePlus, Smile, Meh, Frown, Globe2, Loader2, Edit3, BellRing, Clock3, Cog, Search, Filter, CalendarDays, Activity, Bike, Weight as WeightIcon, Download, PieChartIcon, User // Added User icon
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -87,10 +87,12 @@ export default function DashboardPage() {
 
 
   useEffect(() => {
+    // Effect 1: Set isClient
     setIsClient(true);
   }, []);
 
   useEffect(() => {
+    // Effect 2: Load initial data from localStorage when isClient is true
     if (isClient) {
       const initialPlan = getSelectedPlan();
       setPlan(initialPlan);
@@ -118,7 +120,7 @@ export default function DashboardPage() {
 
     if (currentPlan === 'pro' || currentPlan === 'ecopro') {
       setIsLoadingAI(prev => ({ ...prev, trends: true, coach: true }));
-      analyzeNutrientTrends({ recentMeals: recentMealsForTrends.map(m => ({...m, date: m.date, detailedNutrients: m.detailedNutrients || {}})), userHealthGoals: profile.health_goals })
+      analyzeNutrientTrends({ recentMeals: recentMealsForTrends.map(m => ({...m, date: m.date, detailedNutrients: m.detailedNutrients || {}})), userHealthGoals: profile.healthGoals })
         .then(setNutrientTrend).catch(err => {
             console.error("Error fetching nutrient trends:", err);
             toast({variant: 'destructive', title:'AI Error', description:'Could not fetch nutrient trends.'});
@@ -163,6 +165,7 @@ export default function DashboardPage() {
   }, [isClient, toast]);
 
   useEffect(() => {
+    // Effect 3: Fetch AI data once client is ready and essential profile/log data is loaded
     if (isClient && userProfile && plan && todaysMealLogs) { 
       fetchDashboardData(plan, userProfile, todaysMealLogs);
     }
@@ -446,11 +449,18 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <Card className="shadow-lg bg-gradient-to-br from-primary/10 via-background to-background">
-        <CardHeader>
-          <CardTitle className="text-3xl font-bold text-primary">Welcome, {userProfile?.name || 'User'}!</CardTitle>
-          <CardDescription className="text-lg">
-            Your EcoAI Dashboard. Current plan: <Badge variant={plan === 'free' ? 'secondary' : 'default'} className="capitalize text-sm ml-1">{plan}</Badge>
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-3xl font-bold text-primary">Welcome, {userProfile?.name || 'User'}!</CardTitle>
+            <CardDescription className="text-lg">
+              Your EcoAI Dashboard. Current plan: <Badge variant={plan === 'free' ? 'secondary' : 'default'} className="capitalize text-sm ml-1">{plan}</Badge>
+            </CardDescription>
+          </div>
+          <Link href="/profile" passHref>
+            <Button variant="ghost" size="icon" aria-label="User Profile">
+              <User className="h-6 w-6 text-primary" />
+            </Button>
+          </Link>
         </CardHeader>
         <CardFooter className="flex-wrap gap-2"> 
             <Button onClick={() => router.push('/subscription')} variant="outline"> Manage Subscription </Button> 

@@ -3,11 +3,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Camera, BarChart3, LayoutDashboard, Utensils, CalendarDays } from 'lucide-react';
+import { Camera, BarChart3, Utensils, CalendarDays } from 'lucide-react'; // Removed LayoutDashboard
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  // { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }, // Removed Dashboard
   { href: '/log-meal', label: 'Log Meal', icon: Camera },
   { href: '/recipes', label: 'Recipes', icon: Utensils },
   { href: '/meal-planner', label: 'Planner', icon: CalendarDays },
