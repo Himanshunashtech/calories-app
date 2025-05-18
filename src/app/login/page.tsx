@@ -29,7 +29,6 @@ export default function LoginPage() {
     if (emailFromQuery) {
       setEmail(emailFromQuery);
     }
-    // Redirect if already logged in and onboarded
     if (isUserLoggedIn() && isOnboardingComplete()) {
       router.replace('/dashboard');
     }
@@ -37,13 +36,20 @@ export default function LoginPage() {
 
   const handleEmailPasswordSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (!email.trim() || !password.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Missing Information",
+        description: "Please enter both email and password.",
+      });
+      return;
+    }
     setIsLoading(true);
 
-    // Simulate login with localStorage
-    const profile = fakeLogin(email); // This sets user as logged in and onboarding complete
+    const profile = fakeLogin(email); 
 
     toast({ title: 'Login Successful!', description: `Welcome back, ${profile.name || 'User'}!` });
-    router.push('/dashboard'); // Directly to dashboard as fakeLogin now handles onboarding complete status
+    router.push('/dashboard'); 
 
     setIsLoading(false);
   };

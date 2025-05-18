@@ -69,7 +69,27 @@ export function getUserProfile(): UserProfile {
     const profileJson = localStorage.getItem(USER_PROFILE_KEY);
     if (profileJson) {
       const parsedProfile = JSON.parse(profileJson);
-      return { ...defaultUserProfileData, ...parsedProfile };
+      // Merge with defaults to ensure all fields are present
+      return { 
+        ...defaultUserProfileData, 
+        ...parsedProfile,
+        reminderSettings: {
+            ...(defaultUserProfileData.reminderSettings || {}),
+            ...(parsedProfile.reminderSettings || {})
+        },
+        appSettings: {
+            ...(defaultUserProfileData.appSettings || {}),
+            ...(parsedProfile.appSettings || {}),
+            unitPreferences: {
+                ...(defaultUserProfileData.appSettings?.unitPreferences || {}),
+                ...(parsedProfile.appSettings?.unitPreferences || {})
+            }
+        },
+        macroSplit: {
+            ...(defaultUserProfileData.macroSplit || { carbs: 50, protein: 25, fat: 25 }),
+            ...(parsedProfile.macroSplit || {})
+        }
+      };
     }
     // If no profile, save a default one
     saveUserProfile({ ...defaultUserProfileData });
@@ -122,6 +142,12 @@ export function isUserLoggedIn(): boolean {
 
 export function fakeLogin(email: string): UserProfile {
   if (typeof window === 'undefined') return { ...defaultUserProfileData, email };
+  
+  if (!email || !email.trim()) {
+    console.error("fakeLogin: Attempted to login with an empty email.");
+    return { ...defaultUserProfileData }; // Return default, not logged in
+  }
+
   let profile = getUserProfile(); // Get existing profile (should contain onboarding data)
   
   profile.email = email; // Ensure email is set on the profile
@@ -129,7 +155,8 @@ export function fakeLogin(email: string): UserProfile {
   saveUserProfile(profile);
   try {
     localStorage.setItem(USER_LOGGED_IN_KEY, 'true');
-    localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true'); // Mark onboarding complete upon login in this flow
+    // Mark onboarding complete upon login in this flow, as login is the final step
+    setOnboardingComplete(true); 
   } catch (error) {
     console.error(`Error writing auth keys to localStorage:`, error);
   }
@@ -204,7 +231,9 @@ export function clearLocalOnboardingData(): void {
 export function checkEmailExists(email: string): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    const profile = getUserProfile(); // In localStorage, there's effectively one "main" profile
+    // For localStorage, we assume there's only one "profile" stored.
+    // A real app with multiple users would check a database.
+    const profile = getUserProfile(); 
     return !!profile.email && profile.email.toLowerCase() === email.toLowerCase();
   } catch (error) {
     console.error(`Error checking email in localStorage:`, error);
@@ -278,7 +307,6 @@ export function clearMealLogs(): void {
 // User Plan
 export function getSelectedPlan(): UserPlan {
   if (typeof window === 'undefined') return 'free';
-  // Try to get from profile first, then fallback to direct localStorage item
   const profile = getUserProfile();
   if (profile.selected_plan) return profile.selected_plan;
 
@@ -293,7 +321,6 @@ export function getSelectedPlan(): UserPlan {
 
 export function setSelectedPlan(plan: UserPlan): void {
   if (typeof window === 'undefined') return;
-  // Save to profile AND direct localStorage item for robustness during transition
   const profile = getUserProfile();
   profile.selected_plan = plan;
   saveUserProfile(profile);
@@ -359,7 +386,7 @@ export function getWaterIntake(): WaterIntakeData {
     const intakeJson = localStorage.getItem(WATER_INTAKE_KEY);
     if (intakeJson) {
       intake = JSON.parse(intakeJson);
-      if (intake.lastUpdatedDate !== today) { // Reset if date changed
+      if (intake.lastUpdatedDate !== today) { 
         intake.current = 0;
         intake.lastUpdatedDate = today;
       }
@@ -370,7 +397,7 @@ export function getWaterIntake(): WaterIntakeData {
     console.error(`Error reading '${WATER_INTAKE_KEY}' from localStorage:`, error);
     intake = { ...defaultIntake };
   }
-  intake.goal = goal; // Ensure goal matches profile
+  intake.goal = goal; 
   try { localStorage.setItem(WATER_INTAKE_KEY, JSON.stringify(intake)); }
   catch (e) { console.error("Error saving initial water intake", e); }
   return intake;
@@ -379,7 +406,7 @@ export function getWaterIntake(): WaterIntakeData {
 export function addWater(amountInUnits: number = 1): WaterIntakeData {
   const intake = getWaterIntake();
   const safeGoal = intake.goal > 0 ? intake.goal : DEFAULT_DAILY_WATER_GOAL_GLASSES;
-  intake.current = Math.max(0, Math.min(intake.current + amountInUnits, safeGoal * 3)); // Allow up to 3x goal
+  intake.current = Math.max(0, Math.min(intake.current + amountInUnits, safeGoal * 3)); 
   try {
     localStorage.setItem(WATER_INTAKE_KEY, JSON.stringify(intake));
   } catch (error) {
@@ -416,7 +443,7 @@ export function getWeightEntries(): WeightEntry[] {
 
 export function addWeightEntry(weight: number, unit: 'kg' | 'lbs'): WeightEntry {
   const newEntry: WeightEntry = {
-    id: Math.random().toString(36).substring(2, 15), // Add client-side ID
+    id: Math.random().toString(36).substring(2, 15), 
     date: new Date().toISOString(),
     weight,
     unit,
