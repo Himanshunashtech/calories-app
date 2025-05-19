@@ -7,13 +7,11 @@ const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
 const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage';
 const WATER_INTAKE_KEY = 'ecoAi_waterIntake';
 const WEIGHT_ENTRIES_KEY = 'ecoAi_weightEntries';
-const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput'; // AI generated, temporary
-const WEEKLY_MEAL_PLAN_KEY = 'ecoAi_weeklyMealPlan'; // User's manual plan
+const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput_v2';
+const WEEKLY_MEAL_PLAN_KEY = 'ecoAi_weeklyMealPlan_v2';
+const TEMP_ONBOARDING_DATA_KEY = 'ecoAi_onboardingTempData';
 
-// Keys related to auth state managed locally (these are for client-side UI control, Supabase is source of truth for auth)
-const TEMP_ONBOARDING_DATA_KEY = 'ecoAi_onboardingTempData'; // For pre-filling onboarding if needed
-
-// User Profile (this is now primarily handled by Supabase, but defaults are useful)
+// User Profile (this is now primarily handled by Supabase, but defaults are useful for initial state)
 export const defaultUserProfileData: UserProfile = {
   id: '', // Will be set by Supabase auth
   email: '',
@@ -81,6 +79,17 @@ export function saveLocalOnboardingData(data: Partial<UserProfile>): void {
     console.error(`Error writing '${TEMP_ONBOARDING_DATA_KEY}' to localStorage:`, error);
   }
 }
+
+export function clearLocalOnboardingData(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(TEMP_ONBOARDING_DATA_KEY);
+    // console.log("Cleared temporary local onboarding data.");
+  } catch (error) {
+    console.error(`Error removing '${TEMP_ONBOARDING_DATA_KEY}' from localStorage:`, error);
+  }
+}
+
 
 // Function to clear all user-specific data from localStorage.
 // Called on logout or account deletion.
@@ -324,46 +333,42 @@ export function addWeightEntry(weight: number, unit: 'kg' | 'lbs'): WeightEntry 
   return newEntry;
 }
 
-// For saving and retrieving the AI-generated meal plan output locally
-const GENERATED_MEAL_PLAN_OUTPUT_KEY_LOCAL = 'ecoAi_generatedMealPlanOutput_v2'; // Renamed to avoid conflict
 export function saveGeneratedMealPlanOutput(output: GenerateEcoMealPlanOutput): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(GENERATED_MEAL_PLAN_OUTPUT_KEY_LOCAL, JSON.stringify(output));
+    localStorage.setItem(GENERATED_MEAL_PLAN_OUTPUT_KEY, JSON.stringify(output));
   } catch (error) {
-    console.error(`Error writing '${GENERATED_MEAL_PLAN_OUTPUT_KEY_LOCAL}' to localStorage:`, error);
+    console.error(`Error writing '${GENERATED_MEAL_PLAN_OUTPUT_KEY}' to localStorage:`, error);
   }
 }
 
 export function getGeneratedMealPlanOutput(): GenerateEcoMealPlanOutput | null {
   if (typeof window === 'undefined') return null;
   try {
-    const outputJson = localStorage.getItem(GENERATED_MEAL_PLAN_OUTPUT_KEY_LOCAL);
+    const outputJson = localStorage.getItem(GENERATED_MEAL_PLAN_OUTPUT_KEY);
     return outputJson ? JSON.parse(outputJson) : null;
   } catch (error) {
-    console.error(`Error reading '${GENERATED_MEAL_PLAN_OUTPUT_KEY_LOCAL}' from localStorage:`, error);
+    console.error(`Error reading '${GENERATED_MEAL_PLAN_OUTPUT_KEY}' from localStorage:`, error);
     return null;
   }
 }
 
-// For saving and retrieving the user's manually edited weekly meal plan locally
-const WEEKLY_MEAL_PLAN_KEY_LOCAL = 'ecoAi_weeklyMealPlan_v2'; // Renamed to avoid conflict
 export function saveWeeklyMealPlan(plan: any): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(WEEKLY_MEAL_PLAN_KEY_LOCAL, JSON.stringify(plan));
+    localStorage.setItem(WEEKLY_MEAL_PLAN_KEY, JSON.stringify(plan));
   } catch (error) {
-    console.error(`Error writing '${WEEKLY_MEAL_PLAN_KEY_LOCAL}' to localStorage:`, error);
+    console.error(`Error writing '${WEEKLY_MEAL_PLAN_KEY}' to localStorage:`, error);
   }
 }
 
 export function getWeeklyMealPlan(): any | null {
   if (typeof window === 'undefined') return null;
   try {
-    const planJson = localStorage.getItem(WEEKLY_MEAL_PLAN_KEY_LOCAL);
+    const planJson = localStorage.getItem(WEEKLY_MEAL_PLAN_KEY);
     return planJson ? JSON.parse(planJson) : null;
   } catch (error) {
-    console.error(`Error reading '${WEEKLY_MEAL_PLAN_KEY_LOCAL}' from localStorage:`, error);
+    console.error(`Error reading '${WEEKLY_MEAL_PLAN_KEY}' from localStorage:`, error);
     return null;
   }
 }
