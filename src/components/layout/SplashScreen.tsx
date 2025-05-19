@@ -8,8 +8,8 @@ import { Leaf } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SplashScreenProps {
-  onFinished: () => void;
-  isQuickFallback?: boolean; 
+  onFinished?: () => void; // Make onFinished optional
+  isQuickFallback?: boolean;
 }
 
 const motivationalQuotes = [
@@ -28,8 +28,6 @@ export function SplashScreen({ onFinished, isQuickFallback = false }: SplashScre
 
   useEffect(() => {
     if (isQuickFallback) {
-      // For Suspense fallback or very initial render, we don't run the timer or complex logic.
-      // onFinished should not be called by the quick fallback.
       return;
     }
 
@@ -39,18 +37,19 @@ export function SplashScreen({ onFinished, isQuickFallback = false }: SplashScre
       setProgress((prevProgress) => {
         if (prevProgress >= 100) {
           clearInterval(timer);
-          onFinished(); // Call the passed onFinished callback
+          if (onFinished) { // Only call onFinished if it's provided
+            onFinished();
+          }
           return 100;
         }
-        return prevProgress + 20; // Speed up progress for demo
+        return prevProgress + 20;
       });
-    }, 400); // Update progress every 0.4 seconds
+    }, 400);
 
-    return () => clearInterval(timer); // Cleanup interval on component unmount
-  }, [onFinished, isQuickFallback]); // isQuickFallback ensures effect re-runs if prop changes
+    return () => clearInterval(timer);
+  }, [onFinished, isQuickFallback]);
 
   if (isQuickFallback) {
-    // Render a very minimal loader if this is just for Suspense or pre-client mount
     return (
       <div className="splash-screen-fallback">
         <Leaf className="h-16 w-16 text-primary animate-ping" />
@@ -64,8 +63,8 @@ export function SplashScreen({ onFinished, isQuickFallback = false }: SplashScre
         <Image
           src="https://placehold.co/1200x800.png?text=EcoAI+Splash"
           alt="EcoAI Calorie Tracker Loading"
-          layout="fill"
-          objectFit="cover"
+          fill // Changed from layout="fill" to fill for Next 13+
+          style={{ objectFit: "cover" }} // Used style for objectFit with fill
           priority
           data-ai-hint="salad healthy food"
         />

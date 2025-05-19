@@ -4,11 +4,11 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
-import { SplashScreen } from '@/components/layout/SplashScreen';
 import { Suspense } from 'react';
 import * as React from 'react';
 // SplashScreenWrapper is imported from its own client component file
 import { SplashScreenWrapper } from '@/components/layout/SplashScreenWrapper';
+import { SplashScreen } from '@/components/layout/SplashScreen';
 
 
 const geistSans = Geist({
@@ -45,7 +45,8 @@ export default function RootLayout({
           'antialiased font-sans'
         )}
       >
-        <Suspense fallback={<SplashScreen onFinished={() => {}} isQuickFallback={true} />}>
+        {/* The Suspense fallback now only passes isQuickFallback */}
+        <Suspense fallback={<SplashScreen isQuickFallback={true} />}>
            <SplashScreenWrapper>{children}</SplashScreenWrapper>
         </Suspense>
         <Toaster />
@@ -53,3 +54,4 @@ export default function RootLayout({
     </html>
   );
 }
+
