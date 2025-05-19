@@ -14,79 +14,99 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { User, Target, Salad, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChartIcon, Droplet, ShieldAlert, BellRing, Smile, Users, Search, Activity, Edit3, Mail as MailIcon, Sparkles as LucideSparklesIcon, Loader2, Bike } from 'lucide-react';
+import { User, Target, Salad, CheckCircle, Leaf, HeartHandshake, BarChart3, PieChartIcon, Droplet, ShieldAlert, BellRing, Smile, Users, Search, ActivityIcon, Edit3, Mail, Sparkles as LucideSparklesIcon, Loader2, Bike } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
-import type { OnboardingData, UserProfile, ReminderSettings } from '@/types';
+import type { UserProfile, ReminderSettings } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
-import {
-  saveLocalOnboardingData,
-  clearLocalOnboardingData,
-  getLocalOnboardingData,
-  saveUserProfile,
-  checkEmailExists,
-  isUserLoggedIn,
-  getUserProfile,
-  defaultUserProfileData,
-  setOnboardingComplete
-} from '@/lib/localStorage';
+import { defaultUserProfileData, getLocalOnboardingData, saveLocalOnboardingData, clearLocalOnboardingData } from '@/lib/localStorage';
+import { supabase } from '@/lib/supabaseClient';
+import { Skeleton } from '@/components/ui/skeleton';
 
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 7; // Reduced as account creation is now separate
 
 export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<UserProfile>(defaultUserProfileData);
+  const [formData, setFormData] = useState<Partial<UserProfile>>(defaultUserProfileData);
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [emailExistsError, setEmailExistsError] = useState(false);
+  const [authUser, setAuthUser] = useState<any | null>(null); // Supabase user object
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   const { toast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
     setIsClient(true);
-    // No longer redirecting based on !isUserLoggedIn() here.
-    // The (app)/layout.tsx will handle general protection,
-    // but /onboarding is now a publicPage.
-    
-    const existingProfile = getUserProfile(); // This returns default if nothing is there.
-    const localData = getLocalOnboardingData(); // Get any temporarily saved onboarding progress
-
-    // Merge priorities: existing profile > local onboarding data > defaults
-    const mergedData = {
-      ...defaultUserProfileData,
-      ...existingProfile,
-      ...localData,
-      reminderSettings: {
-        ...(defaultUserProfileData.reminderSettings || {}),
-        ...(existingProfile.reminderSettings || {}),
-        ...(localData.reminderSettings || {}),
-      },
-      appSettings: {
-        ...(defaultUserProfileData.appSettings || {}),
-        ...(existingProfile.appSettings || {}),
-        ...(localData.appSettings || {}),
-        unitPreferences: {
-            ...(defaultUserProfileData.appSettings?.unitPreferences || {}),
-            ...(existingProfile.appSettings?.unitPreferences || {}),
-            ...(localData.appSettings?.unitPreferences || {}),
-        }
-      },
-       macroSplit: {
-        ...(defaultUserProfileData.macroSplit || { carbs: 50, protein: 25, fat: 25 }),
-        ...(existingProfile.macroSplit || {}),
-        ...(localData.macroSplit || {}),
+    const checkAuthAndLoadData = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        toast({ variant: "destructive", title: "Not Authenticated", description: "Please sign up or log in to continue." });
+        router.push('/signup'); // Or /login
+        return;
       }
+      setAuthUser(session.user);
+
+      // Fetch existing profile data from Supabase if it exists
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+      const localData = getLocalOnboardingData(); // Get any temporarily saved onboarding progress
+
+      if (profileData) {
+        // Merge priorities: Supabase profile > local onboarding data > defaults
+        const mergedData = {
+          ...defaultUserProfileData,
+          ...profileData, // Supabase data is source of truth
+          ...localData,   // Overlay with any more recent local edits
+          email: session.user.email || profileData.email || localData.email, // Ensure email is from session
+          name: profileData.name || localData.name || session.user.user_metadata?.full_name,
+          reminderSettings: {
+            ...(defaultUserProfileData.reminderSettings || {}),
+            ...(profileData.reminderSettings || {}),
+            ...(localData.reminderSettings || {}),
+          },
+          appSettings: {
+            ...(defaultUserProfileData.appSettings || {}),
+            ...(profileData.appSettings || {}),
+            ...(localData.appSettings || {}),
+            unitPreferences: {
+                ...(defaultUserProfileData.appSettings?.unitPreferences || {}),
+                ...(profileData.appSettings?.unitPreferences || {}),
+                ...(localData.appSettings?.unitPreferences || {}),
+            }
+          },
+          macroSplit: {
+            ...(defaultUserProfileData.macroSplit || { carbs: 50, protein: 25, fat: 25 }),
+            ...(profileData.macroSplit || {}),
+            ...(localData.macroSplit || {}),
+          }
+        };
+        setFormData(mergedData as UserProfile);
+      } else if (profileError && profileError.code !== 'PGRST116') { // PGRST116: No rows found, fine for new user
+         console.error("Error fetching profile:", profileError.message);
+         toast({variant: "destructive", title: "Profile Error", description: "Could not load your profile."});
+         // Fallback to local/defaults
+         setFormData(prev => ({ ...prev, ...localData, email: session.user.email, name: localData.name || session.user.user_metadata?.full_name }));
+      } else {
+        // No profile in Supabase yet, use local data and session email/name
+        setFormData(prev => ({ ...prev, ...localData, email: session.user.email, name: localData.name || session.user.user_metadata?.full_name }));
+      }
+      setIsLoadingProfile(false);
     };
-    setFormData(mergedData as UserProfile); // Cast as UserProfile as mergedData will have all fields
-  }, [router]); // Removed isUserLoggedIn from dependency array
+    checkAuthAndLoadData();
+  }, [router]);
 
   useEffect(() => {
-    if(isClient && currentStep < TOTAL_STEPS) {
+    if(isClient && currentStep < TOTAL_STEPS && !isLoadingProfile) {
+      // Save progress locally as user moves through onboarding
       saveLocalOnboardingData(formData);
     }
-  }, [formData, isClient, currentStep]);
+  }, [formData, isClient, currentStep, isLoadingProfile]);
 
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -110,16 +130,14 @@ export default function OnboardingPage() {
       }));
     } else if (name === "water_goal") {
       setFormData((prev) => ({ ...prev, water_goal: parseInt(value, 10) || 0 }));
-    } else if (name === "email") {
-      setEmailExistsError(false); 
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
-    else {
+    } else if (name === "age" || name === "height" || name === "weight") {
+        setFormData((prev) => ({ ...prev, [name]: value })); // Keep as string, parse on submit
+    } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
-  const handleSwitchChange = (name: keyof OnboardingData | 'reminderSettings.mealRemindersEnabled' | 'reminderSettings.waterReminderEnabled' | 'enable_carbon_tracking' | 'also_track_sustainability') => (checked: boolean) => {
+  const handleSwitchChange = (name: keyof UserProfile | 'reminderSettings.mealRemindersEnabled' | 'reminderSettings.waterReminderEnabled' | 'enable_carbon_tracking' | 'also_track_sustainability') => (checked: boolean) => {
     if (name === 'reminderSettings.mealRemindersEnabled') {
       setFormData(prev => ({ ...prev, reminderSettings: { ...(prev.reminderSettings || defaultUserProfileData.reminderSettings!), mealRemindersEnabled: checked } }));
     } else if (name === 'reminderSettings.waterReminderEnabled') {
@@ -129,11 +147,11 @@ export default function OnboardingPage() {
     } else if (name === 'also_track_sustainability') {
       setFormData(prev => ({ ...prev, also_track_sustainability: checked }));
     } else {
-      setFormData(prev => ({ ...prev, [name as keyof OnboardingData]: checked as any }));
+      setFormData(prev => ({ ...prev, [name as keyof UserProfile]: checked as any }));
     }
   };
 
-  const handleSelectChange = (name: keyof OnboardingData | 'reminderSettings.waterReminderInterval' | 'height_unit' | 'weight_unit') => (value: string | number) => {
+  const handleSelectChange = (name: keyof UserProfile | 'reminderSettings.waterReminderInterval' | 'height_unit' | 'weight_unit') => (value: string | number) => {
     if (name === 'reminderSettings.waterReminderInterval') {
         setFormData((prev) => ({
             ...prev,
@@ -142,31 +160,21 @@ export default function OnboardingPage() {
     } else if (name === 'height_unit' || name === 'weight_unit') {
        setFormData((prev) => ({ ...prev, [name]: value as 'cm' | 'in' | 'kg' | 'lbs' }));
     } else {
-      setFormData((prev) => ({ ...prev, [name as keyof OnboardingData]: value as any }));
+      setFormData((prev) => ({ ...prev, [name as keyof UserProfile]: value as any }));
     }
   };
 
-  const handleRadioChange = (name: keyof OnboardingData) => (value: string) => {
+  const handleRadioChange = (name: keyof UserProfile) => (value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleNext = async () => {
-    if (currentStep === 1) {
-        if (!formData.name || !formData.age || !formData.email) {
-            toast({ variant: "destructive", title: "Missing fields", description: "Please fill in your name, year of birth, and email." });
+    // Validation for current step
+    if (currentStep === 1) { // Basic Details (name, age, gender - email is from authUser)
+        if (!formData.name || !formData.age) {
+            toast({ variant: "destructive", title: "Missing fields", description: "Please fill in your name and year of birth." });
             return;
         }
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(formData.email)) {
-            toast({ variant: "destructive", title: "Invalid Email", description: "Please enter a valid email address." });
-            return;
-        }
-        if (checkEmailExists(formData.email)) {
-            setEmailExistsError(true);
-            toast({ variant: "destructive", title: "Email Exists", description: "This email is already registered. Please proceed to login." });
-            return;
-        }
-        setEmailExistsError(false);
     }
     if (currentStep === 2 && (!formData.height || !formData.weight || !formData.activity_level)) {
       toast({ variant: "destructive", title: "Missing fields", description: "Please provide height, weight, and activity level." });
@@ -180,11 +188,12 @@ export default function OnboardingPage() {
       toast({ variant: "destructive", title: "Missing fields", description: "Please select your diet type." });
       return;
     }
+     // Step 5 (Eco Mission) is informational, no validation
      if (currentStep === 6 && (!formData.sleep_hours || !formData.stress_level || !formData.water_goal)) {
       toast({ variant: "destructive", title: "Missing fields", description: "Please complete all lifestyle fields." });
       return;
     }
-
+    // Step 7 (Notifications) is also mostly optional preferences
 
     if (currentStep < TOTAL_STEPS) {
       setCurrentStep((prev) => prev + 1);
@@ -199,20 +208,43 @@ export default function OnboardingPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!authUser) {
+      toast({ variant: "destructive", title: "Not Authenticated", description: "Session expired. Please log in again." });
+      router.push('/login');
+      return;
+    }
     setIsLoading(true);
 
-    // Ensure onboarding_complete is false before saving, it will be set true upon final login/setup
-    const profileToSave: UserProfile = {
-        ...formData,
-        onboarding_complete: false, 
+    const profileToSave: Partial<UserProfile> = {
+      ...formData,
+      id: authUser.id, // Ensure ID is from the authenticated user
+      email: authUser.email, // Ensure email is from authenticated user
+      onboarding_complete: true,
+      updated_at: new Date().toISOString(),
     };
     
-    saveUserProfile(profileToSave);
-    clearLocalOnboardingData(); 
+    // Convert numeric string fields to numbers if they exist
+    if (profileToSave.age) profileToSave.age = profileToSave.age; // Keep as string or parse if needed
+    if (profileToSave.height) profileToSave.height = profileToSave.height;
+    if (profileToSave.weight) profileToSave.weight = profileToSave.weight;
+    if (profileToSave.water_goal) profileToSave.water_goal = Number(profileToSave.water_goal);
+
+
+    const { error } = await supabase
+      .from('profiles')
+      .upsert(profileToSave, { onConflict: 'id' });
+
+    if (error) {
+      toast({ variant: "destructive", title: "Error Saving Profile", description: error.message });
+      setIsLoading(false);
+      return;
+    }
+    
+    clearLocalOnboardingData(); // Clear temp data after successful save to Supabase
 
     toast({
-      title: 'Preferences Saved!',
-      description: "Next, let's choose your plan.",
+      title: 'Onboarding Complete!',
+      description: "Let's choose your plan.",
       action: <CheckCircle className="text-green-500" />,
     });
     router.push('/subscription');
@@ -232,6 +264,7 @@ export default function OnboardingPage() {
     if (formData.height && formData.weight && formData.height_unit && formData.weight_unit) {
       const heightNum = parseFloat(formData.height);
       const weightNum = parseFloat(formData.weight);
+
       if (isNaN(heightNum) || isNaN(weightNum) || heightNum <=0 || weightNum <=0) return null;
 
       const heightInMeters = formData.height_unit === 'cm' ? heightNum / 100 : heightNum * 0.0254;
@@ -253,7 +286,7 @@ export default function OnboardingPage() {
     { id: 'improve-energy', label: 'Improve Energy Levels' },
   ];
 
-  if (!isClient) {
+  if (!isClient || isLoadingProfile) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -270,52 +303,49 @@ export default function OnboardingPage() {
             currentStep === 2 ? <BarChart3 className="h-10 w-10 text-primary"/> :
             currentStep === 3 ? <Target className="h-10 w-10 text-primary"/> :
             currentStep === 4 ? <Salad className="h-10 w-10 text-primary"/> :
-            currentStep === 5 ? <LucideSparklesIcon className="h-10 w-10 text-primary"/> :
+            currentStep === 5 ? <Leaf className="h-10 w-10 text-primary" /> : // Eco Mission
             currentStep === 6 ? <HeartHandshake className="h-10 w-10 text-primary"/> :
-            currentStep === 7 ? <BellRing className="h-10 w-10 text-primary"/> :
-            <Leaf className="h-10 w-10 text-primary" />
+            // currentStep === 7 ? <BellRing className="h-10 w-10 text-primary"/> : // Notifications are now part of review
+            <CheckCircle className="h-10 w-10 text-primary" /> // Review Step (TOTAL_STEPS)
           }
         </div>
         <CardTitle className="text-center text-3xl font-bold text-primary">
-          { currentStep === 1 && "Welcome to EcoTrack!"}
-          { currentStep === 2 && "Physical Metrics"}
+          { currentStep === 1 && "Tell Us About Yourself"}
+          { currentStep === 2 && "Your Physical Metrics"}
           { currentStep === 3 && "Your Health Goals"}
           { currentStep === 4 && "Diet & Food Preferences"}
           { currentStep === 5 && "Our Eco Mission & AI"}
           { currentStep === 6 && "Lifestyle Habits"}
-          { currentStep === 7 && "Notification Preferences"}
+          {/* { currentStep === 7 && "Notification Preferences"} */}
           { currentStep === TOTAL_STEPS && "Review & Get Started!"}
           { currentStep < TOTAL_STEPS && ` (Step ${currentStep}/${TOTAL_STEPS-1})`}
         </CardTitle>
         <CardDescription className="text-center">
-          { currentStep === 1 && "Let's personalize your journey. Start by telling us about yourself."}
-          { currentStep === 2 && "Tell us a bit about yourself for accurate tracking."}
-          { currentStep === 3 && "What are you aiming to achieve? You can select multiple goals."}
-          { currentStep === 4 && "Customize your diet and food preferences."}
-          { currentStep === 5 && "See how EcoTrack makes an impact & how AI helps!"}
-          { currentStep === 6 && "Understanding your habits helps us guide you better."}
-          { currentStep === 7 && "Stay on track with timely reminders."}
-          { currentStep === TOTAL_STEPS && "You're almost there! Review your info and proceed to choose your plan."}
+          { currentStep === 1 && "Let's personalize your journey."}
+          { currentStep === 2 && "This helps us provide accurate tracking and recommendations."}
+          { currentStep === 3 && "What are you aiming to achieve? Select all that apply."}
+          { currentStep === 4 && "Customize your diet and any specific food needs."}
+          { currentStep === 5 && "Learn how EcoTrack helps you and the planet, powered by AI!"}
+          { currentStep === 6 && "Understanding your habits helps us tailor advice."}
+          {/* { currentStep === 7 && "Stay on track with timely reminders."} */}
+          { currentStep === TOTAL_STEPS && "You're almost there! Review your information below."}
         </CardDescription>
         <Progress value={progressValue} className="w-full mt-4 h-2 [&>div]:bg-primary" />
       </CardHeader>
 
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {currentStep === 1 && (
+          {currentStep === 1 && ( // Basic Details
             <section className="space-y-4 animate-in fade-in duration-500">
               <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><User className="h-6 w-6" /> Basic Details</h3>
               <div>
                 <Label htmlFor="name-onboarding">Full Name</Label>
                 <Input id="name-onboarding" name="name" value={formData.name || ''} onChange={handleChange} placeholder="E.g., Alex Green" required />
               </div>
-               <div>
-                <Label htmlFor="email-onboarding">Email Address</Label>
-                 <div className="relative">
-                   <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                   <Input id="email-onboarding" name="email" type="email" value={formData.email || ''} onChange={handleChange} placeholder="you@example.com" required className="pl-10" />
-                 </div>
-                {emailExistsError && <p className="text-sm text-destructive mt-1">This email is already registered. Click "Go to Login" or use a different email.</p>}
+              <div>
+                <Label htmlFor="email-onboarding-display">Email Address</Label>
+                 <Input id="email-onboarding-display" name="email" type="email" value={formData.email || authUser?.email || ''} disabled className="bg-muted/50 pl-10" />
+                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hidden" /> {/* Hidden but keeps structure for other email inputs */}
               </div>
               <div>
                 <Label htmlFor="age-onboarding">Year of Birth</Label>
@@ -336,7 +366,7 @@ export default function OnboardingPage() {
             </section>
           )}
 
-          {currentStep === 2 && (
+          {currentStep === 2 && ( // Physical Metrics
              <section className="space-y-4 animate-in fade-in duration-500">
                  <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><BarChart3 className="h-6 w-6" /> Your Metrics</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -367,10 +397,10 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                 </div>
-                {calculatedBMI && <p className="text-sm text-muted-foreground text-center">Calculated BMI: {calculatedBMI} (Note: BMI is an estimate)</p>}
+                {calculatedBMI && <p className="text-sm text-muted-foreground text-center">Calculated BMI: {calculatedBMI} (Note: BMI is an estimate of body fat based on height and weight.)</p>}
                  <div>
                   <Label>Typical Activity Level</Label>
-                  <RadioGroup name="activity_level" value={formData.activity_level || ''} onValueChange={handleRadioChange('activity_level')} className="mt-2 space-y-1">
+                  <RadioGroup name="activity_level" value={formData.activity_level || 'moderate'} onValueChange={handleRadioChange('activity_level')} className="mt-2 space-y-1">
                       <div className="flex items-center space-x-2"><RadioGroupItem value="sedentary" id="sedentary" /><Label htmlFor="sedentary" className="font-normal cursor-pointer">Sedentary (little to no exercise)</Label></div>
                       <div className="flex items-center space-x-2"><RadioGroupItem value="light" id="light" /><Label htmlFor="light" className="font-normal cursor-pointer">Lightly Active (light exercise/sports 1-3 days/week)</Label></div>
                       <div className="flex items-center space-x-2"><RadioGroupItem value="moderate" id="moderate" /><Label htmlFor="moderate" className="font-normal cursor-pointer">Moderately Active (moderate exercise/sports 3-5 days/week)</Label></div>
@@ -384,7 +414,7 @@ export default function OnboardingPage() {
               </section>
           )}
 
-           {currentStep === 3 && (
+           {currentStep === 3 && ( // Health Goals
               <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Target className="h-6 w-6" /> Health Goals & Focus</h3>
                 <div>
@@ -394,12 +424,12 @@ export default function OnboardingPage() {
                       <div key={goal.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-muted/50">
                         <Checkbox
                           id={`healthGoalsCheckbox-${goal.id}`}
-                          name="healthGoalsCheckbox" 
+                          name="healthGoalsCheckbox"
                           value={goal.label}
                           checked={(formData.health_goals || []).includes(goal.label)}
                           onCheckedChange={(checked) => {
-                            const isChecked = !!checked; 
-                            handleChange({ 
+                            const isChecked = !!checked;
+                            handleChange({
                               target: {
                                 name: "healthGoalsCheckbox",
                                 value: goal.label,
@@ -423,7 +453,7 @@ export default function OnboardingPage() {
                 </div>
                 <div>
                   <Label htmlFor="exercise_frequency-onboarding">How many days a week do you typically exercise?</Label>
-                  <Select name="exercise_frequency" value={formData.exercise_frequency || ''} onValueChange={handleSelectChange('exercise_frequency')}>
+                  <Select name="exercise_frequency" value={formData.exercise_frequency || '1-2'} onValueChange={handleSelectChange('exercise_frequency')}>
                     <SelectTrigger id="exercise_frequency-onboarding"><SelectValue placeholder="Select frequency" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0">0 days</SelectItem>
@@ -434,22 +464,22 @@ export default function OnboardingPage() {
                   </Select>
                 </div>
                  <div>
-                  <Label>Customize Macro Split</Label>
+                  <Label>Customize Macro Split (Optional)</Label>
                   <div className="p-4 border rounded-md text-center bg-muted/50">
                     <PieChartIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2"/>
                     <p className="text-sm text-muted-foreground">Carbs: {formData.macroSplit?.carbs}% | Protein: {formData.macroSplit?.protein}% | Fat: {formData.macroSplit?.fat}%</p>
-                    <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('Edit Macro Split')}>Edit Split</Button> or <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('AI Macro Recommendation')}>Use AI Recommendation</Button>
+                    <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('Edit Macro Split during Onboarding')}>Edit Split</Button> or <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('AI Macro Recommendation')}>Use AI Recommendation</Button>
                   </div>
                 </div>
               </section>
           )}
 
-          {currentStep === 4 && (
+          {currentStep === 4 && ( // Diet & Food Preferences
              <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><Salad className="h-6 w-6" /> Diet & Food Preferences</h3>
                  <div>
                   <Label htmlFor="diet_type-onboarding">Are you following any specific diet?</Label>
-                  <Select name="diet_type" value={formData.diet_type || ''} onValueChange={handleSelectChange('diet_type')}>
+                  <Select name="diet_type" value={formData.diet_type || 'none'} onValueChange={handleSelectChange('diet_type')}>
                     <SelectTrigger id="diet_type-onboarding"><SelectValue placeholder="Select diet type" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
@@ -504,16 +534,16 @@ export default function OnboardingPage() {
                  <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
                   <Label htmlFor="enable_carbon_trackingOnboarding" className="flex flex-col">
                     <span>Enable Carbon Tracking?</span>
-                    <span className="text-xs text-muted-foreground">Understand your food's eco-impact.</span>
+                    <span className="text-xs text-muted-foreground">Understand your food's eco-impact (EcoPro feature).</span>
                   </Label>
                   <Switch id="enable_carbon_trackingOnboarding" name="enable_carbon_tracking" checked={!!formData.enable_carbon_tracking} onCheckedChange={handleSwitchChange('enable_carbon_tracking')} />
                 </div>
               </section>
           )}
 
-          {currentStep === 5 && (
+          {currentStep === 5 && ( // Eco Mission & AI
              <section className="space-y-6 animate-in fade-in duration-500 text-center">
-                 <h3 className="text-xl font-semibold flex items-center justify-center gap-2 text-primary"><LucideSparklesIcon className="h-6 w-6" /> Our Eco Mission & AI</h3>
+                 <h3 className="text-xl font-semibold flex items-center justify-center gap-2 text-primary"><Leaf className="h-6 w-6" /> Our Eco Mission & AI Power</h3>
                  <div className="p-4 border rounded-lg bg-muted/30">
                     <LucideSparklesIcon className="h-10 w-10 text-primary mx-auto mb-3"/>
                     <p className="font-semibold text-lg mb-2">Snap a Photo, Get Instant Insights!</p>
@@ -529,12 +559,12 @@ export default function OnboardingPage() {
               </section>
           )}
 
-          {currentStep === 6 && (
+          {currentStep === 6 && ( // Lifestyle Habits
              <section className="space-y-4 animate-in fade-in duration-500">
                 <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><HeartHandshake className="h-6 w-6" /> Lifestyle Habits</h3>
                 <div>
                   <Label htmlFor="sleep_hours-onboarding">On average, how many hours of sleep do you get per night?</Label>
-                  <Select name="sleep_hours" value={formData.sleep_hours || ''} onValueChange={handleSelectChange('sleep_hours')}>
+                  <Select name="sleep_hours" value={formData.sleep_hours || '7-8'} onValueChange={handleSelectChange('sleep_hours')}>
                     <SelectTrigger id="sleep_hours-onboarding"><SelectValue placeholder="Select sleep hours" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="<5">&lt;5 hours</SelectItem>
@@ -546,7 +576,7 @@ export default function OnboardingPage() {
                 </div>
                 <div>
                   <Label>How would you rate your typical stress levels?</Label>
-                  <RadioGroup name="stress_level" value={formData.stress_level || ''} onValueChange={handleRadioChange('stress_level')} className="mt-2 space-y-1">
+                  <RadioGroup name="stress_level" value={formData.stress_level || 'moderate'} onValueChange={handleRadioChange('stress_level')} className="mt-2 space-y-1">
                       <div className="flex items-center space-x-2"><RadioGroupItem value="low" id="stress_low_onboarding" /><Label htmlFor="stress_low_onboarding" className="font-normal cursor-pointer">Low</Label></div>
                       <div className="flex items-center space-x-2"><RadioGroupItem value="moderate" id="stress_moderate_onboarding" /><Label htmlFor="stress_moderate_onboarding" className="font-normal cursor-pointer">Moderate</Label></div>
                       <div className="flex items-center space-x-2"><RadioGroupItem value="high" id="stress_high_onboarding" /><Label htmlFor="stress_high_onboarding" className="font-normal cursor-pointer">High</Label></div>
@@ -559,66 +589,16 @@ export default function OnboardingPage() {
                     <Input id="water_goalOnboarding" name="water_goal" type="number" value={formData.water_goal?.toString() || '8'} onChange={handleChange} placeholder="E.g., 8" min="1" max="20"/>
                   </div>
                 </div>
+                {/* Removed Notification Preferences from here, will be part of review/final step or profile settings */}
               </section>
           )}
 
-          {currentStep === 7 && (
-             <section className="space-y-4 animate-in fade-in duration-500">
-                <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><BellRing className="h-6 w-6" /> Notification Preferences</h3>
-                 <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
-                    <Label htmlFor="mealRemindersEnabledOnboarding" className="flex flex-col">
-                        <span>Enable Meal Reminders?</span>
-                        <span className="text-xs text-muted-foreground">Get notified for breakfast, lunch, and dinner.</span>
-                    </Label>
-                    <Switch id="mealRemindersEnabledOnboarding" name="reminderSettings.mealRemindersEnabled" checked={!!formData.reminderSettings?.mealRemindersEnabled} onCheckedChange={handleSwitchChange('reminderSettings.mealRemindersEnabled')} />
-                </div>
-                {formData.reminderSettings?.mealRemindersEnabled && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-3 border rounded-md bg-muted/30">
-                         <div> <Label htmlFor="breakfastTimeOnboarding">Breakfast</Label> <Input id="breakfastTimeOnboarding" name="breakfastTime" type="time" value={formData.reminderSettings?.breakfastTime || '08:00'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...(prev.reminderSettings || defaultUserProfileData.reminderSettings!), breakfastTime: e.target.value}}))} /> </div>
-                        <div> <Label htmlFor="lunchTimeOnboarding">Lunch</Label> <Input id="lunchTimeOnboarding" name="lunchTime" type="time" value={formData.reminderSettings?.lunchTime || '12:30'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...(prev.reminderSettings || defaultUserProfileData.reminderSettings!), lunchTime: e.target.value}}))} /> </div>
-                        <div> <Label htmlFor="dinnerTimeOnboarding">Dinner</Label> <Input id="dinnerTimeOnboarding" name="dinnerTime" type="time" value={formData.reminderSettings?.dinnerTime || '18:30'} onChange={(e) => setFormData(prev => ({...prev, reminderSettings: {...(prev.reminderSettings || defaultUserProfileData.reminderSettings!), dinnerTime: e.target.value}}))} /> </div>
-                    </div>
-                )}
-                 <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
-                    <Label htmlFor="waterReminderEnabledOnboarding" className="flex flex-col">
-                        <span>Water Intake Reminders?</span>
-                         <span className="text-xs text-muted-foreground">Stay hydrated throughout the day.</span>
-                    </Label>
-                    <Switch id="waterReminderEnabledOnboarding" name="reminderSettings.waterReminderEnabled" checked={!!formData.reminderSettings?.waterReminderEnabled} onCheckedChange={handleSwitchChange('reminderSettings.waterReminderEnabled')} />
-                </div>
-                {formData.reminderSettings?.waterReminderEnabled && (
-                     <div className="p-3 border rounded-md bg-muted/30 space-y-2">
-                        <Label htmlFor="waterReminderIntervalOnboarding">Remind every:</Label>
-                        <Select name="waterReminderInterval" value={formData.reminderSettings?.waterReminderInterval?.toString() || '60'} onValueChange={(val) => handleSelectChange('reminderSettings.waterReminderInterval')(Number(val))}>
-                            <SelectTrigger id="waterReminderIntervalOnboarding"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                            <SelectItem value="30">30 minutes</SelectItem>
-                            <SelectItem value="60">60 minutes</SelectItem>
-                            <SelectItem value="90">90 minutes</SelectItem>
-                            <SelectItem value="120">120 minutes</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-                 <p className="text-xs text-muted-foreground text-center">Actual notification delivery depends on your browser and device settings.</p>
-                  <div className="p-4 border rounded-lg text-center">
-                    <h4 className="font-semibold mb-2">Data Privacy Assurance</h4>
-                    <ShieldAlert className="h-8 w-8 text-primary mx-auto mb-2"/>
-                    <p className="text-xs text-muted-foreground">Your data is yours. We use AI to provide insights, but your personal information is handled with care. Read our (placeholder) Privacy Policy for details.</p>
-                    <div className="mt-2 flex items-center justify-center space-x-2">
-                        <Checkbox id="privacyConsentOnboarding" required defaultChecked/>
-                        <Label htmlFor="privacyConsentOnboarding" className="text-xs font-normal cursor-pointer">I agree to the terms and conditions.</Label>
-                    </div>
-                </div>
-            </section>
-          )}
-
-          {currentStep === TOTAL_STEPS && (
+          {currentStep === TOTAL_STEPS && ( // Review Step
             <section className="space-y-4 animate-in fade-in duration-500">
                  <h3 className="text-xl font-semibold flex items-center gap-2 text-primary"><CheckCircle className="h-6 w-6" /> Review Your Information</h3>
                 <div className="space-y-2 border p-4 rounded-md bg-muted/30 max-h-96 overflow-y-auto text-sm">
                   <p><strong>Name:</strong> {formData.name || 'Not set'}</p>
-                  <p><strong>Email:</strong> {formData.email || 'Not set'}</p>
+                  <p><strong>Email:</strong> {formData.email || authUser?.email || 'Not set'}</p>
                   <p><strong>Year of Birth:</strong> {formData.age || 'Not set'}</p>
                   <p><strong>Gender:</strong> {formData.gender || 'Not set'}</p>
                   <p><strong>Height:</strong> {formData.height || 'Not set'} {formData.height_unit || 'cm'}</p>
@@ -636,12 +616,18 @@ export default function OnboardingPage() {
                   <p><strong>Sleep per night:</strong> {formData.sleep_hours || 'Not set'}</p>
                   <p><strong>Stress Level:</strong> {formData.stress_level || 'Not set'}</p>
                   <p><strong>Water Goal:</strong> {formData.water_goal || '8'} glasses</p>
+                  <p className="mt-3 font-medium">Notification Preferences (Editable later in Profile):</p>
                   <p><strong>Meal Reminders:</strong> {formData.reminderSettings?.mealRemindersEnabled ? `Enabled (${formData.reminderSettings.breakfastTime}, ${formData.reminderSettings.lunchTime}, ${formData.reminderSettings.dinnerTime})` : 'Disabled'}</p>
                   <p><strong>Water Reminders:</strong> {formData.reminderSettings?.waterReminderEnabled ? `Enabled, every ${formData.reminderSettings.waterReminderInterval} mins` : 'Disabled'}</p>
                 </div>
-                <div className="flex items-center gap-2 mt-4 p-3 bg-primary/10 rounded-md">
-                    <Users className="h-5 w-5 text-primary"/>
-                    <p className="text-sm text-muted-foreground">You're joining a community dedicated to health and sustainability!</p>
+                <div className="p-4 border rounded-lg text-center mt-4">
+                    <h4 className="font-semibold mb-2">Data Privacy Assurance</h4>
+                    <ShieldAlert className="h-8 w-8 text-primary mx-auto mb-2"/>
+                    <p className="text-xs text-muted-foreground">Your data is yours. We use AI to provide insights, but your personal information is handled with care. By proceeding, you agree to our (placeholder) Privacy Policy and Terms of Service.</p>
+                    <div className="mt-2 flex items-center justify-center space-x-2">
+                        <Checkbox id="privacyConsentOnboarding" required defaultChecked/>
+                        <Label htmlFor="privacyConsentOnboarding" className="text-xs font-normal cursor-pointer">I agree to the terms and conditions.</Label>
+                    </div>
                 </div>
               </section>
           )}
@@ -651,19 +637,13 @@ export default function OnboardingPage() {
               Previous
             </Button>
             {currentStep < TOTAL_STEPS ? (
-              <Button 
-                type="button" 
-                onClick={() => {
-                  if (currentStep === 1 && emailExistsError) {
-                    router.push(`/login?email=${encodeURIComponent(formData.email || '')}`);
-                  } else {
-                    handleNext();
-                  }
-                }}
-                className="ml-auto" 
+              <Button
+                type="button"
+                onClick={handleNext}
+                className="ml-auto"
                 disabled={isLoading}
               >
-                {currentStep === 1 && emailExistsError ? "Go to Login" : "Next"}
+                Next <ArrowRight className="ml-2 h-4 w-4"/>
               </Button>
             ) : (
               <Button type="submit" className="ml-auto bg-green-600 hover:bg-green-700" disabled={isLoading}>

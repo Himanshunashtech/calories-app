@@ -3,12 +3,14 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Check, Leaf, Sparkles, Trees, ArrowRight } from 'lucide-react';
+import { Check, Leaf, Sparkles, Trees, ArrowRight, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { setSelectedPlan as saveSelectedPlan, type UserPlan, saveUserProfile, getUserProfile } from '@/lib/localStorage';
+import { setSelectedPlan as saveSelectedPlanToLocal, type UserPlan } from '@/lib/localStorage'; // Using local for now
+import { supabase } from '@/lib/supabaseClient';
+import { useEffect, useState } from 'react';
 
 const plans = [
   {
@@ -23,7 +25,7 @@ const plans = [
       'Limited AI analysis (3 scans/month)',
     ],
     cta: 'Continue Free',
-    tier: 'free',
+    tier: 'free' as UserPlan,
     variant: 'outline' as 'outline' | 'default',
   },
   {
@@ -40,7 +42,7 @@ const plans = [
       'Personalized AI-driven tips & recommendations',
     ],
     cta: 'Upgrade to Pro',
-    tier: 'pro',
+    tier: 'pro' as UserPlan,
     variant: 'default' as 'outline' | 'default',
     highlight: true,
   },
@@ -55,10 +57,10 @@ const plans = [
       'Meal carbon footprint estimations',
       'Eco-friendly food suggestions',
       'Track your positive environmental impact',
-      'Support eco-initiatives (conceptual)',
+      'AI-Generated Eco Meal Plans',
     ],
     cta: 'Go EcoPro',
-    tier: 'ecopro',
+    tier: 'ecopro' as UserPlan,
     variant: 'outline' as 'outline' | 'default',
   },
 ];
@@ -66,22 +68,52 @@ const plans = [
 export default function SubscriptionPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [authUser, setAuthUser] = useState<any>(null);
 
-  const handleSelectPlan = (tier: string, planName: string) => {
-    saveSelectedPlan(tier as UserPlan); 
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({ variant: "destructive", title: "Not Authenticated", description: "Please complete onboarding or log in." });
+        router.push('/onboarding'); // Or /login if user might have an account
+      } else {
+        setAuthUser(user);
+      }
+    };
+    fetchUser();
+  }, [router, toast]);
+
+  const handleSelectPlan = async (tier: UserPlan, planName: string) => {
+    if (!authUser) {
+      toast({ variant: "destructive", title: "Authentication Error", description: "User session not found. Please try logging in." });
+      router.push('/login');
+      return;
+    }
+    setIsLoading(true);
+
+    // Save selected plan to Supabase profile
+    const { error } = await supabase
+      .from('profiles')
+      .update({ selected_plan: tier, updated_at: new Date().toISOString() })
+      .eq('id', authUser.id);
+
+    if (error) {
+      toast({ variant: "destructive", title: "Update Failed", description: `Could not save plan choice: ${error.message}` });
+      setIsLoading(false);
+      return;
+    }
     
-    // Optionally, update the user profile with this plan choice if needed
-    // const userProfile = getUserProfile();
-    // if (userProfile) {
-    //   saveUserProfile({ ...userProfile, selectedPlan: tier as UserPlan });
-    // }
+    // Also save to local for immediate access if needed, though Supabase is source of truth
+    saveSelectedPlanToLocal(tier); 
 
     toast({
       title: 'Plan Selected!',
-      description: `You've chosen the ${planName} plan. Let's finalize your account.`,
+      description: `You've chosen the ${planName} plan. Welcome to the core app!`,
       action: <Check className="text-green-500" />,
     });
-    router.push('/login'); 
+    router.push('/log-meal'); // Redirect to log-meal page
+    setIsLoading(false);
   };
 
   return (
@@ -127,8 +159,10 @@ export default function SubscriptionPage() {
                 className="w-full text-base py-5"
                 variant={plan.highlight ? 'default' : 'outline'}
                 size="lg"
+                disabled={isLoading}
               >
-                {plan.cta} <ArrowRight className="ml-2 h-4 w-4" />
+                {isLoading ? <Loader2 className="animate-spin mr-2"/> : plan.cta} 
+                {!isLoading && <ArrowRight className="ml-2 h-4 w-4" />}
               </Button>
             </CardFooter>
           </Card>
@@ -136,7 +170,11 @@ export default function SubscriptionPage() {
       </div>
 
       <div className="text-center mt-6 space-y-2">
-        <p className="text-muted-foreground">All plans are commitment-free. Cancel anytime.</p>
+        <p className="text-muted-foreground">All plans are commitment-free. Cancel anytime (conceptual).</p>
+        <p className="text-xs text-muted-foreground">Payment processing is a placeholder. No actual charges will be made.</p>
+         <Link href="/log-meal" passHref>
+          <Button variant="link">Skip for now</Button>
+        </Link>
       </div>
     </div>
   );

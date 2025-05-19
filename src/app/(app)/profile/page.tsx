@@ -14,8 +14,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile, ReminderSettings, AppSettings } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
-import { defaultUserProfileData, getUserProfile, saveUserProfile, fakeLogout, clearAllUserData } from '@/lib/localStorage';
-import { UserCircle2, Mail, Phone, Weight, Ruler, Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, SettingsIcon, Edit3, Cog, Palette, Droplet, LogOut, PieChartIcon, CalendarDays, Trash2, Sprout, Loader2 } from 'lucide-react';
+import { defaultUserProfileData, clearLocalOnboardingData } from '@/lib/localStorage'; // Keep for defaults
+import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/app/(app)/layout'; // Import useAuth
+
+import { UserCircle2, Mail, Phone, Weight, Ruler, ActivityIcon as Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, SettingsIcon, Edit3, Cog, Palette, Droplet, LogOut, PieChartIcon, CalendarDays, Trash2, Sprout, Loader2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -32,12 +35,14 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter as ModalFooter, DialogTrigger as ModalTrigger } from "@/components/ui/dialog";
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<UserProfile>(defaultUserProfileData);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, profile: authProfile, isLoading: authLoading, refreshProfile } = useAuth();
+  const [profile, setProfile] = useState<Partial<UserProfile>>(defaultUserProfileData);
   const [isSaving, setIsSaving] = useState(false);
-  const [isClient, setIsClient] = useState(false);
+  const [isClient, setIsClient] = useState(false); // Still useful for some client-only ops
   const [isMacroModalOpen, setIsMacroModalOpen] = useState(false);
-  const [tempMacroSplit, setTempMacroSplit] = useState(profile.macroSplit || { carbs: 50, protein: 25, fat: 25 });
+  const [tempMacroSplit, setTempMacroSplit] = useState(defaultUserProfileData.macroSplit || { carbs: 50, protein: 25, fat: 25 });
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+
 
   const { toast } = useToast();
   const router = useRouter();
@@ -45,11 +50,47 @@ export default function ProfilePage() {
 
   useEffect(() => {
     setIsClient(true);
-    const loadedProfile = getUserProfile();
-    setProfile(loadedProfile);
-    setTempMacroSplit(loadedProfile.macroSplit || defaultUserProfileData.macroSplit!);
-    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (authProfile && !authLoading) {
+      // Deep merge authProfile with defaults to ensure all fields are present
+      const mergedProfile = {
+        ...defaultUserProfileData,
+        ...authProfile,
+        reminderSettings: {
+          ...(defaultUserProfileData.reminderSettings || {}),
+          ...(authProfile.reminderSettings || {}),
+        },
+        appSettings: {
+          ...(defaultUserProfileData.appSettings || {}),
+          ...(authProfile.appSettings || {}),
+          unitPreferences: {
+            ...(defaultUserProfileData.appSettings?.unitPreferences || {}),
+            ...(authProfile.appSettings?.unitPreferences || {}),
+          }
+        },
+        macroSplit: {
+            ...(defaultUserProfileData.macroSplit || { carbs: 50, protein: 25, fat: 25 }),
+            ...(authProfile.macroSplit || {}),
+        }
+      };
+      setProfile(mergedProfile as UserProfile);
+      setTempMacroSplit(mergedProfile.macroSplit || { carbs: 50, protein: 25, fat: 25 });
+      setInitialLoadDone(true);
+    } else if (!authLoading && !authProfile && user) {
+        // User exists but no profile yet, could be new user or fetch issue
+        // Initialize with defaults and user's email/id
+        setProfile(prev => ({
+            ...defaultUserProfileData,
+            ...prev, // keep any partial local data if any
+            id: user.id,
+            email: user.email || '',
+        }));
+        setInitialLoadDone(true);
+    }
+  }, [authProfile, authLoading, user]);
+
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -93,7 +134,7 @@ export default function ProfilePage() {
       }
     } else if (name === 'appSettings.hideNonCompliantRecipes') {
       setProfile(prev => ({ ...prev, appSettings: { ...(prev.appSettings || defaultUserProfileData.appSettings!), hideNonCompliantRecipes: checked } }));
-    } else if (typeof name === 'string' && name in profile) {
+    } else if (typeof name === 'string' && Object.prototype.hasOwnProperty.call(profile, name)) {
       setProfile((prev) => ({ ...prev, [name as keyof UserProfile]: checked as any }));
     } else {
       console.warn("Unhandled switch change on profile page:", name);
@@ -115,8 +156,10 @@ export default function ProfilePage() {
       }));
     } else if (name === 'height_unit' || name === 'weight_unit') {
        setProfile((prev) => ({ ...prev, [name]: value as 'cm' | 'in' | 'kg' | 'lbs' }));
-    } else {
+    } else if (Object.prototype.hasOwnProperty.call(profile, name)) {
       setProfile((prev) => ({ ...prev, [name as keyof UserProfile]: value as any }));
+    } else {
+        console.warn("Unhandled select change on profile page:", name);
     }
   };
 
@@ -133,21 +176,30 @@ export default function ProfilePage() {
   };
 
   const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (!user) {
+      toast({ variant: "destructive", title: "Not Authenticated", description: "Please log in." });
+      return;
+    }
     const file = event.target.files?.[0];
     if (file) {
       setIsSaving(true);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUri = reader.result as string;
-        setProfile((prev) => ({ ...prev, profile_image_url: dataUri }));
+      const filePath = `${user.id}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('avatars') // Ensure you have an 'avatars' bucket in Supabase Storage
+        .upload(filePath, file);
+
+      if (uploadError) {
+        toast({ variant: "destructive", title: "Upload Failed", description: uploadError.message });
         setIsSaving(false);
-        toast({ title: "Avatar Updated (Locally)", description: "Click 'Save Profile' to persist."});
-      };
-      reader.onerror = () => {
-        toast({ variant: "destructive", title: "Image Read Failed", description: "Could not process image." });
-        setIsSaving(false);
+        return;
       }
-      reader.readAsDataURL(file);
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      
+      setProfile((prev) => ({ ...prev, profile_image_url: publicUrl }));
+      // No need to save to Supabase profiles table yet, handleSubmit will do that.
+      toast({ title: "Avatar Ready", description: "New avatar selected. Click 'Save Profile' to apply."});
+      setIsSaving(false);
     }
   };
 
@@ -156,9 +208,38 @@ export default function ProfilePage() {
   };
 
   const handleSubmit = async () => {
+    if (!user) {
+      toast({ variant: "destructive", title: "Not Authenticated", description: "Please log in to save your profile." });
+      return;
+    }
     setIsSaving(true);
-    saveUserProfile(profile);
-    toast({ title: 'Profile Updated', description: 'Your profile information has been saved.', action: <Save className="text-green-500" /> });
+    
+    const profileToSave: Partial<UserProfile> = {
+        ...profile,
+        id: user.id, // Ensure ID is always the auth user's ID
+        email: user.email, // Email should not be changed here, it's from auth
+        updated_at: new Date().toISOString(),
+        // Ensure nested objects are correctly structured if they were null
+        reminderSettings: profile.reminderSettings || defaultUserProfileData.reminderSettings,
+        appSettings: profile.appSettings || defaultUserProfileData.appSettings,
+        macroSplit: profile.macroSplit || defaultUserProfileData.macroSplit,
+    };
+
+    // Remove fields that Supabase auto-generates or shouldn't be client-updated directly this way
+    delete profileToSave.created_at; 
+    if (profileToSave.id === '') delete profileToSave.id; // Should always be user.id
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(profileToSave)
+      .eq('id', user.id);
+
+    if (error) {
+      toast({ variant: "destructive", title: 'Profile Update Failed', description: error.message });
+    } else {
+      toast({ title: 'Profile Updated', description: 'Your profile information has been saved.', action: <Save className="text-green-500" /> });
+      await refreshProfile(); // Refresh context profile
+    }
     setIsSaving(false);
   };
 
@@ -179,33 +260,65 @@ export default function ProfilePage() {
     }
     setProfile(prev => ({ ...prev, macroSplit: { ...(tempMacroSplit || defaultUserProfileData.macroSplit!) } }));
     setIsMacroModalOpen(false);
-    toast({ title: 'Macro Split Updated (Locally)', description: 'Your new macro targets are set. Click Save Profile to persist.' });
+    toast({ title: 'Macro Split Updated (Locally)', description: 'Your new macro targets are set. Click Save Profile to persist to database.' });
   };
 
   const handleLogout = async () => {
     setIsSaving(true);
-    fakeLogout();
-    toast({ title: "Logged Out", description: "You have been successfully logged out." });
-    router.push('/'); // Redirect to home page
+    const { error } = await supabase.auth.signOut();
+    clearLocalOnboardingData(); // Clear any temp onboarding data
+    if (error) {
+      toast({ variant: "destructive", title: "Logout Failed", description: error.message });
+    } else {
+      toast({ title: "Logged Out", description: "You have been successfully logged out." });
+      router.push('/'); // Redirect to home page
+    }
     setIsSaving(false);
   };
 
   const handleDeleteAccount = async () => {
-    clearAllUserData();
-    toast({ title: 'Account Data Cleared', description: 'All your app data on this device has been removed.', variant: 'default', duration: 7000 });
-    router.push('/'); // Redirect to home page after deleting account
+    // Note: True account deletion requires server-side admin privileges.
+    // This will delete the profile row and sign out.
+    if (!user) return;
+    setIsSaving(true);
+    const { error: profileDeleteError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', user.id);
+
+    if (profileDeleteError) {
+        toast({ title: 'Error Deleting Profile Data', description: profileDeleteError.message, variant: 'destructive' });
+    } else {
+        toast({ title: 'Profile Data Cleared', description: 'Your profile data has been removed.' });
+    }
+    
+    await supabase.auth.signOut(); // Sign out the user
+    clearLocalOnboardingData();
+    toast({ title: 'Account Data Removed Locally & Signed Out', description: 'All your app data on this device has been removed.', variant: 'default', duration: 7000 });
+    router.push('/');
+    setIsSaving(false);
   };
 
   const handlePlaceholderFeatureClick = (featureName: string) => {
     toast({ title: `${featureName} Coming Soon!`, description: `This feature will be available in a future update.` });
   };
 
-  if (!isClient || isLoading) {
+  if (!isClient || authLoading || !initialLoadDone) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
         <p className="text-muted-foreground">Loading profile...</p>
       </div>
+    );
+  }
+  
+  if (!user && isClient) { // Should be caught by layout, but as a safeguard
+    router.push('/login');
+    return (
+         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
+            <AlertTriangle className="h-12 w-12 text-destructive animate-pulse mb-4" />
+            <p className="text-muted-foreground">Redirecting to login...</p>
+        </div>
     );
   }
 
@@ -215,12 +328,13 @@ export default function ProfilePage() {
         <CardHeader className="items-center text-center">
           <div className="relative mb-4">
             <Image
-              src={profile.profile_image_url || `https://placehold.co/128x128.png?text=${profile.name ? profile.name.charAt(0).toUpperCase() : 'P'}`}
+              src={profile.profile_image_url || `https://placehold.co/128x128.png?text=${profile.name ? profile.name.charAt(0).toUpperCase() : (user?.email?.charAt(0).toUpperCase() || 'P')}`}
               alt="Profile Picture"
               data-ai-hint="profile avatar"
               width={128}
               height={128}
               className="rounded-full object-cover border-4 border-primary/50 shadow-md"
+              key={profile.profile_image_url} // Force re-render if URL changes
             />
             <Button
               variant="outline"
@@ -234,7 +348,7 @@ export default function ProfilePage() {
             </Button>
             <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="sr-only" id="profileImageUpload" />
           </div>
-          <CardTitle className="text-3xl font-bold text-primary">{profile.name || 'Your Profile'}</CardTitle>
+          <CardTitle className="text-3xl font-bold text-primary">{profile.name || user?.email || 'Your Profile'}</CardTitle>
           <CardDescription>View and update your personal information and preferences.</CardDescription>
         </CardHeader>
 
@@ -251,7 +365,7 @@ export default function ProfilePage() {
           <section>
             <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><Mail /> Contact Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div> <Label htmlFor="email-profile">Email Address</Label> <Input id="email-profile" name="email" type="email" value={profile.email || ''} disabled className="bg-muted/50" /> </div>
+              <div> <Label htmlFor="email-profile">Email Address</Label> <Input id="email-profile" name="email" type="email" value={profile.email || user?.email || ''} disabled className="bg-muted/50" /> </div>
               <div> <Label htmlFor="phone-profile">Phone Number (Optional)</Label> <Input id="phone-profile" name="phone" type="tel" value={profile.phone || ''} onChange={handleChange} placeholder="+1 123-456-7890" /> </div>
             </div>
           </section>
@@ -277,7 +391,7 @@ export default function ProfilePage() {
           <section>
             <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><Activity /> Goals & Activity</h3>
             <div className="space-y-4">
-              <div> <Label>Primary Health Goals</Label> <div className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50 min-h-[40px]"> {profile.health_goals && profile.health_goals.length > 0 ? profile.health_goals.join(', ') : 'Not set'} </div> <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => router.push('/onboarding')}><Edit3 className="mr-1 h-3 w-3" />Edit Goals (Re-run Onboarding)</Button></div>
+              <div> <Label>Primary Health Goals</Label> <div className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50 min-h-[40px]"> {profile.health_goals && profile.health_goals.length > 0 ? profile.health_goals.join(', ') : 'Not set'} </div> <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => router.push('/onboarding?step=3')}><Edit3 className="mr-1 h-3 w-3" />Edit Goals (Re-run Onboarding)</Button></div>
               <div> <Label htmlFor="activity_level-profile">Activity Level</Label> <Select name="activity_level" value={profile.activity_level || ''} onValueChange={handleSelectChange('activity_level')}> <SelectTrigger id="activity_level-profile"><SelectValue placeholder="Select activity level" /></SelectTrigger> <SelectContent> <SelectItem value="sedentary">Sedentary</SelectItem> <SelectItem value="light">Lightly Active</SelectItem> <SelectItem value="moderate">Moderately Active</SelectItem> <SelectItem value="very">Very Active</SelectItem> </SelectContent> </Select> </div>
               <div> <Label htmlFor="exercise_frequency-profile">Exercise Frequency</Label> <Select name="exercise_frequency" value={profile.exercise_frequency || ''} onValueChange={handleSelectChange('exercise_frequency')}> <SelectTrigger id="exercise_frequency-profile"><SelectValue placeholder="Select frequency" /></SelectTrigger> <SelectContent> <SelectItem value="0">0 days/week</SelectItem> <SelectItem value="1-2">1-2 days/week</SelectItem> <SelectItem value="3-4">3-4 days/week</SelectItem> <SelectItem value="5+">5+ days/week</SelectItem> </SelectContent> </Select> </div>
               <div className="flex items-center justify-between space-x-2 p-3 border rounded-md">
@@ -290,9 +404,9 @@ export default function ProfilePage() {
                     <div className="p-4 border rounded-md text-center bg-muted/50">
                       <PieChartIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                       <p className="text-sm text-muted-foreground">C: {profile.macroSplit?.carbs}% | P: {profile.macroSplit?.protein}% | F: {profile.macroSplit?.fat}%</p>
-                      <ModalTrigger asChild>
-                        <Button type="button" variant="link" size="sm" className="p-0 h-auto">Edit Split</Button>
-                      </ModalTrigger>
+                       <ModalTrigger asChild>
+                         <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => { setTempMacroSplit(profile.macroSplit || { carbs: 50, protein: 25, fat: 25 }); setIsMacroModalOpen(true); }}>Edit Split</Button>
+                       </ModalTrigger>
                       or <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => handlePlaceholderFeatureClick('AI Macro Recommendation')}>Use AI Recommendation</Button>
                     </div>
                     <DialogContent>
@@ -405,15 +519,18 @@ export default function ProfilePage() {
               <p className="text-xs text-muted-foreground">Note: Actual notification delivery depends on browser/device settings and app capabilities.</p>
             </div>
           </section>
+            <Button variant="outline" className="w-full justify-start gap-2 mt-2" onClick={() => router.push('/settings')}>
+              <SettingsIcon className="h-5 w-5"/> App Settings
+            </Button>
         </CardContent>
         <CardFooter className="flex-col space-y-2 pt-6">
-          <Button onClick={handleSubmit} className="w-full text-lg py-6" disabled={isSaving}>
+          <Button onClick={handleSubmit} className="w-full text-lg py-6" disabled={isSaving || authLoading}>
             {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5" />}
             Save Profile & Preferences
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" className="w-full" disabled={isSaving}> <LogOut className="mr-2 h-5 w-5" /> Log Out </Button>
+              <Button variant="outline" className="w-full" disabled={isSaving || authLoading}> <LogOut className="mr-2 h-5 w-5" /> Log Out </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader> <AlertDialogTitle>Confirm Logout</AlertDialogTitle> <AlertDialogDescription> Are you sure you want to log out of your EcoAI Calorie Tracker account? </AlertDialogDescription> </AlertDialogHeader>
@@ -422,10 +539,10 @@ export default function ProfilePage() {
           </AlertDialog>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" className="w-full mt-2" disabled={isSaving}> <Trash2 className="mr-2 h-5 w-5" /> Delete Account Data </Button>
+              <Button variant="destructive" className="w-full mt-2" disabled={isSaving || authLoading}> <Trash2 className="mr-2 h-5 w-5" /> Delete Account Data </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
-              <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently delete all your app data from this device. </AlertDialogDescription> </AlertDialogHeader>
+              <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently delete your profile data from our servers and sign you out. Local app data may persist until cleared. </AlertDialogDescription> </AlertDialogHeader>
               <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleDeleteAccount} className={cn(buttonVariants({ variant: 'destructive' }))}> Yes, Delete My Data </AlertDialogAction> </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
