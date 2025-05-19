@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import { setSelectedPlan, getSelectedPlan as getLocalSelectedPlan, saveLocalOnboardingData, clearLocalOnboardingData } from '@/lib/localStorage'; // For plan management pre-profile sync
+import { setSelectedPlan, getSelectedPlan as getLocalSelectedPlan, saveLocalOnboardingData, clearAllLocalUserData } from '@/lib/localStorage'; // For plan management pre-profile sync
 import { FcGoogle } from 'react-icons/fc';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { UserProfile } from '@/types';
@@ -49,12 +49,17 @@ export default function LoginPage() {
                     router.replace('/log-meal');
                 } else {
                     // If session exists but onboarding not complete, means they dropped off.
-                    // Save necessary info to local storage if needed for onboarding prefill.
-                    saveLocalOnboardingData({ email: session.user.email });
+                    saveLocalOnboardingData({ email: session.user.email, name: session.user.user_metadata?.full_name });
                     router.replace('/onboarding');
                 }
-            } else if (error) {
+            } else if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
                 console.error("Error fetching profile for redirection:", error.message);
+                 // If profile fetch fails but session exists, maybe go to onboarding as a fallback
+                saveLocalOnboardingData({ email: session.user.email, name: session.user.user_metadata?.full_name });
+                router.replace('/onboarding');
+            } else if (!profile) { // No profile means new user or incomplete signup
+                 saveLocalOnboardingData({ email: session.user.email, name: session.user.user_metadata?.full_name });
+                 router.replace('/onboarding');
             }
         }
     };
@@ -64,14 +69,14 @@ export default function LoginPage() {
 
   const syncLocalPlanToProfile = async (userId: string) => {
     const localPlan = getLocalSelectedPlan();
-    if (localPlan && localPlan !== 'free') { // Only sync if it's a paid plan set before login
+    if (localPlan && localPlan !== 'free') { 
         const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('selected_plan')
             .eq('id', userId)
             .single();
 
-        if (profileError && profileError.code !== 'PGRST116') { // PGRST116 = no rows found, which is fine if profile gets created by trigger
+        if (profileError && profileError.code !== 'PGRST116') { 
             console.error("Error fetching profile before plan sync:", profileError.message);
             return;
         }
@@ -115,35 +120,42 @@ export default function LoginPage() {
     }
 
     if (data.user) {
-      await syncLocalPlanToProfile(data.user.id); // Sync plan after successful login
-      // Fetch profile to check onboarding status
+      await syncLocalPlanToProfile(data.user.id); 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('onboarding_complete, name')
         .eq('id', data.user.id)
         .single();
 
-      if (profileError && profileError.code !== 'PGRST116') { // PGRST116 means no rows found
+      if (profileError && profileError.code !== 'PGRST116') { 
         toast({ variant: "destructive", title: "Profile Error", description: "Could not fetch your profile data." });
         setIsLoading(false);
         return;
       }
       
-      clearLocalOnboardingData(); // Clear temp onboarding data after successful login
+      clearAllLocalUserData(); // Clear temporary local data after successful login & profile fetch
       toast({ title: 'Logged In Successfully!', description: `Welcome back, ${profile?.name || data.user.email}!`, action: <CheckCircle className="text-green-500"/> });
 
-      if (profile?.onboarding_complete) {
-        router.push('/log-meal');
-      } else {
-        router.push('/onboarding');
+      // Ensure onboarding_complete is true for this specific user flow finalization step
+      // This is where the "Setup Account" implicitly completes onboarding
+      if (!profile?.onboarding_complete) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ onboarding_complete: true, updated_at: new Date().toISOString() })
+          .eq('id', data.user.id);
+        if (updateError) {
+          console.error("Error marking onboarding complete:", updateError.message);
+          // Proceed to log-meal anyway, as login was successful
+        }
       }
+      router.push('/log-meal');
     }
     setIsLoading(false);
   };
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
@@ -154,8 +166,7 @@ export default function LoginPage() {
       setIsLoading(false);
     }
     // Supabase handles redirection. onAuthStateChange in layout will manage next steps.
-    // We might want to sync local plan here too if possible, but it's tricky due to redirect.
-    // Better to do it upon session confirmation.
+    // Plan syncing for Google OAuth happens in the AppLayout's onAuthStateChange.
   };
 
 
@@ -189,54 +200,62 @@ export default function LoginPage() {
     <Card className="shadow-2xl">
       <CardHeader className="text-center">
         <LogIn className="mx-auto h-10 w-10 text-primary mb-2" />
-        <CardTitle className="text-2xl font-bold text-primary">Log In or Set Up Account</CardTitle>
-        <CardDescription>Access your EcoAI Calorie Tracker or finalize your setup.</CardDescription>
+        <CardTitle className="text-2xl font-bold text-primary">Set Up Your Account</CardTitle>
+        <CardDescription>Finalize your account setup or log in if you have an existing account.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleEmailPasswordSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="pl-10"
-              />
+        {isClient ? (
+          <form onSubmit={handleEmailPasswordSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="pl-10"
+                />
+              </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="pl-10 pr-10"
+                  autoComplete="current-password"
+                />
+                <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <div className="text-right">
+                <Link href="/password-reset" passHref>
+                  <Button variant="link" className="p-0 h-auto text-xs">Forgot Password?</Button>
+                </Link>
+              </div>
+            </div>
+            <Button type="submit" className="w-full text-lg py-3" disabled={isLoading}>
+              {isLoading ? <Loader2 className="animate-spin mr-2"/> : 'Complete Account Setup'}
+            </Button>
+          </form>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
+            <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
+            <Skeleton className="h-12 w-full" />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="pl-10 pr-10"
-                autoComplete="current-password"
-              />
-              <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-             <div className="text-right">
-              <Link href="/password-reset" passHref>
-                <Button variant="link" className="p-0 h-auto text-xs">Forgot Password?</Button>
-              </Link>
-            </div>
-          </div>
-          <Button type="submit" className="w-full text-lg py-3" disabled={isLoading}>
-            {isLoading ? <Loader2 className="animate-spin mr-2"/> : 'Log In / Set Up Account'}
-          </Button>
-        </form>
+        )}
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t" />
@@ -249,16 +268,10 @@ export default function LoginPage() {
         </div>
         <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
           {isLoading ? <Loader2 className="animate-spin mr-2"/> : <FcGoogle className="mr-2 h-5 w-5"/>}
-          Sign In with Google
+          Continue with Google
         </Button>
       </CardContent>
        <CardFooter className="flex flex-col items-center text-sm space-y-2">
-          <div className="flex items-center">
-            <p>New to EcoAI?</p>
-            <Link href="/signup" passHref>
-                <Button variant="link" className="p-1 h-auto">Create an Account</Button>
-            </Link>
-        </div>
          <Link href="/" passHref>
           <Button variant="link" className="p-0 h-auto"><ArrowLeft className="mr-1 h-4 w-4"/>Back to Home</Button>
         </Link>

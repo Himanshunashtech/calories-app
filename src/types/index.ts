@@ -12,8 +12,8 @@ export interface DetailedNutrients {
 export type MealCategory = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Fast Food';
 
 export interface MealEntry {
-  id: string; // UUID from Supabase or client-generated for localStorage
-  user_id?: string; // Foreign key to Supabase auth.users.id
+  id: string; // client-generated for localStorage, or UUID from Supabase
+  user_id?: string; // Foreign key to Supabase auth.users.id if using Supabase
   date: string; // ISO string
   category?: MealCategory;
   photoDataUri?: string; // Or URL if using Supabase Storage
@@ -32,7 +32,7 @@ export interface MealEntry {
 export interface FoodAnalysisResult { // Output from AI flows
   estimatedCalories: number;
   nutritionalInformation: string;
-  detailedNutrients: DetailedNutrients; // Ensure this is consistently an object
+  detailedNutrients: DetailedNutrients;
   carbohydrates: number;
   fats: number;
   proteins: number;
@@ -44,17 +44,17 @@ export type UserPlan = 'free' | 'pro' | 'ecopro';
 export interface AIScanUsage {
   count: number;
   limit: number;
-  lastResetMonth: number; // To track monthly reset for free tier
+  lastResetMonth: number;
 }
 
 export interface ReminderSettings {
   mealRemindersEnabled?: boolean;
-  breakfastTime?: string; // e.g., "08:00"
+  breakfastTime?: string;
   lunchTime?: string;
   dinnerTime?: string;
   waterReminderEnabled?: boolean;
-  waterReminderInterval?: number; // in minutes
-  snoozeDuration?: number; // in minutes
+  waterReminderInterval?: number;
+  snoozeDuration?: number;
 }
 
 export interface AppSettings {
@@ -62,74 +62,71 @@ export interface AppSettings {
   unitPreferences?: {
     weight: 'kg' | 'lbs';
     height: 'cm' | 'in';
-    volume: 'ml' | 'fl oz'; // For water intake
+    volume: 'ml' | 'fl oz';
   };
-  hideNonCompliantRecipes?: boolean; // Filter recipes based on profile allergies
+  hideNonCompliantRecipes?: boolean;
 }
 
+// This UserProfile should align with your Supabase 'profiles' table columns
 export interface UserProfile {
-  id: string; // This will be the Supabase auth user ID (UUID)
-  email: string;
+  id: string; // Supabase auth user ID (UUID)
+  email?: string | null; // From Supabase auth, can be null if not set
   name?: string | null;
-  age?: string | null; // Consider storing as number (year of birth) or date
+  age?: string | null; // Year of birth
   gender?: string | null;
-  height?: string | null; // Store as string for flexibility, parse to number when needed
+  height?: string | null;
   height_unit?: 'cm' | 'in' | null;
-  weight?: string | null; // Store as string, parse to number
+  weight?: string | null;
   weight_unit?: 'kg' | 'lbs' | null;
-  activity_level?: string | null; // E.g., 'sedentary', 'light', 'moderate', 'active'
-  health_goals?: string[] | null; // Array of strings
+  activity_level?: string | null;
+  health_goals?: string[] | null;
   also_track_sustainability?: boolean | null;
-  exercise_frequency?: string | null; // E.g., "0", "1-2", "3-4", "5+" days/week
+  exercise_frequency?: string | null;
   diet_type?: string | null;
   dietary_restrictions?: string[] | null;
   dietary_restrictions_other?: string | null;
-  favorite_cuisines?: string | null; // Comma-separated or JSON array string
-  disliked_ingredients?: string | null; // Comma-separated or JSON array string
+  favorite_cuisines?: string | null;
+  disliked_ingredients?: string | null;
   enable_carbon_tracking?: boolean | null;
-  sleep_hours?: string | null; // E.g., "<5", "5-6", "7-8", "8+"
-  stress_level?: string | null; // E.g., "low", "moderate", "high"
-  water_goal?: number | null; // Number of glasses/units
+  sleep_hours?: string | null;
+  stress_level?: string | null;
+  water_goal?: number | null;
   macroSplit?: { carbs: number; protein: number; fat: number } | null;
-  profile_image_url?: string | null; // URL from Supabase Storage or Google
-  onboarding_complete?: boolean; // Default false in DB
-  selected_plan?: UserPlan | null; // Default 'free' in DB
-  reminderSettings?: ReminderSettings | null; // Stored as JSONB in Supabase
-  appSettings?: AppSettings | null; // Stored as JSONB in Supabase
+  profile_image_url?: string | null;
+  onboarding_complete?: boolean;
+  selected_plan?: UserPlan | null;
+  reminderSettings?: ReminderSettings | null; // Stored as JSONB
+  appSettings?: AppSettings | null; // Stored as JSONB
   created_at?: string; // Supabase timestamp
   updated_at?: string; // Supabase timestamp
 }
 
-// Used for collecting onboarding data, can be partial
 export type OnboardingData = Partial<UserProfile>;
 
 
 export interface WaterIntakeData {
-  // This might be managed differently with Supabase, e.g., daily logs or aggregated on profile
-  id?: string;
+  id?: string; // client-gen or Supabase UUID
   user_id?: string;
   date: string; // YYYY-MM-DD
   current: number;
   goal: number;
+  lastUpdatedDate?: string; // To track daily reset
 }
 
 export interface WeightEntry {
-  id?: string; // UUID from Supabase
-  user_id?: string; // Foreign key
+  id?: string; // client-gen or Supabase UUID
+  user_id?: string;
   date: string; // ISO string
   weight: number;
   unit: 'kg' | 'lbs';
   created_at?: string;
 }
 
-// ... other types for AI flow outputs remain largely the same ...
-// NutrientTrendAnalysis, AICoachRecommendations, CarbonComparisonAnalysis, EcoMealPlan, FoodMoodCorrelation, RecipeNutritionDetails
-
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   text: string;
-  timestamp: string; // ISO string
+  timestamp: string;
 }
 
 export interface FlowChatMessage {

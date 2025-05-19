@@ -1,21 +1,21 @@
+
 import type { MealEntry, UserPlan, AIScanUsage, WaterIntakeData, WeightEntry, UserProfile } from '@/types';
 import type { GenerateEcoMealPlanOutput } from '@/ai/flows/generate-eco-meal-plan';
 
-// Keys for data not yet migrated to Supabase or for purely local settings
-const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs'; // Will be migrated to Supabase
-const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage'; // Might be managed differently with backend logic
-const WATER_INTAKE_KEY = 'ecoAi_waterIntake'; // Will be migrated
-const WEIGHT_ENTRIES_KEY = 'ecoAi_weightEntries'; // Will be migrated
-const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput'; // Temporary local cache
-const MEAL_PLAN_KEY = 'ecoAi_weeklyMealPlan'; // Temporary local cache for user's manual plan
-const TEMP_ONBOARDING_DATA_KEY = 'ecoAi_onboardingTempData'; // For pre-filling onboarding after social signup
+// LocalStorage Keys
+const MEAL_LOGS_KEY = 'ecoAiCalorieTracker_mealLogs';
+const AI_SCAN_USAGE_KEY = 'ecoAi_aiScanUsage';
+const WATER_INTAKE_KEY = 'ecoAi_waterIntake';
+const WEIGHT_ENTRIES_KEY = 'ecoAi_weightEntries';
+const GENERATED_MEAL_PLAN_OUTPUT_KEY = 'ecoAi_generatedMealPlanOutput'; // AI generated, temporary
+const WEEKLY_MEAL_PLAN_KEY = 'ecoAi_weeklyMealPlan'; // User's manual plan
 
-// --- User Profile & Auth ---
-// These are now primarily handled by Supabase.
-// Local flags might be used for quick client-side checks but session truth comes from Supabase.
+// Keys related to auth state managed locally (these are for client-side UI control, Supabase is source of truth for auth)
+const TEMP_ONBOARDING_DATA_KEY = 'ecoAi_onboardingTempData'; // For pre-filling onboarding if needed
 
+// User Profile (this is now primarily handled by Supabase, but defaults are useful)
 export const defaultUserProfileData: UserProfile = {
-  id: '', // Will be set by Supabase
+  id: '', // Will be set by Supabase auth
   email: '',
   name: '',
   age: '',
@@ -61,7 +61,7 @@ export const defaultUserProfileData: UserProfile = {
   }
 };
 
-// Temporary Onboarding Data (to pass data from signup to onboarding)
+// Temporary Onboarding Data (to pass data from social signup to onboarding if needed)
 export function getLocalOnboardingData(): Partial<UserProfile> {
   if (typeof window === 'undefined') return {};
   try {
@@ -82,25 +82,36 @@ export function saveLocalOnboardingData(data: Partial<UserProfile>): void {
   }
 }
 
-export function clearLocalOnboardingData(): void {
+// Function to clear all user-specific data from localStorage.
+// Called on logout or account deletion.
+export function clearAllLocalUserData(): void {
   if (typeof window === 'undefined') return;
-  try {
-    localStorage.removeItem(TEMP_ONBOARDING_DATA_KEY);
-  } catch (error) {
-    console.error(`Error removing '${TEMP_ONBOARDING_DATA_KEY}' from localStorage:`, error);
-  }
+  const keysToRemove = [
+    MEAL_LOGS_KEY,
+    AI_SCAN_USAGE_KEY,
+    WATER_INTAKE_KEY,
+    WEIGHT_ENTRIES_KEY,
+    GENERATED_MEAL_PLAN_OUTPUT_KEY,
+    WEEKLY_MEAL_PLAN_KEY,
+    TEMP_ONBOARDING_DATA_KEY,
+    // Add any other app-specific keys here
+  ];
+  keysToRemove.forEach(key => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error(`Error removing '${key}' from localStorage:`, error);
+    }
+  });
+  console.log("Cleared app-specific localStorage data.");
 }
 
 
-// --- Data still managed by localStorage (to be migrated) ---
-
-// Selected Plan (might be redundant if profile.selected_plan from Supabase is source of truth)
+// Selected Plan (primarily for use before profile is fully synced or for UI hints)
 export function getSelectedPlan(): UserPlan {
   if (typeof window === 'undefined') return 'free';
-  // This should ideally come from the fetched Supabase user profile
-  // For now, keeping local as a fallback or for pre-auth state
   try {
-    const plan = localStorage.getItem('ecoAi_selectedPlan_v2') as UserPlan | null; // Use a new key if old one exists
+    const plan = localStorage.getItem('ecoAi_selectedPlan_v2') as UserPlan | null;
     return plan || 'free';
   } catch (error) {
     console.error('Error getting selected plan from LS:', error);
@@ -118,7 +129,7 @@ export function setSelectedPlan(plan: UserPlan): void {
 }
 
 
-// Meal Logs
+// Meal Logs (To be migrated to Supabase)
 export function getMealLogs(): MealEntry[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -179,7 +190,7 @@ export function clearMealLogs(): void {
   }
 }
 
-// AI Scan Usage
+// AI Scan Usage (Consider moving to Supabase with user profile or a separate table)
 const FREE_TIER_SCAN_LIMIT = 3;
 export function getAIScanUsage(): AIScanUsage {
   const defaultUsage = { count: 0, limit: FREE_TIER_SCAN_LIMIT, lastResetMonth: new Date().getMonth() };
@@ -220,7 +231,7 @@ export function canUseAIScan(plan: UserPlan): boolean {
   return usage.count < usage.limit;
 }
 
-// Water Intake
+// Water Intake (To be migrated to Supabase)
 const DEFAULT_DAILY_WATER_GOAL_GLASSES = 8;
 export function getWaterIntake(): WaterIntakeData {
   const today = new Date().toISOString().split('T')[0];
@@ -245,7 +256,7 @@ export function getWaterIntake(): WaterIntakeData {
     console.error(`Error reading '${WATER_INTAKE_KEY}' from localStorage:`, error);
     intake = { ...defaultIntake };
   }
-  intake.goal = goal;
+  intake.goal = goal; // Use default or profile goal
   try { localStorage.setItem(WATER_INTAKE_KEY, JSON.stringify(intake)); }
   catch (e) { console.error("Error saving initial water intake", e); }
   return intake;
@@ -255,7 +266,7 @@ export function addWater(amountInUnits: number = 1): WaterIntakeData {
   if (typeof window === 'undefined') return { current: 0, goal: DEFAULT_DAILY_WATER_GOAL_GLASSES, lastUpdatedDate: new Date().toISOString().split('T')[0] };
   const intake = getWaterIntake();
   const safeGoal = intake.goal > 0 ? intake.goal : DEFAULT_DAILY_WATER_GOAL_GLASSES;
-  intake.current = Math.max(0, Math.min(intake.current + amountInUnits, safeGoal * 3));
+  intake.current = Math.max(0, Math.min(intake.current + amountInUnits, safeGoal * 3)); // Cap at 3x goal to prevent absurd values
   try {
     localStorage.setItem(WATER_INTAKE_KEY, JSON.stringify(intake));
   } catch (error) {
@@ -280,7 +291,7 @@ export function getRecentMealLogs(days: number = 7): MealEntry[] {
   return allLogs.filter(log => log.date && new Date(log.date) >= cutoffDate);
 }
 
-// Weight Entries
+// Weight Entries (To be migrated to Supabase)
 export function getWeightEntries(): WeightEntry[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -294,7 +305,7 @@ export function getWeightEntries(): WeightEntry[] {
 
 export function addWeightEntry(weight: number, unit: 'kg' | 'lbs'): WeightEntry {
   const newEntry: WeightEntry = {
-    id: Math.random().toString(36).substring(2, 15),
+    id: Math.random().toString(36).substring(2, 15), // Client-gen ID
     date: new Date().toISOString(),
     weight,
     unit,
@@ -314,69 +325,45 @@ export function addWeightEntry(weight: number, unit: 'kg' | 'lbs'): WeightEntry 
 }
 
 // For saving and retrieving the AI-generated meal plan output locally
+const GENERATED_MEAL_PLAN_OUTPUT_KEY_LOCAL = 'ecoAi_generatedMealPlanOutput_v2'; // Renamed to avoid conflict
 export function saveGeneratedMealPlanOutput(output: GenerateEcoMealPlanOutput): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(GENERATED_MEAL_PLAN_OUTPUT_KEY, JSON.stringify(output));
+    localStorage.setItem(GENERATED_MEAL_PLAN_OUTPUT_KEY_LOCAL, JSON.stringify(output));
   } catch (error) {
-    console.error(`Error writing '${GENERATED_MEAL_PLAN_OUTPUT_KEY}' to localStorage:`, error);
+    console.error(`Error writing '${GENERATED_MEAL_PLAN_OUTPUT_KEY_LOCAL}' to localStorage:`, error);
   }
 }
 
 export function getGeneratedMealPlanOutput(): GenerateEcoMealPlanOutput | null {
   if (typeof window === 'undefined') return null;
   try {
-    const outputJson = localStorage.getItem(GENERATED_MEAL_PLAN_OUTPUT_KEY);
+    const outputJson = localStorage.getItem(GENERATED_MEAL_PLAN_OUTPUT_KEY_LOCAL);
     return outputJson ? JSON.parse(outputJson) : null;
   } catch (error) {
-    console.error(`Error reading '${GENERATED_MEAL_PLAN_OUTPUT_KEY}' from localStorage:`, error);
+    console.error(`Error reading '${GENERATED_MEAL_PLAN_OUTPUT_KEY_LOCAL}' from localStorage:`, error);
     return null;
   }
 }
 
 // For saving and retrieving the user's manually edited weekly meal plan locally
+const WEEKLY_MEAL_PLAN_KEY_LOCAL = 'ecoAi_weeklyMealPlan_v2'; // Renamed to avoid conflict
 export function saveWeeklyMealPlan(plan: any): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(MEAL_PLAN_KEY, JSON.stringify(plan));
+    localStorage.setItem(WEEKLY_MEAL_PLAN_KEY_LOCAL, JSON.stringify(plan));
   } catch (error) {
-    console.error(`Error writing '${MEAL_PLAN_KEY}' to localStorage:`, error);
+    console.error(`Error writing '${WEEKLY_MEAL_PLAN_KEY_LOCAL}' to localStorage:`, error);
   }
 }
 
 export function getWeeklyMealPlan(): any | null {
   if (typeof window === 'undefined') return null;
   try {
-    const planJson = localStorage.getItem(MEAL_PLAN_KEY);
+    const planJson = localStorage.getItem(WEEKLY_MEAL_PLAN_KEY_LOCAL);
     return planJson ? JSON.parse(planJson) : null;
   } catch (error) {
-    console.error(`Error reading '${MEAL_PLAN_KEY}' from localStorage:`, error);
+    console.error(`Error reading '${WEEKLY_MEAL_PLAN_KEY_LOCAL}' from localStorage:`, error);
     return null;
   }
-}
-
-// General LocalStorage clear, useful for testing or full data removal
-export function clearAllUserData(): void {
-  if (typeof window === 'undefined') return;
-  const keysToRemove = [
-    MEAL_LOGS_KEY,
-    'ecoAi_selectedPlan_v2', // Updated key
-    AI_SCAN_USAGE_KEY,
-    // USER_PROFILE_KEY, // This is now handled by Supabase logout essentially
-    WATER_INTAKE_KEY,
-    // ONBOARDING_COMPLETE_KEY, // Handled by Supabase profile
-    // USER_LOGGED_IN_KEY, // Handled by Supabase session
-    GENERATED_MEAL_PLAN_OUTPUT_KEY,
-    MEAL_PLAN_KEY,
-    WEIGHT_ENTRIES_KEY,
-    TEMP_ONBOARDING_DATA_KEY,
-  ];
-  keysToRemove.forEach(key => {
-    try {
-      localStorage.removeItem(key);
-    } catch (error) {
-      console.error(`Error removing '${key}' from localStorage:`, error);
-    }
-  });
-  console.log("Cleared app-specific localStorage data (excluding Supabase session).");
 }

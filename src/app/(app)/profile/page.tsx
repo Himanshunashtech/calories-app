@@ -14,9 +14,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile, ReminderSettings, AppSettings } from '@/types';
 import { ALLERGY_OPTIONS } from '@/types';
-import { defaultUserProfileData, clearLocalOnboardingData } from '@/lib/localStorage'; // Keep for defaults
+import { defaultUserProfileData, clearAllLocalUserData } from '@/lib/localStorage';
 import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from '@/app/(app)/layout'; // Import useAuth
+import { useAuth } from '@/app/(app)/layout';
 
 import { UserCircle2, Mail, Phone, Weight, Ruler, ActivityIcon as Activity, ShieldQuestion, Leaf, Save, UploadCloud, BellRing, Clock3, Utensils, SettingsIcon, Edit3, Cog, Palette, Droplet, LogOut, PieChartIcon, CalendarDays, Trash2, Sprout, Loader2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -38,10 +38,11 @@ export default function ProfilePage() {
   const { user, profile: authProfile, isLoading: authLoading, refreshProfile } = useAuth();
   const [profile, setProfile] = useState<Partial<UserProfile>>(defaultUserProfileData);
   const [isSaving, setIsSaving] = useState(false);
-  const [isClient, setIsClient] = useState(false); // Still useful for some client-only ops
+  const [isClient, setIsClient] = useState(false);
   const [isMacroModalOpen, setIsMacroModalOpen] = useState(false);
   const [tempMacroSplit, setTempMacroSplit] = useState(defaultUserProfileData.macroSplit || { carbs: 50, protein: 25, fat: 25 });
   const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
 
   const { toast } = useToast();
@@ -54,7 +55,6 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (authProfile && !authLoading) {
-      // Deep merge authProfile with defaults to ensure all fields are present
       const mergedProfile = {
         ...defaultUserProfileData,
         ...authProfile,
@@ -79,11 +79,9 @@ export default function ProfilePage() {
       setTempMacroSplit(mergedProfile.macroSplit || { carbs: 50, protein: 25, fat: 25 });
       setInitialLoadDone(true);
     } else if (!authLoading && !authProfile && user) {
-        // User exists but no profile yet, could be new user or fetch issue
-        // Initialize with defaults and user's email/id
         setProfile(prev => ({
             ...defaultUserProfileData,
-            ...prev, // keep any partial local data if any
+            ...prev,
             id: user.id,
             email: user.email || '',
         }));
@@ -156,7 +154,7 @@ export default function ProfilePage() {
       }));
     } else if (name === 'height_unit' || name === 'weight_unit') {
        setProfile((prev) => ({ ...prev, [name]: value as 'cm' | 'in' | 'kg' | 'lbs' }));
-    } else if (Object.prototype.hasOwnProperty.call(profile, name)) {
+    } else if (typeof name === 'string' && Object.prototype.hasOwnProperty.call(profile, name)) { // Added check
       setProfile((prev) => ({ ...prev, [name as keyof UserProfile]: value as any }));
     } else {
         console.warn("Unhandled select change on profile page:", name);
@@ -184,9 +182,23 @@ export default function ProfilePage() {
     if (file) {
       setIsSaving(true);
       const filePath = `${user.id}/${Date.now()}-${file.name}`;
+      
+      // Check if bucket exists, this is a simplified check.
+      // In a real app, you might have more robust bucket checks or rely on policies.
+      const { data: bucketData, error: bucketError } = await supabase.storage.getBucket('avatars');
+      if (bucketError && bucketError.message.includes("Bucket not found")) {
+         toast({ variant: "destructive", title: "Storage Error", description: "Avatar storage bucket not found. Please contact support." });
+         setIsSaving(false);
+         return;
+      }
+
+
       const { error: uploadError } = await supabase.storage
-        .from('avatars') // Ensure you have an 'avatars' bucket in Supabase Storage
-        .upload(filePath, file);
+        .from('avatars')
+        .upload(filePath, file, {
+            cacheControl: '3600', // Cache for 1 hour
+            upsert: true // Overwrite if file exists
+        });
 
       if (uploadError) {
         toast({ variant: "destructive", title: "Upload Failed", description: uploadError.message });
@@ -197,8 +209,18 @@ export default function ProfilePage() {
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
       
       setProfile((prev) => ({ ...prev, profile_image_url: publicUrl }));
-      // No need to save to Supabase profiles table yet, handleSubmit will do that.
-      toast({ title: "Avatar Ready", description: "New avatar selected. Click 'Save Profile' to apply."});
+      // Update Supabase profile directly with new image URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ profile_image_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (updateError) {
+        toast({ variant: "destructive", title: "Profile Update Failed", description: `Could not save new avatar: ${updateError.message}` });
+      } else {
+        toast({ title: "Avatar Updated!", description: "Your new avatar has been saved."});
+        await refreshProfile(); // Refresh profile in auth context
+      }
       setIsSaving(false);
     }
   };
@@ -216,18 +238,15 @@ export default function ProfilePage() {
     
     const profileToSave: Partial<UserProfile> = {
         ...profile,
-        id: user.id, // Ensure ID is always the auth user's ID
-        email: user.email, // Email should not be changed here, it's from auth
+        id: user.id,
+        email: user.email,
         updated_at: new Date().toISOString(),
-        // Ensure nested objects are correctly structured if they were null
         reminderSettings: profile.reminderSettings || defaultUserProfileData.reminderSettings,
         appSettings: profile.appSettings || defaultUserProfileData.appSettings,
         macroSplit: profile.macroSplit || defaultUserProfileData.macroSplit,
     };
 
-    // Remove fields that Supabase auto-generates or shouldn't be client-updated directly this way
     delete profileToSave.created_at; 
-    if (profileToSave.id === '') delete profileToSave.id; // Should always be user.id
 
     const { error } = await supabase
       .from('profiles')
@@ -238,7 +257,7 @@ export default function ProfilePage() {
       toast({ variant: "destructive", title: 'Profile Update Failed', description: error.message });
     } else {
       toast({ title: 'Profile Updated', description: 'Your profile information has been saved.', action: <Save className="text-green-500" /> });
-      await refreshProfile(); // Refresh context profile
+      await refreshProfile();
     }
     setIsSaving(false);
   };
@@ -260,27 +279,29 @@ export default function ProfilePage() {
     }
     setProfile(prev => ({ ...prev, macroSplit: { ...(tempMacroSplit || defaultUserProfileData.macroSplit!) } }));
     setIsMacroModalOpen(false);
-    toast({ title: 'Macro Split Updated (Locally)', description: 'Your new macro targets are set. Click Save Profile to persist to database.' });
+    toast({ title: 'Macro Split Updated (Locally)', description: 'Click "Save Profile" to persist changes.' });
   };
 
   const handleLogout = async () => {
     setIsSaving(true);
     const { error } = await supabase.auth.signOut();
-    clearLocalOnboardingData(); // Clear any temp onboarding data
+    clearAllLocalUserData(); 
     if (error) {
       toast({ variant: "destructive", title: "Logout Failed", description: error.message });
     } else {
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      router.push('/'); // Redirect to home page
+      router.push('/'); 
     }
     setIsSaving(false);
   };
 
   const handleDeleteAccount = async () => {
-    // Note: True account deletion requires server-side admin privileges.
-    // This will delete the profile row and sign out.
-    if (!user) return;
-    setIsSaving(true);
+    if (!user) {
+      toast({ title: "Not Authenticated", description: "Please log in to delete account.", variant: "destructive" });
+      return;
+    }
+    setIsDeleting(true);
+    // 1. Delete profile row from public.profiles
     const { error: profileDeleteError } = await supabase
         .from('profiles')
         .delete()
@@ -288,15 +309,28 @@ export default function ProfilePage() {
 
     if (profileDeleteError) {
         toast({ title: 'Error Deleting Profile Data', description: profileDeleteError.message, variant: 'destructive' });
-    } else {
-        toast({ title: 'Profile Data Cleared', description: 'Your profile data has been removed.' });
+        setIsDeleting(false);
+        return; // Stop if profile deletion fails
     }
     
-    await supabase.auth.signOut(); // Sign out the user
-    clearLocalOnboardingData();
-    toast({ title: 'Account Data Removed Locally & Signed Out', description: 'All your app data on this device has been removed.', variant: 'default', duration: 7000 });
+    // 2. Sign out the user (this invalidates their session)
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) {
+        toast({ title: 'Sign Out Error', description: `Profile data deleted, but sign out failed: ${signOutError.message}`, variant: 'destructive' });
+    } else {
+        toast({ title: 'Account Data Removed & Signed Out', description: 'All your app data has been removed from this device.', duration: 7000 });
+    }
+    
+    // 3. Clear local storage
+    clearAllLocalUserData();
+    
+    // 4. Redirect to home page
     router.push('/');
-    setIsSaving(false);
+    setIsDeleting(false);
+
+    // Note: Deleting from auth.users table requires admin privileges and an Edge Function.
+    // This current implementation only deletes the public profile and signs out.
+    // The user's auth record in Supabase will remain.
   };
 
   const handlePlaceholderFeatureClick = (featureName: string) => {
@@ -312,9 +346,9 @@ export default function ProfilePage() {
     );
   }
   
-  if (!user && isClient) { // Should be caught by layout, but as a safeguard
-    router.push('/login');
-    return (
+  if (!user && isClient) {
+     router.push('/login');
+     return (
          <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
             <AlertTriangle className="h-12 w-12 text-destructive animate-pulse mb-4" />
             <p className="text-muted-foreground">Redirecting to login...</p>
@@ -334,7 +368,7 @@ export default function ProfilePage() {
               width={128}
               height={128}
               className="rounded-full object-cover border-4 border-primary/50 shadow-md"
-              key={profile.profile_image_url} // Force re-render if URL changes
+              key={profile.profile_image_url}
             />
             <Button
               variant="outline"
@@ -344,7 +378,7 @@ export default function ProfilePage() {
               aria-label="Upload profile picture"
               disabled={isSaving}
             >
-              {isSaving && profile.profile_image_url === null ? <Loader2 className="h-5 w-5 animate-spin"/> : <UploadCloud className="h-5 w-5" />}
+              {isSaving && !profile.profile_image_url /* Only show loader if no image exists yet during upload */ ? <Loader2 className="h-5 w-5 animate-spin"/> : <UploadCloud className="h-5 w-5" />}
             </Button>
             <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="sr-only" id="profileImageUpload" />
           </div>
@@ -366,7 +400,7 @@ export default function ProfilePage() {
             <h3 className="text-xl font-semibold flex items-center gap-2 mb-3 text-primary"><Mail /> Contact Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div> <Label htmlFor="email-profile">Email Address</Label> <Input id="email-profile" name="email" type="email" value={profile.email || user?.email || ''} disabled className="bg-muted/50" /> </div>
-              <div> <Label htmlFor="phone-profile">Phone Number (Optional)</Label> <Input id="phone-profile" name="phone" type="tel" value={profile.phone || ''} onChange={handleChange} placeholder="+1 123-456-7890" /> </div>
+              <div> <Label htmlFor="phone-profile">Phone Number (Optional)</Label> <Input id="phone-profile" name="phone" type="tel" value={(profile as any).phone || ''} onChange={handleChange} placeholder="+1 123-456-7890" /> </div>
             </div>
           </section>
 
@@ -530,20 +564,23 @@ export default function ProfilePage() {
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" className="w-full" disabled={isSaving || authLoading}> <LogOut className="mr-2 h-5 w-5" /> Log Out </Button>
+              <Button variant="outline" className="w-full" disabled={isSaving || authLoading || isDeleting}> <LogOut className="mr-2 h-5 w-5" /> Log Out </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader> <AlertDialogTitle>Confirm Logout</AlertDialogTitle> <AlertDialogDescription> Are you sure you want to log out of your EcoAI Calorie Tracker account? </AlertDialogDescription> </AlertDialogHeader>
-              <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleLogout} className={cn(buttonVariants({ variant: 'destructive' }))}> Log Out </AlertDialogAction> </AlertDialogFooter>
+              <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleLogout} className={cn(buttonVariants({ variant: 'destructive' }))} disabled={isSaving}> Log Out </AlertDialogAction> </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" className="w-full mt-2" disabled={isSaving || authLoading}> <Trash2 className="mr-2 h-5 w-5" /> Delete Account Data </Button>
+              <Button variant="destructive" className="w-full mt-2" disabled={isSaving || authLoading || isDeleting}>
+                {isDeleting ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Trash2 className="mr-2 h-5 w-5" />}
+                Delete Account Data
+              </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
-              <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently delete your profile data from our servers and sign you out. Local app data may persist until cleared. </AlertDialogDescription> </AlertDialogHeader>
-              <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleDeleteAccount} className={cn(buttonVariants({ variant: 'destructive' }))}> Yes, Delete My Data </AlertDialogAction> </AlertDialogFooter>
+              <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently delete your profile data from our servers and sign you out. Local app data will also be cleared. </AlertDialogDescription> </AlertDialogHeader>
+              <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleDeleteAccount} className={cn(buttonVariants({ variant: 'destructive' }))} disabled={isDeleting}> Yes, Delete My Data </AlertDialogAction> </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
         </CardFooter>
