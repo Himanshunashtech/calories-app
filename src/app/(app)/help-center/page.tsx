@@ -1,10 +1,11 @@
 
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
-import { HelpCircle, MessageSquare, Search, BookOpen, ShieldCheck, Sparkles } from 'lucide-react';
+import { HelpCircle, MessageSquare, Search, BookOpen, ShieldCheck, Sparkles, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 
@@ -41,6 +42,11 @@ const faqItems = [
 
 export default function HelpCenterPage() {
   const { toast } = useToast();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const handleContactSupport = () => {
     toast({
@@ -54,6 +60,15 @@ export default function HelpCenterPage() {
       title: "Coming Soon!",
       description: `${featureName} will be available in a future update.`
     });
+  }
+
+  if (!isClient) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
+        <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
+        <p className="text-muted-foreground">Loading Help Center...</p>
+      </div>
+    );
   }
 
   return (
@@ -122,3 +137,5 @@ export default function HelpCenterPage() {
     </div>
   );
 }
+
+    
