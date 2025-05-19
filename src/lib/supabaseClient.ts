@@ -1,22 +1,22 @@
+
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { UserProfile } from '@/types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl) {
-  console.error("Supabase URL is not defined. Please set NEXT_PUBLIC_SUPABASE_URL in your .env.local file.");
-  // Potentially throw an error or return a mock client for environments where it's not critical (like static site generation parts if any)
-  // For now, we let it proceed, but operations will fail.
+  const errorMessage = "Supabase URL is not defined. Please set NEXT_PUBLIC_SUPABASE_URL as an environment variable in your hosting provider (e.g., Netlify, Vercel) or in your .env.local file for local development.";
+  console.error(errorMessage);
+  throw new Error(errorMessage);
 }
 if (!supabaseAnonKey) {
-  console.error("Supabase anon key is not defined. Please set NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file.");
+  const errorMessage = "Supabase anon key is not defined. Please set NEXT_PUBLIC_SUPABASE_ANON_KEY as an environment variable in your hosting provider (e.g., Netlify, Vercel) or in your .env.local file for local development.";
+  console.error(errorMessage);
+  throw new Error(errorMessage);
 }
 
-// Ensure the client is only created once.
-// The null assertion `!` is used because we check and log errors above.
-// In a real app, you might handle the undefined case more gracefully,
-// perhaps by providing a mock client or throwing an error to halt execution.
-export const supabase: SupabaseClient = createClient(supabaseUrl!, supabaseAnonKey!);
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
 // Helper to get the current user's profile data from Supabase
 export async function getSupabaseUserProfile(userId: string): Promise<UserProfile | null> {
@@ -28,11 +28,11 @@ export async function getSupabaseUserProfile(userId: string): Promise<UserProfil
     .single();
 
   if (error) {
-    console.error('Error fetching user profile from Supabase:', error.message);
+    // Log less critical errors without throwing, to allow app to potentially function if profile fetch fails but auth is ok.
+    if (error.code !== 'PGRST116') { // PGRST116: No rows found, which is valid for new users.
+        console.error('Error fetching user profile from Supabase:', error.message);
+    }
     return null;
   }
   return data as UserProfile | null;
 }
-
-// You'll need to import UserProfile type
-import type { UserProfile } from '@/types';
